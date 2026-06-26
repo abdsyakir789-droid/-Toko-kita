@@ -19094,13 +19094,11 @@ window.closeKelolaToko = function() {
   document.head.appendChild(styleTag);
 
   function isAnyOverlayOpen() {
-    // Jangan aktifkan pull-to-refresh kalau ada modal/overlay fullscreen yang sedang terbuka,
-    // supaya gesture tarik di dalam modal (misal chat room) tidak memicu reload tak disengaja.
-    const overlaySelectors = ['#authOverlay', '#chatRoomOverlay', '#searchOverlay', '#kelolaTokoScreen', '#recentlyViewedScreen'];
-    return overlaySelectors.some(sel => {
-      const el = document.querySelector(sel);
-      return el && getComputedStyle(el).display !== 'none';
-    });
+    // Jangan aktifkan pull-to-refresh kalau ada modal/overlay/panel apapun yang sedang terbuka.
+    // Semua overlay di app ini konsisten set document.body.style.overflow='hidden' saat dibuka
+    // dan reset ke '' saat ditutup — jadi cek ini otomatis cover SEMUA overlay (termasuk yang
+    // baru ditambahkan nanti), tanpa perlu maintain daftar selector manual satu-satu.
+    return document.body.style.overflow === 'hidden';
   }
 
   document.addEventListener('touchstart', function(e) {
