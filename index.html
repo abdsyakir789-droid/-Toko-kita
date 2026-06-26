@@ -38,6 +38,8 @@ html { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
 <script src="https://cdn.tailwindcss.com"></script>
 <!-- Lucide Icons (untuk icon premium) -->
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<!-- Fuse.js (fuzzy search pencarian produk, versi di-pin biar gak berubah tiba-tiba) -->
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
 <script>
   // Inject Megaphone icon (Lucide native) setelah DOM ready
   document.addEventListener('DOMContentLoaded', function() {
@@ -8034,19 +8036,47 @@ async function loadSellerStatusCache() {
 window.loadSellerStatusCache = loadSellerStatusCache;
 
 function getFiltered(){
-  return getAllAds().filter(p=>{
-    // ── Filter iklan non-aktif (sembunyikan dari publik) ──
+  // ── Tahap 1: filter visibilitas + kategori (logic sama seperti sebelumnya) ──
+  const byCategory = getAllAds().filter(p=>{
     if (!isAdVisible(p)) return false;
-
     const mc=window._S.curCat==='semua'||p.cat===window._S.curCat||
       (window._S.curCat==='gratis-ongkir'&&p.siapTaushil)||
       (window._S.curCat==='promo'&&(p.disc>0||p.badge==='Promo'))||
       // ── PATCH: official filter sertakan partner_silver ──
       (window._S.curCat==='official'&&(p.badge==='Official'||p._partnerSilver===true));
-    const n=(p.title||p.name||'').toLowerCase();
-    const mq=window._S.searchQ===''||n.includes(window._S.searchQ)||(p.loc||'').toLowerCase().includes(window._S.searchQ)||(p.cat||'').includes(window._S.searchQ);
-    return mc&&mq;
+    return mc;
   });
+
+  if(window._S.searchQ==='') return byCategory;
+
+  // ── Tahap 2: pencarian fuzzy (toleran typo) pakai Fuse.js ──
+  // Fallback ke substring match lama kalau CDN Fuse gagal load (mis. offline/diblok)
+  if(typeof Fuse==='undefined'){
+    return byCategory.filter(p=>{
+      const n=(p.title||p.name||'').toLowerCase();
+      return n.includes(window._S.searchQ)||(p.loc||'').toLowerCase().includes(window._S.searchQ)||(p.cat||'').includes(window._S.searchQ);
+    });
+  }
+  // Pool ringan khusus buat di-index Fuse — TIDAK mengubah objek ads aslinya,
+  // cuma nyimpen field yang mau dicari + index balik (i) ke array byCategory.
+  const pool = byCategory.map((p,i)=>({
+    i,
+    judul: p.title||p.name||'',
+    penjual: p.sellerName||'',
+    loc: p.loc||'',
+    cat: p.cat||''
+  }));
+  const fuse = new Fuse(pool, {
+    keys: [
+      { name:'judul', weight:2 },
+      { name:'penjual', weight:1.5 },
+      { name:'loc', weight:1 },
+      { name:'cat', weight:1 }
+    ],
+    threshold: 0.35,
+    ignoreLocation: true
+  });
+  return fuse.search(window._S.searchQ).map(r=>byCategory[r.item.i]);
 }
 
 window.showProductSkeletons = (count=8) => {
@@ -17324,7 +17354,6 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
   // ── State ──
   let _soHistory = JSON.parse(localStorage.getItem('ym_search_history') || '[]');
   let _soTimer = null;
-  let _soCache = {};
 
   // ── Buka Overlay ──
   window.openSearchOverlay = function() {
@@ -17468,30 +17497,44 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
     document.getElementById('searchProductResults').style.display = 'none';
     document.getElementById('searchEmptyState').style.display = 'none';
 
-    const cacheKey = q.toLowerCase();
-    let data = _soCache[cacheKey];
+    // ── Ambil ads lokal sekali — dipakai buat cari produk DAN toko ──
+    // (sebelumnya pencarian toko nembak tabel 'profiles' yang TIDAK ADA di
+    // database, makanya selalu 0 hasil apapun yang diketik — bukan cuma typo)
+    const localAds = (typeof getAllAds === 'function') ? getAllAds().filter(p => isAdVisible(p)) : [];
 
-    if (!data) {
-      try {
-        const enc = encodeURIComponent(q);
-        // Fetch paralel: produk + toko/user
-        const [adsRes, shopsRes] = await Promise.all([
-          window._supaFetch('/rest/v1/ads?title=ilike.*' + enc + '*&select=title&limit=8&order=created_at.desc'),
-          window._supaFetch('/rest/v1/profiles?name=ilike.*' + enc + '*&select=id,name,avatar_url,role&limit=5&order=name.asc')
-        ]);
-
-        const ads = adsRes.ok ? await adsRes.json() : [];
-        const shops = shopsRes.ok ? await shopsRes.json() : [];
-        data = { ads, shops };
-        _soCache[cacheKey] = data;
-      } catch(e) {
-        data = { ads: [], shops: [] };
-      }
+    // ── Cari judul produk secara fuzzy (toleran typo) ──
+    // Sebelumnya: query ilike ke Supabase (strict substring, gak toleran typo,
+    // makanya "ayan" gak ketemu "ayam"). Sekarang pakai data yang sama dengan
+    // home grid (getAllAds), jadi konsisten + gak perlu fetch ke server lagi.
+    let titles = [];
+    if (typeof Fuse !== 'undefined') {
+      const pool = localAds.map((p,i)=>({ i, judul: p.title||p.name||'' }));
+      const fuse = new Fuse(pool, { keys:['judul'], threshold:0.35, ignoreLocation:true });
+      titles = [...new Set(fuse.search(q).map(r => localAds[r.item.i].title||localAds[r.item.i].name).filter(Boolean))].slice(0,7);
+    } else {
+      // Fallback kalau CDN Fuse gagal load
+      const ql = q.toLowerCase();
+      titles = [...new Set(localAds.filter(p => (p.title||p.name||'').toLowerCase().includes(ql)).map(p=>p.title||p.name).filter(Boolean))].slice(0,7);
     }
 
-    const { ads, shops } = data;
-    const titles = [...new Set((ads||[]).map(r => r.title).filter(Boolean))].slice(0,7);
-    const shopList = (shops||[]).slice(0,5);
+    // ── Cari toko/penjual secara fuzzy — diturunkan dari seller_uid/name/photo ──
+    // di ads yang sama (bukan dari tabel profiles yang gak ada). Toko "static"
+    // (iklan dummy tanpa penjual asli) gak dimasukin karena gak bisa dibuka profilnya.
+    const sellerMap = new Map();
+    localAds.forEach(p => {
+      const uid = p.sellerUid;
+      if (!uid || uid === 'static' || sellerMap.has(uid)) return;
+      sellerMap.set(uid, { id: uid, name: p.sellerName||'', avatar_url: p.sellerPhoto||'', role: 'seller' });
+    });
+    const sellerPool = [...sellerMap.values()];
+    let shopList = [];
+    if (typeof Fuse !== 'undefined') {
+      const fuseShop = new Fuse(sellerPool, { keys:['name'], threshold:0.35, ignoreLocation:true });
+      shopList = fuseShop.search(q).map(r => r.item).slice(0,5);
+    } else {
+      const ql = q.toLowerCase();
+      shopList = sellerPool.filter(s => (s.name||'').toLowerCase().includes(ql)).slice(0,5);
+    }
 
     let hasResult = false;
 
