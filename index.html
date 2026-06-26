@@ -2336,12 +2336,27 @@ h3.text-sm.font-bold.text-gray-800 {
   var splash = document.getElementById('splashScreen');
   if (!splash) return;
 
-  setTimeout(function() {
+  var hidden = false;
+  function hideSplash() {
+    if (hidden) return; // idempotent — cuma jalan sekali walau dipanggil berkali-kali
+    hidden = true;
     splash.classList.add('splash-hidden');
     setTimeout(function() {
       if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
     }, 900);
-  }, 2500);
+  }
+
+  // Begitu auth selesai diproses (lihat onAuthStateChange), splash langsung hilang.
+  // Kasih grace period kecil (150ms) supaya tidak ada flash putih kalau auth
+  // resolve SANGAT cepat dan UI belum sempat ke-render.
+  window._signalAuthResolved = function() {
+    setTimeout(hideSplash, 150);
+  };
+
+  // Fallback: kalau karena alasan apapun auth tidak pernah resolve (network putus
+  // total, dll), splash tetap hilang di waktu yang SAMA seperti sebelumnya (2500ms)
+  // — jadi tidak pernah lebih lambat dari behavior lama.
+  setTimeout(hideSplash, 2500);
 })();
 </script>
 
@@ -4692,6 +4707,9 @@ supabase.auth.onAuthStateChange(async (event, session) => {
   const user = session?.user ?? null;
   // Simpan event untuk dipakai startChatListListener
   window._S._authEvent = event;
+  // Sinyal ke splash screen bahwa auth sudah selesai diproses (apapun hasilnya),
+  // supaya splash tidak perlu nunggu timer fixed. Tidak mengubah logic di bawah ini.
+  if (typeof window._signalAuthResolved === 'function') window._signalAuthResolved();
 
   // ── Fix loop: TOKEN_REFRESHED cuma soal token teknis, user TIDAK ganti.
   // Kalau user sudah ada di state, cukup update token saja — JANGAN re-run
@@ -13826,24 +13844,23 @@ document.getElementById('editSiapTaushil')?.addEventListener('change', function(
     const drop = document.getElementById(dropId);
     if(!drop) return;
     _acIdx = -1;
+    // Kalau gak ada produk yang cocok sama sekali, jangan tampilkan saran
     if(!titles.length) { drop.style.display='none'; return; }
 
     const isMob = dropId === '_acDropMob';
 
-    drop.innerHTML = titles.map((t, i) => {
-      // Bold bagian kata yang diketik user
-      const regex = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
-      const highlighted = t.replace(regex, '<strong style="font-weight:700;color:#111827">$1</strong>');
-      return `<div class="_ac-item" data-idx="${i}" data-val="${t.replace(/"/g,'&quot;')}"
-        style="display:flex;align-items:center;gap:12px;padding:${isMob?'15px 20px':'10px 14px'};cursor:pointer;transition:background .15s;font-size:${isMob?'15px':'13px'};color:#374151;border-bottom:1px solid #f3f4f6"
-        onmousedown="event.preventDefault()"
-        onclick="_acSelect('${dropId}','${t.replace(/'/g,"\\'")}')"
-        onmouseover="this.style.background='#f9fafb'"
-        onmouseout="this.style.background=''">
-        <i class="fa-solid fa-magnifying-glass" style="color:#9ca3af;font-size:13px;flex-shrink:0"></i>
-        <span>${highlighted}</span>
-      </div>`;
-    }).join('');
+    // ── Tampilkan cuma 1 saran umum: kata kunci yang diketik user ──
+    // (sebelumnya: tiap judul produk yang cocok ditampilkan satu-satu)
+    const qEsc = q.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    drop.innerHTML = `<div class="_ac-item" data-idx="0" data-val="${q.replace(/"/g,'&quot;')}"
+      style="display:flex;align-items:center;gap:12px;padding:${isMob?'15px 20px':'10px 14px'};cursor:pointer;transition:background .15s;font-size:${isMob?'15px':'13px'};color:#374151;border-bottom:1px solid #f3f4f6"
+      onmousedown="event.preventDefault()"
+      onclick="_acSelect('${dropId}','${q.replace(/'/g,"\\'")}')"
+      onmouseover="this.style.background='#f9fafb'"
+      onmouseout="this.style.background=''">
+      <i class="fa-solid fa-magnifying-glass" style="color:#9ca3af;font-size:13px;flex-shrink:0"></i>
+      <span>Cari "<strong style="font-weight:700;color:#111827">${qEsc}</strong>"</span>
+    </div>`;
 
     drop.style.display = 'block';
   };
@@ -16807,6 +16824,12 @@ window.openOrderDetail = async function(idx) {
 window.closeOrderDetail = function() {
   var ds = document.getElementById('orderDetailScreen');
   if(ds) ds.style.display = 'none';
+  // Reset overflow HANYA kalau halaman induk (Pesanan Saya) sudah tidak terbuka.
+  // Kalau masih terbuka, biarkan overflow tetap 'hidden' — halaman itu yang akan
+  // mengurus reset-nya sendiri lewat closeOrderFullScreen().
+  var parentFs = document.getElementById('orderFullScreen');
+  var parentStillOpen = parentFs && parentFs.style.display !== 'none';
+  if(!parentStillOpen) document.body.style.overflow = '';
 };
 
 // ── Success Sound: bunyi "cring" hanya saat checkout benar-benar sukses ──
