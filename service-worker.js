@@ -6,10 +6,21 @@
 
 const CACHE_NAME = 'yallamart-v3';
 const IMG_CACHE  = 'yallamart-img-v1';
+const CDN_CACHE  = 'yallamart-cdn-v1';
 
 const IMG_DOMAINS = [
   'pub-6965427fe22841f2b1a71e9df9a3522f.r2.dev',
   'res.cloudinary.com'
+];
+
+// CDN library (Tailwind, Font Awesome, Lucide, Bootstrap Icons, Supabase-js).
+// CATATAN: googletagmanager.com & sentry-cdn.com SENGAJA tidak dimasukkan —
+// itu script analytics/monitoring, di luar scope perbaikan ini.
+const CDN_DOMAINS = [
+  'cdn.tailwindcss.com',
+  'cdnjs.cloudflare.com',
+  'cdn.jsdelivr.net',
+  'unpkg.com'
 ];
 
 const APP_SHELL = ['/', '/index.html'];
@@ -35,7 +46,7 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
-        keys.filter(k => k !== CACHE_NAME && k !== IMG_CACHE)
+        keys.filter(k => k !== CACHE_NAME && k !== IMG_CACHE && k !== CDN_CACHE)
           .map(k => caches.delete(k))
       )
     ).then(() => clients.claim())
@@ -66,6 +77,31 @@ self.addEventListener('fetch', event => {
           // Timeout atau offline — return kosong
           return new Response('', { status: 408 });
         }
+      })
+    );
+    return;
+  }
+
+  // ── CDN Library (Tailwind/FontAwesome/Lucide/jsdelivr): Stale-While-Revalidate.
+  // Kasih versi cache dulu (kalau ada) biar instan, TAPI tetap fetch versi baru
+  // di background untuk dipakai di reload berikutnya — jadi tidak pernah
+  // kepake versi lama selamanya, cuma "1 siklus refresh" ketinggalan paling lambat. ──
+  const isCdnLib = CDN_DOMAINS.some(d => url.hostname === d || url.hostname.endsWith('.' + d));
+  if (isCdnLib) {
+    event.respondWith(
+      caches.open(CDN_CACHE).then(async cache => {
+        const cached = await cache.match(req);
+
+        const networkFetch = fetchWithTimeout(req, 5000)
+          .then(response => {
+            if (response && response.status === 200) {
+              cache.put(req, response.clone());
+            }
+            return response;
+          })
+          .catch(() => cached); // network gagal → fallback ke cache kalau ada
+
+        return cached || networkFetch;
       })
     );
     return;
