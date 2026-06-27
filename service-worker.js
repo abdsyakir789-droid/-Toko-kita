@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════
 
 const CACHE_NAME = 'yallamart-v3';
-const IMG_CACHE  = 'yallamart-img-v2'; // v2: stale-while-revalidate + max entries
+const IMG_CACHE  = 'yallamart-img-v1'; // tetap v1 agar cache lama tidak terhapus
 const CDN_CACHE  = 'yallamart-cdn-v1';
 
 const IMG_DOMAINS = [
