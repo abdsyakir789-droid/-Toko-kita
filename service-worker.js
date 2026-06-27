@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════
 
 const CACHE_NAME = 'yallamart-v3';
-const IMG_CACHE  = 'yallamart-img-v1';
+const IMG_CACHE  = 'yallamart-img-v2'; // v2: stale-while-revalidate + max entries
 const CDN_CACHE  = 'yallamart-cdn-v1';
 
 const IMG_DOMAINS = [
@@ -13,9 +13,6 @@ const IMG_DOMAINS = [
   'res.cloudinary.com'
 ];
 
-// CDN library (Tailwind, Font Awesome, Lucide, Bootstrap Icons, Supabase-js).
-// CATATAN: googletagmanager.com & sentry-cdn.com SENGAJA tidak dimasukkan —
-// itu script analytics/monitoring, di luar scope perbaikan ini.
 const CDN_DOMAINS = [
   'cdn.tailwindcss.com',
   'cdnjs.cloudflare.com',
@@ -24,6 +21,7 @@ const CDN_DOMAINS = [
 ];
 
 const APP_SHELL = ['/', '/index.html'];
+const IMG_CACHE_MAX = 120; // maksimal gambar yang di-cache
 
 // ── Fetch dengan timeout ──────────────────
 function fetchWithTimeout(req, ms = 3000) {
@@ -32,6 +30,19 @@ function fetchWithTimeout(req, ms = 3000) {
     fetch(req).then(r => { clearTimeout(timer); resolve(r); })
               .catch(e => { clearTimeout(timer); reject(e); });
   });
+}
+
+// ── Hapus cache gambar lama jika melebihi batas ──
+async function trimImgCache() {
+  try {
+    const cache = await caches.open(IMG_CACHE);
+    const keys = await cache.keys();
+    if (keys.length > IMG_CACHE_MAX) {
+      // Hapus yang paling lama (FIFO)
+      const toDelete = keys.slice(0, keys.length - IMG_CACHE_MAX);
+      await Promise.all(toDelete.map(k => cache.delete(k)));
+    }
+  } catch(e) {}
 }
 
 self.addEventListener('install', event => {
@@ -59,33 +70,36 @@ self.addEventListener('fetch', event => {
 
   if (req.method !== 'GET') return;
 
-  // ── Gambar: Cache First + timeout fallback ──
+  // ── Gambar: Stale-While-Revalidate ──
+  // Return cache DULU (instant, gambar tidak hilang saat refresh)
+  // lalu update cache di background untuk request berikutnya
   const isImg = IMG_DOMAINS.some(d => url.hostname.includes(d));
   if (isImg) {
     event.respondWith(
       caches.open(IMG_CACHE).then(async cache => {
         const cached = await cache.match(req);
-        if (cached) return cached; // cache dulu, tidak perlu network
 
-        try {
-          const response = await fetchWithTimeout(req, 4000);
-          if (response && response.status === 200) {
-            cache.put(req, response.clone());
-          }
-          return response;
-        } catch(e) {
-          // Timeout atau offline — return kosong
-          return new Response('', { status: 408 });
-        }
+        // Fetch network di background (update cache)
+        const networkFetch = fetchWithTimeout(req, 5000)
+          .then(response => {
+            if (response && response.status === 200) {
+              cache.put(req, response.clone());
+              // Trim cache kalau sudah terlalu banyak (fire & forget)
+              trimImgCache();
+            }
+            return response;
+          })
+          .catch(() => cached || new Response('', { status: 408 }));
+
+        // Return cache dulu kalau ada (stale-while-revalidate)
+        // Kalau belum ada di cache, tunggu network
+        return cached || networkFetch;
       })
     );
     return;
   }
 
-  // ── CDN Library (Tailwind/FontAwesome/Lucide/jsdelivr): Stale-While-Revalidate.
-  // Kasih versi cache dulu (kalau ada) biar instan, TAPI tetap fetch versi baru
-  // di background untuk dipakai di reload berikutnya — jadi tidak pernah
-  // kepake versi lama selamanya, cuma "1 siklus refresh" ketinggalan paling lambat. ──
+  // ── CDN Library: Stale-While-Revalidate ──
   const isCdnLib = CDN_DOMAINS.some(d => url.hostname === d || url.hostname.endsWith('.' + d));
   if (isCdnLib) {
     event.respondWith(
@@ -99,7 +113,7 @@ self.addEventListener('fetch', event => {
             }
             return response;
           })
-          .catch(() => cached); // network gagal → fallback ke cache kalau ada
+          .catch(() => cached);
 
         return cached || networkFetch;
       })
@@ -110,14 +124,13 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
 
-  // ── App shell: Cache First untuk performa, network untuk update ──
+  // ── App shell: Cache First ──
   event.respondWith(
     caches.match(req).then(cached => {
-      // Serve cache dulu (instant)
       const networkFetch = fetchWithTimeout(req, 5000)
         .then(response => {
           if (response && response.status === 200) {
-            const toCache = response.clone(); // clone DULUAN, sebelum response dipakai/dibaca
+            const toCache = response.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(req, toCache));
           }
           return response;
@@ -127,6 +140,10 @@ self.addEventListener('fetch', event => {
     })
   );
 });
+
+// ══════════════════════════════════════════
+// PUSH NOTIFICATION — tidak diubah
+// ══════════════════════════════════════════
 
 self.addEventListener('push', event => {
   let payload = {};
