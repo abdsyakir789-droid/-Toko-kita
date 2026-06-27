@@ -3461,7 +3461,7 @@ h3.text-sm.font-bold.text-gray-800 {
           <span id="cartTotal" style="font-size:15px;font-weight:900;color:#10B981;line-height:1.2">-</span>
           <span style="font-size:10px;color:#9ca3af">Subtotal terpilih</span>
         </div>
-        <button onclick="checkoutToChat()" style="flex-shrink:0;background:linear-gradient(to right,#10B981,#059669);color:#fff;font-weight:800;font-size:13px;padding:12px 18px;border-radius:16px;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(16,185,129,0.35)">
+        <button id="checkoutBtn" onclick="checkoutToChat()" style="flex-shrink:0;background:linear-gradient(to right,#10B981,#059669);color:#fff;font-weight:800;font-size:13px;padding:12px 18px;border-radius:16px;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(16,185,129,0.35)">
           Checkout (<span id="cartCheckedCount">0</span>)
         </button>
       </div>
@@ -4728,6 +4728,26 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       name: user.user_metadata?.name || user.email.split('@')[0],
       phone: '', photoUrl: ''
     };
+    // ── Render duluan pakai cache lokal (kalau ada), SEBELUM nunggu query
+    // database. Ini cuma tampilan sementara — begitu query di bawah selesai,
+    // window._S.user & renderUserState() dipanggil ULANG dengan data asli
+    // dari database (tidak diubah), jadi data yang akhirnya menetap selalu
+    // dari database. Ini cuma menghilangkan "jeda kosong" di detik pertama. ──
+    try {
+      const _earlyCached = localStorage.getItem('ym_profile_cache_'+user.id);
+      if (_earlyCached) {
+        const _ec = JSON.parse(_earlyCached);
+        profile.name               = _ec.name               || profile.name;
+        profile.phone              = _ec.phone              || '';
+        profile.photoUrl           = _ec.photoUrl           || '';
+        profile.coverPhoto         = _ec.coverPhoto         || '';
+        profile.coverPhotoURL      = _ec.coverPhotoURL      || '';
+        profile.coverPhotoPublicId = _ec.coverPhotoPublicId || '';
+      }
+      window._S.user = profile;
+      window._S._accessToken = session?.access_token || null;
+      renderUserState();
+    } catch(_earlyErr) {}
     try {
       // ── Timeout 5 detik: kalau query database macet/hang (terutama
       // setelah refresh berturut-turut di iOS), JANGAN tunggu selamanya.
@@ -16875,6 +16895,14 @@ window.playCheckoutSuccessSound = function(){
 };
 
 window.checkoutToChat = async function(){
+  // ── Guard anti double-submit: kalau masih ada proses checkout berjalan
+  // (misal jaringan lemot, user tap tombol berkali-kali), TOLAK eksekusi baru
+  // sampai yang sebelumnya selesai (sukses/gagal/dibatalkan). ──
+  if (window._checkoutInProgress) { showToast('Checkout sedang diproses, tunggu sebentar...', 'red'); return; }
+  window._checkoutInProgress = true;
+  var _ckBtn = document.getElementById('checkoutBtn');
+  if (_ckBtn) { _ckBtn.disabled = true; _ckBtn.style.opacity = '0.6'; _ckBtn.style.pointerEvents = 'none'; }
+  try {
   if(!window._S.user){ showToast("Login dulu untuk checkout","red"); openAuth("login"); return; }
   var _pinOk = await new Promise(function(resolve){ requirePin(resolve); });
   if(!_pinOk){ showToast('PIN salah','red'); return; }
@@ -17069,6 +17097,10 @@ window.checkoutToChat = async function(){
     "green"
   );
   // Tetap di halaman keranjang — tidak membuka chat room atau menutup cart otomatis
+  } finally {
+    window._checkoutInProgress = false;
+    if (_ckBtn) { _ckBtn.disabled = false; _ckBtn.style.opacity = ''; _ckBtn.style.pointerEvents = ''; }
+  }
 };
 
 // ── Update Status Pesanan (hanya penjual) ─────────────────────
