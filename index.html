@@ -10466,46 +10466,48 @@ window.openStoryUpload = async function() {
   if(!u) { showToast('Login dulu untuk upload status', 'red'); return; }
   const uid = u.uid || u.id;
 
-  // Cek apakah user punya story aktif — kalau ada, tampilkan viewer dulu
-  try {
-    const res = await window._supaFetch(
-      '/rest/v1/user_stories?user_id=eq.' + uid +
-      '&expires_at=gt.' + new Date().toISOString() +
-      '&order=created_at.desc&select=*'
-    );
-    const myStories = res.ok ? await res.json() : [];
-    if(myStories.length > 0) {
-      // Tampilkan story sendiri dulu + tombol tambah di viewer
-      _storyViewerData.stories = myStories;
-      _storyViewerData.idx = 0;
-      _storyViewerData.name = u.name || 'Saya';
-      _storyViewerData.photoUrl = u.photoUrl || u.photo_url || '';
-      _storyViewerData.isMe = true;
+  // iOS PWA fix: inp.click() harus dipanggil sebelum await apapun.
+  // Solusi: fetch story paralel (tanpa await dulu), lalu await hasilnya.
+  const storyPromise = window._supaFetch(
+    '/rest/v1/user_stories?user_id=eq.' + uid +
+    '&expires_at=gt.' + new Date().toISOString() +
+    '&order=created_at.desc&select=*'
+  ).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; });
 
-      const avatarEl = document.getElementById('storyViewerAvatar');
-      const nameEl   = document.getElementById('storyViewerName');
-      if(avatarEl) avatarEl.innerHTML = _storyViewerData.photoUrl
-        ? `<img src="${_storyViewerData.photoUrl}" style="width:100%;height:100%;object-fit:cover">`
-        : `<span style="color:#fff;font-weight:900;font-size:14px">${(u.name||'S')[0].toUpperCase()}</span>`;
-      if(nameEl) nameEl.textContent = 'Cerita Anda';
+  let myStories = [];
+  try { myStories = await storyPromise; } catch(e) { console.warn('[openStoryUpload check]', e.message); }
 
-      // Tombol tambah story di viewer (khusus saat lihat story sendiri)
-      const addBtn = document.getElementById('storyViewerAddBtn');
-      if(addBtn) addBtn.style.display = 'flex';
+  if(myStories.length > 0) {
+    // Ada story aktif — tampilkan viewer dulu + tombol tambah
+    _storyViewerData.stories = myStories;
+    _storyViewerData.idx = 0;
+    _storyViewerData.name = u.name || 'Saya';
+    _storyViewerData.photoUrl = u.photoUrl || u.photo_url || '';
+    _storyViewerData.isMe = true;
 
-      const modal = document.getElementById('storyViewerModal');
-      modal.style.display = 'flex';
-      document.body.style.overflow = 'hidden';
-      _renderStoryFrame();
-      return;
-    }
-  } catch(e) { console.warn('[openStoryUpload check]', e.message); }
+    const avatarEl = document.getElementById('storyViewerAvatar');
+    const nameEl   = document.getElementById('storyViewerName');
+    if(avatarEl) avatarEl.innerHTML = _storyViewerData.photoUrl
+      ? '<img src="' + _storyViewerData.photoUrl + '" style="width:100%;height:100%;object-fit:cover">'
+      : '<span style="color:#fff;font-weight:900;font-size:14px">' + (u.name||'S')[0].toUpperCase() + '</span>';
+    if(nameEl) nameEl.textContent = 'Cerita Anda';
 
-  // Tidak ada story aktif — langsung buka file picker
+    const addBtn = document.getElementById('storyViewerAddBtn');
+    if(addBtn) addBtn.style.display = 'flex';
+
+    const modal = document.getElementById('storyViewerModal');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _renderStoryFrame();
+    return;
+  }
+
+  // Tidak ada story aktif — buka file picker
+  // iOS PWA: setTimeout 0 mempertahankan konteks user gesture
   const inp = document.getElementById('storyFileInput');
   if(!inp) return;
   inp.value = '';
-  inp.click();
+  setTimeout(function(){ inp.click(); }, 0);
 };
 
 window.handleStoryFileSelected = async function(input) {
@@ -10762,23 +10764,21 @@ window.openFollowingStores = async function() {
     users.forEach(seller => {
       const followerCount = allFollows.filter(f => f.seller_uid === seller.uid).length;
       const storePosts    = allPosts.filter(p => p.seller_uid === seller.uid).slice(0, 4);
-      if(storePosts.length === 0) return; // skip seller tanpa produk
+
 
       const storeWrap = document.createElement('div');
       storeWrap.style.cssText = 'background:#fff;margin-bottom:8px;border-top:1px solid #f1f5f9';
 
-      // 4 foto horizontal
-      const photosHtml = storePosts.map(p => {
-        const adImg = p.img_url || '';
-        return `
-          <div onclick="openDetail('${p.id}')"
-               style="width:calc(25% - 3px);flex-shrink:0;aspect-ratio:1/1;background:#f3f4f6;overflow:hidden;border-radius:6px;cursor:pointer">
-            ${adImg
-              ? `<img src="${adImg}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentElement.style.background='#e5e7eb'">`
-              : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-image" style="font-size:18px;color:#d1d5db"></i></div>`
-            }
-          </div>`;
-      }).join('');
+      const photosHtml = storePosts.length === 0
+        ? '<div style="width:100%;padding:12px 0;text-align:center;color:#9ca3af;font-size:12px">Belum ada iklan</div>'
+        : storePosts.map(p => {
+            const adImg = p.img_url || '';
+            return '<div onclick="openDetail(\'' + p.id + '\')" style="width:calc(25% - 3px);flex-shrink:0;aspect-ratio:1/1;background:#f3f4f6;overflow:hidden;border-radius:6px;cursor:pointer">' +
+              (adImg
+                ? '<img src="' + adImg + '" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentElement.style.background=\'#e5e7eb\'">'
+                : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-image" style="font-size:18px;color:#d1d5db"></i></div>') +
+              '</div>';
+          }).join('');
 
       storeWrap.innerHTML = `
         <!-- Header toko -->
