@@ -3414,44 +3414,98 @@ h3.text-sm.font-bold.text-gray-800 {
 
   <!-- ── Story Editor Modal ───────────────────────────────────── -->
   <div id="storyEditorModal" style="display:none;position:fixed;inset:0;z-index:1000;background:#000;flex-direction:column">
+    <!-- Background foto -->
     <div style="position:absolute;inset:0">
       <img id="storyEditorImg" src="" style="width:100%;height:100%;object-fit:cover">
-      <div style="position:absolute;bottom:0;left:0;right:0;height:220px;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 100%)"></div>
+      <div style="position:absolute;bottom:0;left:0;right:0;height:180px;background:linear-gradient(to top,rgba(0,0,0,0.7) 0%,transparent 100%)"></div>
     </div>
-    <div style="position:absolute;top:0;left:0;right:0;z-index:2;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+
+    <!-- Header: Batal | Edit Status | (kosong) -->
+    <div style="position:absolute;top:0;left:0;right:0;z-index:3;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
       <button onclick="closeStoryEditor()" style="width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.4);border:none;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
       <span style="color:#fff;font-size:13px;font-weight:700;background:rgba(0,0,0,0.35);padding:6px 14px;border-radius:20px">Edit Status</span>
       <div style="width:36px"></div>
     </div>
-    <div style="position:absolute;bottom:0;left:0;right:0;z-index:2;padding:16px 16px 32px">
-      <div style="margin-bottom:10px">
-        <textarea id="storyEditorCaption" placeholder="Tulis caption..." maxlength="150"
-          style="width:100%;background:rgba(0,0,0,0.45);border:1.5px solid rgba(255,255,255,0.25);border-radius:14px;color:#fff;font-size:14px;padding:12px 14px;resize:none;outline:none;font-family:'Plus Jakarta Sans',sans-serif;backdrop-filter:blur(6px);box-sizing:border-box"
-          rows="2" onclick="event.stopPropagation()"></textarea>
-        <div style="text-align:right;color:rgba(255,255,255,0.5);font-size:11px;margin-top:2px"><span id="storyEditorCaptionCount">0</span>/150</div>
-      </div>
-      <div id="storyEditorSongPicker" style="margin-bottom:14px">
-        <div id="storyEditorSongSelected" onclick="toggleStorySongPicker()"
-          style="display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.45);border:1.5px solid rgba(255,255,255,0.25);border-radius:14px;padding:10px 14px;cursor:pointer;backdrop-filter:blur(6px)">
-          <i class="fa-solid fa-music" style="color:#10B981;font-size:14px"></i>
-          <span id="storyEditorSongLabel" style="color:rgba(255,255,255,0.75);font-size:13px;flex:1">Pilih Lagu (Opsional)</span>
-          <i class="fa-solid fa-chevron-up" id="storyEditorSongChevron" style="color:rgba(255,255,255,0.5);font-size:11px"></i>
-        </div>
-        <div id="storyEditorSongList" style="display:none;background:rgba(20,20,20,0.95);border-radius:14px;margin-top:6px;overflow:hidden;max-height:180px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1)">
-          <div onclick="selectStorySong('','',''); event.stopPropagation()"
-            style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.07)">
-            <div style="width:32px;height:32px;border-radius:50%;background:#374151;display:flex;align-items:center;justify-content:center">
-              <i class="fa-solid fa-ban" style="color:#9ca3af;font-size:12px"></i>
-            </div>
-            <span style="color:#fff;font-size:13px">Tanpa Lagu</span>
-          </div>
-          <div id="storySongListItems"></div>
-        </div>
-      </div>
-      <button id="storyEditorSendBtn" onclick="submitStoryEditor()" style="width:100%;padding:14px;background:#10B981;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">
-        <i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Kirim Status
+
+    <!-- Tombol kanan vertikal: Musik + Crop -->
+    <div style="position:absolute;top:70px;right:14px;z-index:3;display:flex;flex-direction:column;gap:10px">
+      <!-- Ikon musik -->
+      <button id="storyEditorSongSelected" onclick="toggleStorySongPicker()" style="width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,0.45);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;backdrop-filter:blur(6px)">
+        <i class="fa-solid fa-music" id="storyMusicIcon" style="color:#fff;font-size:16px"></i>
+        <span id="storyMusicDot" style="display:none;position:absolute;top:4px;right:4px;width:8px;height:8px;background:#10B981;border-radius:50%;border:1.5px solid #000"></span>
+      </button>
+      <!-- Ikon crop -->
+      <button onclick="openStoryCrop()" style="width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,0.45);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px)" id="storyCropBtn">
+        <i class="fa-solid fa-crop-simple" id="storyCropIcon" style="color:#fff;font-size:16px"></i>
       </button>
     </div>
+
+    <!-- Dropdown lagu — muncul dari bawah header -->
+    <div id="storyEditorSongList" style="display:none;position:absolute;top:64px;right:64px;left:12px;z-index:3;background:rgba(15,15,15,0.96);border-radius:16px;overflow:hidden;max-height:260px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+      <div style="padding:10px 14px 6px;border-bottom:1px solid rgba(255,255,255,0.07)">
+        <span id="storyEditorSongLabel" style="color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Pilih Lagu</span>
+      </div>
+      <div onclick="selectStorySong('','',''); event.stopPropagation()"
+        style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="width:32px;height:32px;border-radius:50%;background:#374151;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid fa-ban" style="color:#9ca3af;font-size:12px"></i>
+        </div>
+        <span style="color:#9ca3af;font-size:13px">Tanpa Lagu</span>
+      </div>
+      <div id="storySongListItems"></div>
+    </div>
+
+    <!-- Crop overlay — fullscreen canvas -->
+    <div id="storyCropOverlay" style="display:none;position:absolute;inset:0;z-index:4;background:#000;flex-direction:column">
+      <div style="position:absolute;top:0;left:0;right:0;z-index:2;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+        <button onclick="cancelStoryCrop()" style="background:none;border:none;color:rgba(255,255,255,0.7);font-size:13px;font-weight:600;cursor:pointer">Batal</button>
+        <span style="color:#fff;font-size:13px;font-weight:700">Potong Foto</span>
+        <button onclick="confirmStoryCrop()" style="background:none;border:none;color:#10B981;font-size:13px;font-weight:700;cursor:pointer">Selesai</button>
+      </div>
+      <!-- Pilihan rasio -->
+      <div style="position:absolute;top:52px;left:0;right:0;z-index:2;display:flex;justify-content:center;gap:8px;padding:8px 16px">
+        <button onclick="setStoryCropRatio(9,16)" style="padding:5px 12px;border-radius:20px;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.3);color:#fff;font-size:11px;font-weight:600;cursor:pointer" id="cropRatio916">9:16</button>
+        <button onclick="setStoryCropRatio(1,1)" style="padding:5px 12px;border-radius:20px;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.3);color:#fff;font-size:11px;font-weight:600;cursor:pointer" id="cropRatio11">1:1</button>
+        <button onclick="setStoryCropRatio(4,5)" style="padding:5px 12px;border-radius:20px;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.3);color:#fff;font-size:11px;font-weight:600;cursor:pointer" id="cropRatio45">4:5</button>
+        <button onclick="setStoryCropRatio(0,0)" style="padding:5px 12px;border-radius:20px;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.3);color:#fff;font-size:11px;font-weight:600;cursor:pointer" id="cropRatioFree">Bebas</button>
+      </div>
+      <!-- Canvas crop area -->
+      <div style="position:absolute;top:96px;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:center;overflow:hidden" id="storyCropArea">
+        <div style="position:relative;display:inline-block;touch-action:none" id="storyCropContainer">
+          <img id="storyCropImg" src="" style="display:block;max-width:100%;max-height:calc(100vh - 100px);user-select:none;-webkit-user-drag:none">
+          <!-- Crop box -->
+          <div id="storyCropBox" style="position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,0.55);cursor:move;touch-action:none">
+            <!-- Corner handles -->
+            <div class="crop-handle" data-pos="tl" style="position:absolute;top:-6px;left:-6px;width:14px;height:14px;border-top:3px solid #10B981;border-left:3px solid #10B981;cursor:nw-resize"></div>
+            <div class="crop-handle" data-pos="tr" style="position:absolute;top:-6px;right:-6px;width:14px;height:14px;border-top:3px solid #10B981;border-right:3px solid #10B981;cursor:ne-resize"></div>
+            <div class="crop-handle" data-pos="bl" style="position:absolute;bottom:-6px;left:-6px;width:14px;height:14px;border-bottom:3px solid #10B981;border-left:3px solid #10B981;cursor:sw-resize"></div>
+            <div class="crop-handle" data-pos="br" style="position:absolute;bottom:-6px;right:-6px;width:14px;height:14px;border-bottom:3px solid #10B981;border-right:3px solid #10B981;cursor:se-resize"></div>
+            <!-- Grid lines -->
+            <div style="position:absolute;inset:0;pointer-events:none">
+              <div style="position:absolute;left:33.33%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.3)"></div>
+              <div style="position:absolute;left:66.66%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.3)"></div>
+              <div style="position:absolute;top:33.33%;left:0;right:0;height:1px;background:rgba(255,255,255,0.3)"></div>
+              <div style="position:absolute;top:66.66%;left:0;right:0;height:1px;background:rgba(255,255,255,0.3)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Area bawah: caption saja -->
+    <div style="position:absolute;bottom:0;left:0;right:0;z-index:2;padding:14px 14px 28px">
+      <textarea id="storyEditorCaption" placeholder=": tambahkan keterangan" maxlength="150"
+        style="width:100%;background:rgba(0,0,0,0.45);border:1.5px solid rgba(255,255,255,0.2);border-radius:14px;color:#fff;font-size:14px;padding:11px 14px;resize:none;outline:none;font-family:'Plus Jakarta Sans',sans-serif;backdrop-filter:blur(6px);box-sizing:border-box;caret-color:#10B981"
+        rows="2"
+        onclick="event.stopPropagation();this.placeholder=''"
+        onblur="if(!this.value)this.placeholder=': tambahkan keterangan'"></textarea>
+      <div style="text-align:right;color:rgba(255,255,255,0.5);font-size:11px;margin-top:2px"><span id="storyEditorCaptionCount">0</span>/150</div>
+    </div>
+
+    <!-- FAB Kirim — pojok kanan bawah -->
+    <button id="storyEditorSendBtn" onclick="submitStoryEditor()" style="position:absolute;bottom:28px;right:16px;z-index:3;width:54px;height:54px;border-radius:50%;background:#10B981;border:none;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(16,185,129,0.5)">
+      <i class="fa-solid fa-paper-plane"></i>
+    </button>
   </div>
 
   <!-- ── Audio Trimmer Modal ──────────────────────────────────── -->
@@ -10454,22 +10508,26 @@ function renderFollowingStoryBar(currentUser, sellers) {
       ? `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none'">`
       : `<span style="color:#fff;font-size:18px;font-weight:900">${firstChar}</span>`;
 
-    const plusBtn = isMe ? `
-      <div style="position:absolute;bottom:1px;right:1px;width:22px;height:22px;border-radius:50%;background:#3b82f6;border:2px solid #fff;display:flex;align-items:center;justify-content:center;z-index:1">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      </div>` : '';
-
     const alreadySeen = !isMe && sellerUid && _seenSet.has(sellerUid);
-    const ringBg = alreadySeen ? '#d1d5db' : igGrad;
+    const ringBg  = alreadySeen ? '#d1d5db' : igGrad;
     const seenAttr = !isMe && sellerUid ? `data-story-uid="${sellerUid}" data-story-seen="${alreadySeen ? 1 : 0}"` : '';
 
+    // Foto profil isMe: klik → lihat story sendiri (openStoryUpload)
     const avatarWrap = isMe
-      ? `<div style="width:68px;height:68px;border-radius:50%;border:2.5px solid #d1d5db;overflow:hidden;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10B981,#064E3B)">${avatarInner}</div>`
+      ? `<div onclick="openStoryUpload()" style="width:68px;height:68px;border-radius:50%;border:2.5px solid #d1d5db;overflow:hidden;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10B981,#064E3B);cursor:pointer">${avatarInner}</div>`
       : `<div ${seenAttr} style="padding:2.5px;border-radius:50%;background:${ringBg};display:inline-flex;transition:background 0.3s">
            <div style="width:64px;height:64px;border-radius:50%;border:2.5px solid #fff;overflow:hidden;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10B981,#064E3B)">${avatarInner}</div>
          </div>`;
 
-    const clickAttr = isMe ? `onclick="openStoryUpload()"` : `onclick="openStoryViewer('${sellerUid}','${(sellerName||'').replace(/'/g,'&apos;')}','${sellerPhoto||''}')"`;
+    // Ikon +: klik → langsung buka file picker, stopPropagation agar tidak trigger foto profil
+    const plusBtn = isMe ? `
+      <div onclick="event.stopPropagation();(function(){var i=document.getElementById('storyFileInput');if(i){i.value='';setTimeout(function(){i.click();},0);}})()"
+           style="position:absolute;bottom:1px;right:1px;width:22px;height:22px;border-radius:50%;background:#3b82f6;border:2px solid #fff;display:flex;align-items:center;justify-content:center;z-index:1;cursor:pointer">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </div>` : '';
+
+    // Wrapper isMe: tidak punya onclick (foto profil punya onclick sendiri)
+    const clickAttr = isMe ? '' : `onclick="openStoryViewer('${sellerUid}','${(sellerName||'').replace(/'/g,'&apos;')}','${sellerPhoto||''}')"`;
 
     return `
       <div style="display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0;width:78px;cursor:pointer" ${clickAttr}>
@@ -10750,12 +10808,18 @@ window.handleStoryFileSelected = function(input) {
   const countEl   = document.getElementById('storyEditorCaptionCount');
   const songLabel = document.getElementById('storyEditorSongLabel');
   const songList  = document.getElementById('storyEditorSongList');
-  const chevron   = document.getElementById('storyEditorSongChevron');
-  if(captionEl) { captionEl.value = ''; captionEl.oninput = function(){ if(countEl) countEl.textContent = this.value.length; }; }
+  const musicDot  = document.getElementById('storyMusicDot');
+  const musicIcon = document.getElementById('storyMusicIcon');
+  if(captionEl) {
+    captionEl.value = '';
+    captionEl.placeholder = ': tambahkan keterangan';
+    captionEl.oninput = function(){ if(countEl) countEl.textContent = this.value.length; };
+  }
   if(countEl)   countEl.textContent = '0';
-  if(songLabel) songLabel.textContent = 'Pilih Lagu (Opsional)';
+  if(songLabel) songLabel.textContent = 'Pilih Lagu';
   if(songList)  songList.style.display = 'none';
-  if(chevron)   chevron.style.transform = '';
+  if(musicDot)  musicDot.style.display = 'none';
+  if(musicIcon) musicIcon.style.color  = '#fff';
 
   const listEl = document.getElementById('storySongListItems');
   if(listEl) {
@@ -10798,18 +10862,26 @@ window.closeStoryEditor = function() {
   const modal = document.getElementById('storyEditorModal');
   if(modal) modal.style.display = 'none';
   document.body.style.overflow = '';
-  _storyEditorState = { file: null, songTitle: '', songUrl: '' };
+  _storyEditorState = { file: null, songTitle: '', songArtist: '', songUrl: '', songStart: 0 };
+  _cropState.active = false; _cropState.croppedDataUrl = '';
+  const cropIcon = document.getElementById('storyCropIcon');
+  if(cropIcon) cropIcon.style.color = '#fff';
   const inp = document.getElementById('storyFileInput');
   if(inp) inp.value = '';
 };
 
 window.toggleStorySongPicker = function() {
-  const listEl  = document.getElementById('storyEditorSongList');
-  const chevron = document.getElementById('storyEditorSongChevron');
+  const listEl   = document.getElementById('storyEditorSongList');
+  const musicIcon = document.getElementById('storyMusicIcon');
   if(!listEl) return;
   const open = listEl.style.display !== 'none';
-  listEl.style.display = open ? 'none' : 'block';
-  if(chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
+  if(open) {
+    listEl.style.display = 'none';
+    if(musicIcon) musicIcon.style.color = '#fff';
+  } else {
+    listEl.style.display = 'block';
+    if(musicIcon) musicIcon.style.color = '#10B981';
+  }
 };
 
 window.selectStorySong = function(url, title, artist) {
@@ -10820,13 +10892,19 @@ window.selectStorySong = function(url, title, artist) {
   if(chevron) chevron.style.transform = '';
 
   if(!url) {
-    // Tanpa lagu
-    _storyEditorState.songUrl   = '';
-    _storyEditorState.songTitle = '';
-    _storyEditorState.songStart = 0;
+    _storyEditorState.songUrl    = '';
+    _storyEditorState.songTitle  = '';
+    _storyEditorState.songStart  = 0;
     _storyEditorState.songArtist = '';
     const label = document.getElementById('storyEditorSongLabel');
-    if(label) label.textContent = 'Pilih Lagu (Opsional)';
+    const dot   = document.getElementById('storyMusicDot');
+    const icon  = document.getElementById('storyMusicIcon');
+    if(label) label.textContent  = 'Pilih Lagu';
+    if(dot)   dot.style.display  = 'none';
+    if(icon)  icon.style.color   = '#fff';
+    // Tutup dropdown
+    const listEl = document.getElementById('storyEditorSongList');
+    if(listEl) listEl.style.display = 'none';
     return;
   }
 
@@ -10886,13 +10964,17 @@ window.confirmAudioTrim = function() {
   _storyEditorState.songArtist = _trimmerState.artist;
   _storyEditorState.songStart  = _trimmerState.start;
 
-  const label = document.getElementById('storyEditorSongLabel');
+  const label    = document.getElementById('storyEditorSongLabel');
+  const dot      = document.getElementById('storyMusicDot');
+  const icon     = document.getElementById('storyMusicIcon');
   const startSec = Math.floor(_trimmerState.start);
   const m = Math.floor(startSec / 60), s = startSec % 60;
   const startStr = m + ':' + (s < 10 ? '0' : '') + s;
   if(label) label.textContent = '\uD83C\uDFB5 ' + _trimmerState.title +
     (_trimmerState.artist ? ' \u2014 ' + _trimmerState.artist : '') +
     ' (dari ' + startStr + ')';
+  if(dot)  dot.style.display  = 'block';
+  if(icon) icon.style.color   = '#10B981';
 
   closeAudioTrimmer();
 };
@@ -10981,6 +11063,177 @@ window.toggleTrimmerPreview = function() {
   }
 };
 
+// ── Story Crop ────────────────────────────────────────────────
+var _cropState = { active: false, x: 0, y: 0, w: 0, h: 0, imgW: 0, imgH: 0, ratio: 0, dragging: false, resizing: null, startX: 0, startY: 0, startBox: null };
+
+window.openStoryCrop = function() {
+  const overlay  = document.getElementById('storyCropOverlay');
+  const cropImg  = document.getElementById('storyCropImg');
+  const srcImg   = document.getElementById('storyEditorImg');
+  if(!overlay || !cropImg || !srcImg) return;
+  cropImg.src = srcImg.src;
+  overlay.style.display = 'flex';
+  cropImg.onload = function() { initCropBox(); };
+  if(cropImg.complete) initCropBox();
+};
+
+function initCropBox() {
+  const img = document.getElementById('storyCropImg');
+  const box = document.getElementById('storyCropBox');
+  if(!img || !box) return;
+  const iW = img.offsetWidth, iH = img.offsetHeight;
+  _cropState.imgW = iW; _cropState.imgH = iH;
+  // Default: 9:16 crop centered
+  _cropState.ratio = 9/16;
+  const h = Math.min(iH, iW / (9/16));
+  const w = h * (9/16);
+  _cropState.x = (iW - w) / 2;
+  _cropState.y = (iH - h) / 2;
+  _cropState.w = w; _cropState.h = h;
+  applyCropBox();
+  highlightRatioBtn('cropRatio916');
+  setupCropEvents();
+}
+
+function applyCropBox() {
+  const box = document.getElementById('storyCropBox');
+  if(!box) return;
+  box.style.left   = _cropState.x + 'px';
+  box.style.top    = _cropState.y + 'px';
+  box.style.width  = _cropState.w + 'px';
+  box.style.height = _cropState.h + 'px';
+}
+
+function highlightRatioBtn(id) {
+  ['cropRatio916','cropRatio11','cropRatio45','cropRatioFree'].forEach(function(bid) {
+    const b = document.getElementById(bid);
+    if(b) b.style.background = bid === id ? '#10B981' : 'rgba(255,255,255,0.15)';
+  });
+}
+
+window.setStoryCropRatio = function(rw, rh) {
+  const iW = _cropState.imgW, iH = _cropState.imgH;
+  if(rw === 0) {
+    _cropState.ratio = 0;
+    highlightRatioBtn('cropRatioFree');
+    return;
+  }
+  _cropState.ratio = rw / rh;
+  const h = Math.min(iH, iW / _cropState.ratio);
+  const w = h * _cropState.ratio;
+  _cropState.x = (iW - w) / 2;
+  _cropState.y = (iH - h) / 2;
+  _cropState.w = w; _cropState.h = h;
+  applyCropBox();
+  const ids = { '0.5625': 'cropRatio916', '1': 'cropRatio11', '0.8': 'cropRatio45' };
+  highlightRatioBtn(ids[_cropState.ratio.toFixed(4)] || ids[String(Math.round(_cropState.ratio*100)/100)] || 'cropRatioFree');
+};
+
+function setupCropEvents() {
+  const box = document.getElementById('storyCropBox');
+  const con = document.getElementById('storyCropContainer');
+  if(!box || !con) return;
+
+  function getPos(e) {
+    const t = e.touches ? e.touches[0] : e;
+    const r = con.getBoundingClientRect();
+    return { x: t.clientX - r.left, y: t.clientY - r.top };
+  }
+
+  function onStart(e) {
+    e.preventDefault();
+    const pos   = getPos(e);
+    const tgt   = e.target;
+    const hPos  = tgt.getAttribute && tgt.getAttribute('data-pos');
+    _cropState.startX   = pos.x;
+    _cropState.startY   = pos.y;
+    _cropState.startBox = { x: _cropState.x, y: _cropState.y, w: _cropState.w, h: _cropState.h };
+    _cropState.resizing = hPos || null;
+    _cropState.dragging = !hPos;
+  }
+
+  function onMove(e) {
+    e.preventDefault();
+    if(!_cropState.dragging && !_cropState.resizing) return;
+    const pos = getPos(e);
+    const dx = pos.x - _cropState.startX, dy = pos.y - _cropState.startY;
+    const b = _cropState.startBox;
+    const iW = _cropState.imgW, iH = _cropState.imgH;
+    const ratio = _cropState.ratio;
+    let nx = b.x, ny = b.y, nw = b.w, nh = b.h;
+
+    if(_cropState.dragging) {
+      nx = Math.max(0, Math.min(iW - nw, b.x + dx));
+      ny = Math.max(0, Math.min(iH - nh, b.y + dy));
+    } else {
+      const r = _cropState.resizing;
+      if(r === 'br') { nw = Math.max(40, b.w + dx); nh = ratio ? nw / ratio : Math.max(40, b.h + dy); }
+      else if(r === 'bl') { nw = Math.max(40, b.w - dx); nx = b.x + b.w - nw; nh = ratio ? nw / ratio : Math.max(40, b.h + dy); }
+      else if(r === 'tr') { nw = Math.max(40, b.w + dx); nh = ratio ? nw / ratio : Math.max(40, b.h - dy); ny = b.y + b.h - nh; }
+      else if(r === 'tl') { nw = Math.max(40, b.w - dx); nx = b.x + b.w - nw; nh = ratio ? nw / ratio : Math.max(40, b.h - dy); ny = b.y + b.h - nh; }
+      // Clamp
+      if(nx < 0) { nw += nx; nx = 0; }
+      if(ny < 0) { nh += ny; ny = 0; }
+      nw = Math.min(nw, iW - nx);
+      nh = Math.min(nh, iH - ny);
+    }
+    _cropState.x = nx; _cropState.y = ny; _cropState.w = nw; _cropState.h = nh;
+    applyCropBox();
+  }
+
+  function onEnd() { _cropState.dragging = false; _cropState.resizing = null; }
+
+  // Hapus listener lama
+  const oldBox = box.cloneNode(true);
+  box.parentNode.replaceChild(oldBox, box);
+  oldBox.addEventListener('mousedown',  onStart);
+  oldBox.addEventListener('touchstart', onStart, { passive: false });
+  con.addEventListener('mousemove',  onMove);
+  con.addEventListener('touchmove',  onMove, { passive: false });
+  con.addEventListener('mouseup',   onEnd);
+  con.addEventListener('touchend',  onEnd);
+}
+
+window.cancelStoryCrop = function() {
+  const overlay = document.getElementById('storyCropOverlay');
+  if(overlay) overlay.style.display = 'none';
+  _cropState.active = false;
+  const icon = document.getElementById('storyCropIcon');
+  if(icon) icon.style.color = '#fff';
+};
+
+window.confirmStoryCrop = function() {
+  const srcImg = document.getElementById('storyCropImg');
+  if(!srcImg) return;
+  // Hitung skala: naturalWidth vs offsetWidth
+  const scaleX = srcImg.naturalWidth  / srcImg.offsetWidth;
+  const scaleY = srcImg.naturalHeight / srcImg.offsetHeight;
+  const canvas = document.createElement('canvas');
+  canvas.width  = Math.round(_cropState.w * scaleX);
+  canvas.height = Math.round(_cropState.h * scaleY);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(srcImg,
+    _cropState.x * scaleX, _cropState.y * scaleY,
+    _cropState.w * scaleX, _cropState.h * scaleY,
+    0, 0, canvas.width, canvas.height
+  );
+  // Simpan hasil crop sebagai dataURL → update preview
+  const croppedUrl = canvas.toDataURL('image/jpeg', 0.92);
+  _cropState.active = true;
+  _cropState.croppedDataUrl = croppedUrl;
+
+  // Update preview di editor
+  const editorImg = document.getElementById('storyEditorImg');
+  if(editorImg) editorImg.src = croppedUrl;
+
+  // Tandai ikon crop aktif
+  const icon = document.getElementById('storyCropIcon');
+  if(icon) icon.style.color = '#10B981';
+
+  const overlay = document.getElementById('storyCropOverlay');
+  if(overlay) overlay.style.display = 'none';
+};
+
 window.submitStoryEditor = async function() {
   const file = _storyEditorState.file;
   if(!file) return;
@@ -11005,19 +11258,25 @@ window.submitStoryEditor = async function() {
     const todayStories = checkRes.ok ? await checkRes.json() : [];
     if(todayStories.length >= 4) {
       showToast('Batas upload status hari ini sudah penuh (maks 4 per hari)', 'red');
-      if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Kirim Status'; }
+      if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>'; btn.textContent = ''; }
       return;
     }
   } catch(e) { console.warn('[story limit]', e.message); }
 
-  // 2. Kompres gambar
+  // 2. Kompres gambar (atau ambil dari crop jika aktif)
   if(btn) btn.textContent = 'Mengkompres...';
   let blob;
   try {
-    blob = await compressImage(file, 800, 0.75);
+    if(_cropState.active && _cropState.croppedDataUrl) {
+      // Ubah dataURL crop jadi Blob
+      const res  = await fetch(_cropState.croppedDataUrl);
+      blob = await res.blob();
+    } else {
+      blob = await compressImage(file, 800, 0.75);
+    }
   } catch(e) {
     showToast('Gagal kompres: ' + (e.message||e), 'red');
-    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Kirim Status'; }
+    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>'; }
     return;
   }
 
@@ -11045,7 +11304,7 @@ window.submitStoryEditor = async function() {
     publicId = res.public_id || '';
   } catch(e) {
     showToast('Gagal upload: ' + (e.message||e), 'red');
-    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Kirim Status'; }
+    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>'; btn.textContent = ''; }
     return;
   }
 
@@ -11073,7 +11332,7 @@ window.submitStoryEditor = async function() {
     trackEvent('post_story', {});
   } catch(e) {
     showToast('Gagal simpan status: ' + (e.message||e), 'red');
-    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Kirim Status'; }
+    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>'; btn.textContent = ''; }
   }
 };
 
