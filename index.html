@@ -12671,6 +12671,14 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (typeof showToast === 'function') showToast('[SW-DEBUG] controllerchange terjadi (SW baru ambil kontrol)', 'green');
   });
+  // [SW-IMG-DEBUG] Terima log dari fetch handler gambar di service-worker.js
+  // (sementara, untuk diagnosa kenapa IMG_CACHE selalu 0 entry — akan dihapus
+  // setelah ketemu akar masalahnya).
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SW_IMG_DEBUG' && typeof showToast === 'function') {
+      showToast('[SW-IMG-DEBUG] ' + event.data.msg, 'green');
+    }
+  });
 }
 </script>
 <script>
