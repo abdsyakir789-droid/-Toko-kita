@@ -9446,7 +9446,14 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
                     </button>
                   </div>
                 </div>
-              </div>` : ''}
+              </div>
+              ${m.status==='dibatalkan' ? `<div style="background:#EF4444;color:#000;text-align:center;padding:8px 12px;font-size:11px;font-weight:700">Pesanan dibatalkan</div>` : ''}` : (window._S.user && window._S.user.uid===(orderData.buyerUid||window._S.activeChatBuyerId||'') && m.status!=='selesai' && m.status!=='dibatalkan' ? `
+              <div style="padding:8px 12px 10px;border-top:1px solid #f1f5f9">
+                <button onclick="cancelOrderByBuyer('${window._S.activeChatId||''}','${orderData.buyerUid||window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 0;border-radius:20px;border:1.5px solid #DC2626;background:#FEE2E2;color:#DC2626;font-size:11px;font-weight:700;cursor:pointer">
+                  <i class="fa-solid fa-xmark" style="font-size:10px"></i> Batalkan
+                </button>
+              </div>
+              ` : '')}
             </div>
             ` : isImg ? `
             <div class="relative rounded-2xl overflow-hidden shadow-sm">
@@ -18104,6 +18111,71 @@ window.updateOrderStatus = async function(newStatus, chatId, buyerId, msgId, own
         })
       });
     } catch(ne) { console.warn('[updateOrderStatus notif]', ne.message); }
+
+  } catch(e) {
+    showToast('Gagal: ' + (e.message||e), 'red');
+  }
+};
+
+// ── Pembatalan pesanan oleh pembeli (terpisah dari updateOrderStatus, tidak menyentuh logika status seller) ──
+window.cancelOrderByBuyer = async function(chatId, buyerId, msgId, sellerUid) {
+  var uid = window._S.user && window._S.user.uid;
+  if(!uid) { showToast('Login dulu','red'); return; }
+  // Keamanan: hanya pembeli pemilik pesanan ini yang boleh membatalkan
+  if(uid !== buyerId) { showToast('Hanya pembeli yang bisa membatalkan pesanan ini','red'); return; }
+  if(!chatId || !msgId) { showToast('Data pesanan tidak lengkap','red'); return; }
+  if(!confirm('Yakin ingin membatalkan pesanan ini?')) return;
+
+  try {
+    var _query = '/rest/v1/orders?msg_id=eq.'+encodeURIComponent(msgId)+'&buyer_id=eq.'+buyerId;
+    var _res = await window._supaFetch(
+      _query,
+      { method: 'PATCH', headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ status: 'dibatalkan' }) }
+    );
+    if(!_res.ok) {
+      var _err = await _res.text();
+      throw new Error('Gagal membatalkan: ' + _err.slice(0,80));
+    }
+
+    showToast('Pesanan dibatalkan','green');
+
+    // Simpan status ke chat_messages agar persistent saat re-render (sama seperti updateOrderStatus)
+    await window._supaFetch('/rest/v1/chat_messages?id=eq.'+encodeURIComponent(msgId), {
+      method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ status: 'dibatalkan' })
+    }).catch(function(){});
+
+    // Sembunyikan tombol Batalkan di sisi pembeli setelah berhasil
+    try {
+      var _btns = document.querySelectorAll('button[onclick*="cancelOrderByBuyer"]');
+      _btns.forEach(function(b){
+        if(b.getAttribute('onclick') && b.getAttribute('onclick').indexOf("'"+msgId+"'") !== -1 && b.parentElement) {
+          b.parentElement.style.display = 'none';
+        }
+      });
+    } catch(_he) {}
+
+    // Kirim notifikasi ke penjual
+    try {
+      var buyerName = window._S.user.name || 'Pembeli';
+      window.sendPushToUser(sellerUid, buyerName, 'Pesanan dibatalkan oleh pembeli', '/?chatId=' + chatId);
+
+      await window._supaFetch('/rest/v1/notifications', {
+        method: 'POST', headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          to_uid: sellerUid,
+          user_id: sellerUid,
+          type: 'order_status',
+          message: buyerName + ' membatalkan pesanan',
+          sender_name: buyerName,
+          sender_uid: uid,
+          sender_photo: window._S.user.photoUrl || '',
+          is_read: false,
+          created_at: new Date().toISOString()
+        })
+      });
+    } catch(ne) { console.warn('[cancelOrderByBuyer notif]', ne.message); }
 
   } catch(e) {
     showToast('Gagal: ' + (e.message||e), 'red');
