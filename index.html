@@ -3412,6 +3412,48 @@ h3.text-sm.font-bold.text-gray-800 {
   <!-- Hidden input untuk upload story -->
   <input type="file" id="storyFileInput" accept="image/*" style="display:none" onchange="handleStoryFileSelected(this)">
 
+  <!-- ── Story Editor Modal ───────────────────────────────────── -->
+  <div id="storyEditorModal" style="display:none;position:fixed;inset:0;z-index:1000;background:#000;flex-direction:column">
+    <div style="position:absolute;inset:0">
+      <img id="storyEditorImg" src="" style="width:100%;height:100%;object-fit:cover">
+      <div style="position:absolute;bottom:0;left:0;right:0;height:220px;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 100%)"></div>
+    </div>
+    <div style="position:absolute;top:0;left:0;right:0;z-index:2;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+      <button onclick="closeStoryEditor()" style="width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.4);border:none;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+      <span style="color:#fff;font-size:13px;font-weight:700;background:rgba(0,0,0,0.35);padding:6px 14px;border-radius:20px">Edit Status</span>
+      <div style="width:36px"></div>
+    </div>
+    <div style="position:absolute;bottom:0;left:0;right:0;z-index:2;padding:16px 16px 32px">
+      <div style="margin-bottom:10px">
+        <textarea id="storyEditorCaption" placeholder="Tulis caption..." maxlength="150"
+          style="width:100%;background:rgba(0,0,0,0.45);border:1.5px solid rgba(255,255,255,0.25);border-radius:14px;color:#fff;font-size:14px;padding:12px 14px;resize:none;outline:none;font-family:'Plus Jakarta Sans',sans-serif;backdrop-filter:blur(6px);box-sizing:border-box"
+          rows="2" onclick="event.stopPropagation()"></textarea>
+        <div style="text-align:right;color:rgba(255,255,255,0.5);font-size:11px;margin-top:2px"><span id="storyEditorCaptionCount">0</span>/150</div>
+      </div>
+      <div id="storyEditorSongPicker" style="margin-bottom:14px">
+        <div id="storyEditorSongSelected" onclick="toggleStorySongPicker()"
+          style="display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.45);border:1.5px solid rgba(255,255,255,0.25);border-radius:14px;padding:10px 14px;cursor:pointer;backdrop-filter:blur(6px)">
+          <i class="fa-solid fa-music" style="color:#10B981;font-size:14px"></i>
+          <span id="storyEditorSongLabel" style="color:rgba(255,255,255,0.75);font-size:13px;flex:1">Pilih Lagu (Opsional)</span>
+          <i class="fa-solid fa-chevron-up" id="storyEditorSongChevron" style="color:rgba(255,255,255,0.5);font-size:11px"></i>
+        </div>
+        <div id="storyEditorSongList" style="display:none;background:rgba(20,20,20,0.95);border-radius:14px;margin-top:6px;overflow:hidden;max-height:180px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1)">
+          <div onclick="selectStorySong('','',''); event.stopPropagation()"
+            style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.07)">
+            <div style="width:32px;height:32px;border-radius:50%;background:#374151;display:flex;align-items:center;justify-content:center">
+              <i class="fa-solid fa-ban" style="color:#9ca3af;font-size:12px"></i>
+            </div>
+            <span style="color:#fff;font-size:13px">Tanpa Lagu</span>
+          </div>
+          <div id="storySongListItems"></div>
+        </div>
+      </div>
+      <button id="storyEditorSendBtn" onclick="submitStoryEditor()" style="width:100%;padding:14px;background:#10B981;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">
+        <i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Kirim Status
+      </button>
+    </div>
+  </div>
+
   <!-- ── Story Viewer Modal ──────────────────────────────────── -->
   <div id="storyViewerModal" style="display:none;position:fixed;inset:0;z-index:999;background:#000;flex-direction:column" onclick="closeStoryViewer()">
     <!-- Progress bar -->
@@ -3435,6 +3477,17 @@ h3.text-sm.font-bold.text-gray-800 {
     <!-- Gambar story -->
     <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
       <img id="storyViewerImg" src="" style="max-width:100%;max-height:100%;object-fit:contain" onclick="event.stopPropagation()">
+    </div>
+    <!-- Caption story -->
+    <div id="storyViewerCaption" style="display:none;position:absolute;bottom:70px;left:0;right:0;z-index:2;padding:0 16px;pointer-events:none">
+      <p style="color:#fff;font-size:14px;font-weight:500;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,0.8);line-height:1.5;margin:0;background:rgba(0,0,0,0.3);border-radius:10px;padding:8px 12px;backdrop-filter:blur(4px)" id="storyViewerCaptionText"></p>
+    </div>
+    <!-- Info lagu -->
+    <div id="storyViewerSong" style="display:none;position:absolute;bottom:24px;left:0;right:0;z-index:2;padding:0 16px;pointer-events:none">
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px">
+        <i class="fa-solid fa-music" style="color:#fff;font-size:11px;animation:spin 3s linear infinite"></i>
+        <span id="storyViewerSongText" style="color:#fff;font-size:12px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,0.8)"></span>
+      </div>
     </div>
     <!-- Tap kiri/kanan untuk navigasi -->
     <div style="position:absolute;inset:0;display:flex;z-index:1">
@@ -10472,6 +10525,30 @@ function _renderStoryFrame() {
   const img = document.getElementById('storyViewerImg');
   if(img) img.src = story.img_url || '';
 
+  // Caption
+  const captionBox  = document.getElementById('storyViewerCaption');
+  const captionText = document.getElementById('storyViewerCaptionText');
+  if(captionBox && captionText) {
+    if(story.caption) {
+      captionText.textContent = story.caption;
+      captionBox.style.display = 'block';
+    } else {
+      captionBox.style.display = 'none';
+    }
+  }
+
+  // Info lagu
+  const songBox  = document.getElementById('storyViewerSong');
+  const songText = document.getElementById('storyViewerSongText');
+  if(songBox && songText) {
+    if(story.music_title) {
+      songText.textContent = story.music_title;
+      songBox.style.display = 'block';
+    } else {
+      songBox.style.display = 'none';
+    }
+  }
+
   // Waktu
   const timeEl = document.getElementById('storyViewerTime');
   if(timeEl && story.created_at) {
@@ -10567,44 +10644,129 @@ window.openStoryUpload = async function() {
   setTimeout(function(){ inp.click(); }, 0);
 };
 
-window.handleStoryFileSelected = async function(input) {
+window.handleStoryFileSelected = function(input) {
   const file = input.files[0];
   if(!file) return;
+  const u = window._S.user;
+  if(!u) { showToast('Login dulu', 'red'); return; }
 
+  _storyEditorState = { file: file, songTitle: '', songUrl: '' };
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = document.getElementById('storyEditorImg');
+    if(img) img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+
+  const captionEl = document.getElementById('storyEditorCaption');
+  const countEl   = document.getElementById('storyEditorCaptionCount');
+  const songLabel = document.getElementById('storyEditorSongLabel');
+  const songList  = document.getElementById('storyEditorSongList');
+  const chevron   = document.getElementById('storyEditorSongChevron');
+  if(captionEl) { captionEl.value = ''; captionEl.oninput = function(){ if(countEl) countEl.textContent = this.value.length; }; }
+  if(countEl)   countEl.textContent = '0';
+  if(songLabel) songLabel.textContent = 'Pilih Lagu (Opsional)';
+  if(songList)  songList.style.display = 'none';
+  if(chevron)   chevron.style.transform = '';
+
+  const listEl = document.getElementById('storySongListItems');
+  if(listEl) {
+    const songs = window._STORY_SONGS || [];
+    if(songs.length === 0) {
+      listEl.innerHTML = '<div style="padding:12px 14px;color:rgba(255,255,255,0.4);font-size:12px;text-align:center">Belum ada lagu tersedia</div>';
+    } else {
+      listEl.innerHTML = songs.map(function(s) {
+        return '<div onclick="selectStorySong(\'' + s.url + '\',\'' + s.title.replace(/'/g,"\\'") + '\',\'' + (s.artist||'').replace(/'/g,"\\'") + '\'); event.stopPropagation()"' +
+          ' style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.07)">' +
+          '<div style="width:32px;height:32px;border-radius:50%;background:#10B981;display:flex;align-items:center;justify-content:center">' +
+          '<i class="fa-solid fa-music" style="color:#fff;font-size:12px"></i></div>' +
+          '<div style="flex:1;min-width:0"><div style="color:#fff;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + s.title + '</div>' +
+          (s.artist ? '<div style="color:rgba(255,255,255,0.5);font-size:11px">' + s.artist + '</div>' : '') +
+          '</div></div>';
+      }).join('');
+    }
+  }
+
+  const modal = document.getElementById('storyEditorModal');
+  if(modal) modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+};
+
+// State sementara editor
+var _storyEditorState = { file: null, songTitle: '', songUrl: '' };
+
+window.closeStoryEditor = function() {
+  const modal = document.getElementById('storyEditorModal');
+  if(modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+  _storyEditorState = { file: null, songTitle: '', songUrl: '' };
+  const inp = document.getElementById('storyFileInput');
+  if(inp) inp.value = '';
+};
+
+window.toggleStorySongPicker = function() {
+  const listEl  = document.getElementById('storyEditorSongList');
+  const chevron = document.getElementById('storyEditorSongChevron');
+  if(!listEl) return;
+  const open = listEl.style.display !== 'none';
+  listEl.style.display = open ? 'none' : 'block';
+  if(chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
+};
+
+window.selectStorySong = function(url, title, artist) {
+  _storyEditorState.songUrl   = url;
+  _storyEditorState.songTitle = title;
+  const label = document.getElementById('storyEditorSongLabel');
+  if(label) label.textContent = url ? ('\uD83C\uDFB5 ' + title + (artist ? ' \u2014 ' + artist : '')) : 'Pilih Lagu (Opsional)';
+  const listEl  = document.getElementById('storyEditorSongList');
+  const chevron = document.getElementById('storyEditorSongChevron');
+  if(listEl)  listEl.style.display = 'none';
+  if(chevron) chevron.style.transform = '';
+};
+
+window.submitStoryEditor = async function() {
+  const file = _storyEditorState.file;
+  if(!file) return;
   const u = window._S.user;
   if(!u) { showToast('Login dulu', 'red'); return; }
   const uid = u.uid || u.id;
 
-  // ── 1. Cek daily limit (maks 4 story per 24 jam) ──────────
+  const captionEl = document.getElementById('storyEditorCaption');
+  const caption   = captionEl ? captionEl.value.trim() : '';
+  const songTitle = _storyEditorState.songTitle || '';
+  const songUrl   = _storyEditorState.songUrl   || '';
+
+  const btn = document.getElementById('storyEditorSendBtn');
+  if(btn) { btn.disabled = true; btn.textContent = 'Mengirim...'; }
+
+  // 1. Cek daily limit
   try {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
     const checkRes = await window._supaFetch(
-      '/rest/v1/user_stories?user_id=eq.' + uid +
-      '&created_at=gte.' + todayStart.toISOString() +
-      '&select=id'
+      '/rest/v1/user_stories?user_id=eq.' + uid + '&created_at=gte.' + todayStart.toISOString() + '&select=id'
     );
     const todayStories = checkRes.ok ? await checkRes.json() : [];
     if(todayStories.length >= 4) {
-      showToast('Batas upload status Anda hari ini sudah penuh (Maksimal 4 status per hari)', 'red');
+      showToast('Batas upload status hari ini sudah penuh (maks 4 per hari)', 'red');
+      if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Kirim Status'; }
       return;
     }
-  } catch(e) {
-    console.warn('[story limit check]', e.message);
-  }
+  } catch(e) { console.warn('[story limit]', e.message); }
 
-  // ── 2. Kompres gambar (max 800px, quality 0.75) ────────────
-  showToast('Mengkompres gambar...', 'green');
+  // 2. Kompres gambar
+  if(btn) btn.textContent = 'Mengkompres...';
   let blob;
   try {
     blob = await compressImage(file, 800, 0.75);
   } catch(e) {
-    showToast('Gagal kompres gambar: ' + (e.message||e), 'red');
+    showToast('Gagal kompres: ' + (e.message||e), 'red');
+    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Kirim Status'; }
     return;
   }
 
-  // ── 3. Upload ke Cloudinary folder stories/ ────────────────
-  showToast('Mengupload status...', 'green');
+  // 3. Upload ke Cloudinary
+  if(btn) btn.textContent = 'Mengupload foto...';
   let imgUrl = '', publicId = '';
   try {
     const fd = new FormData();
@@ -10612,45 +10774,49 @@ window.handleStoryFileSelected = async function(input) {
     fd.append('upload_preset', 'Toko kita');
     fd.append('cloud_name', 'dsy4hjc7a');
     fd.append('folder', 'stories');
-    const res = await new Promise((resolve, reject) => {
+    const res = await new Promise(function(resolve, reject) {
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', `https://api.cloudinary.com/v1_1/dsy4hjc7a/image/upload`);
-      xhr.onload = () => {
+      xhr.open('POST', 'https://api.cloudinary.com/v1_1/dsy4hjc7a/image/upload');
+      xhr.onload = function() {
         const r = JSON.parse(xhr.responseText);
         if(xhr.status === 200) resolve(r);
-        else reject(new Error(r.error?.message || 'Upload gagal'));
+        else reject(new Error((r.error && r.error.message) || 'Upload gagal'));
       };
-      xhr.onerror = () => reject(new Error('Koneksi ke Cloudinary gagal'));
+      xhr.onerror = function() { reject(new Error('Koneksi ke Cloudinary gagal')); };
       xhr.send(fd);
     });
     imgUrl   = res.secure_url;
     publicId = res.public_id || '';
   } catch(e) {
     showToast('Gagal upload: ' + (e.message||e), 'red');
+    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Kirim Status'; }
     return;
   }
 
-  // ── 4. Simpan ke tabel user_stories di Supabase ───────────
+  // 4. Simpan ke Supabase
+  if(btn) btn.textContent = 'Menyimpan...';
   try {
     const saveRes = await window._supaFetch('/rest/v1/user_stories', {
       method: 'POST',
       headers: { 'Prefer': 'return=minimal' },
       body: JSON.stringify({
-        user_id:    uid,
-        img_url:    imgUrl,
-        public_id:  publicId,
-        created_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 24*60*60*1000).toISOString()
+        user_id:     uid,
+        img_url:     imgUrl,
+        public_id:   publicId,
+        caption:     caption  || null,
+        music_title: songTitle || null,
+        music_url:   songUrl   || null,
+        created_at:  new Date().toISOString(),
+        expires_at:  new Date(Date.now() + 24*60*60*1000).toISOString()
       })
     });
-    if(!saveRes.ok) {
-      const errText = await saveRes.text();
-      throw new Error(errText.slice(0, 80));
-    }
-    showToast('✅ Status berhasil diupload!', 'green');
+    if(!saveRes.ok) throw new Error((await saveRes.text()).slice(0, 80));
+    closeStoryEditor();
+    showToast('\u2705 Status berhasil diupload!', 'green');
     trackEvent('post_story', {});
   } catch(e) {
     showToast('Gagal simpan status: ' + (e.message||e), 'red');
+    if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Kirim Status'; }
   }
 };
 
