@@ -12643,9 +12643,26 @@ window.sendBroadcastPushBatch = async function(userIds, title, body) {
 </script>
 
 <script>
+// [SW-DEBUG] Cek status controller paling awal mungkin (sebelum window.load),
+// untuk lihat apakah SW sudah mengontrol halaman ini SEJAK AWAL atau belum.
+if (typeof showToast === 'function') {
+  showToast('[SW-DEBUG] Awal load, controller=' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'ADA' : 'BELUM ADA'), navigator.serviceWorker && navigator.serviceWorker.controller ? 'green' : 'red');
+}
+if ('serviceWorker' in navigator) {
+  // [SW-DEBUG] Kalau controller berubah (SW baru mengambil alih kontrol halaman)
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (typeof showToast === 'function') showToast('[SW-DEBUG] controllerchange terjadi (SW baru ambil kontrol)', 'green');
+  });
+}
+</script>
+<script>
 // Register Service Worker untuk PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
+    // [SW-DEBUG] Cek status controller saat window.load (setelah semua resource selesai)
+    if (typeof showToast === 'function') {
+      showToast('[SW-DEBUG] window.load, controller=' + (navigator.serviceWorker.controller ? 'ADA' : 'BELUM ADA'), navigator.serviceWorker.controller ? 'green' : 'red');
+    }
     try {
       const regs = await navigator.serviceWorker.getRegistrations();
       for (const reg of regs) {
@@ -12660,8 +12677,18 @@ if ('serviceWorker' in navigator) {
     } catch(e) { console.warn('[SW] gagal unregister:', e.message); }
     // Register PWA service worker
     navigator.serviceWorker.register('/service-worker.js')
-      .then(reg => console.log('[PWA] Service Worker terdaftar:', reg.scope))
-      .catch(err => console.warn('[PWA] Service Worker gagal (non-critical):', err));
+      .then(reg => {
+        console.log('[PWA] Service Worker terdaftar:', reg.scope);
+        // [SW-DEBUG] Tampilkan state SW setelah register (installing/waiting/active)
+        if (typeof showToast === 'function') {
+          const state = reg.active ? 'active' : (reg.waiting ? 'waiting' : (reg.installing ? 'installing' : 'unknown'));
+          showToast('[SW-DEBUG] register sukses, state=' + state, 'green');
+        }
+      })
+      .catch(err => {
+        console.warn('[PWA] Service Worker gagal (non-critical):', err);
+        if (typeof showToast === 'function') showToast('[SW-DEBUG] register GAGAL: ' + (err && err.message || err), 'red');
+      });
   });
 }
 </script>
