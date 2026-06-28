@@ -12328,6 +12328,37 @@ function initCarousel(){
   }
   resetCAuto();
 }
+// ── Prefetch eksplisit gambar ke Cache API (IMG_CACHE milik Service Worker) ──
+// Dipakai khusus untuk billboard, karena mengandalkan <img crossorigin> + fetch
+// handler SW terbukti tidak selalu konsisten menyimpan ke cache (response bisa
+// opaque tergantung kondisi). Cara ini eksplisit: fetch manual mode 'cors',
+// baru simpan manual — tidak bergantung pada fetch event SW sama sekali.
+// Nama cache HARUS sama persis dengan IMG_CACHE di service-worker.js, supaya
+// saat offline nanti, cache.match() di SW otomatis nemu entry ini.
+async function _prefetchImageToCache(url) {
+  if (!url || typeof url !== 'string' || !url.startsWith('http')) return false;
+  try {
+    const cache = await caches.open('yallamart-img-v1');
+    const existing = await cache.match(url);
+    if (existing) {
+      if (typeof showToast === 'function') showToast('[BB-PREFETCH] Sudah ada di cache: ' + url.slice(-30), 'green');
+      return true; // sudah ada, tidak perlu fetch ulang
+    }
+    const res = await fetch(url, { mode: 'cors' });
+    if (res && res.ok) {
+      await cache.put(url, res.clone());
+      if (typeof showToast === 'function') showToast('[BB-PREFETCH] Berhasil simpan: ' + url.slice(-30), 'green');
+      return true;
+    } else {
+      if (typeof showToast === 'function') showToast('[BB-PREFETCH] Response tidak ok (' + (res && res.status) + '): ' + url.slice(-30), 'red');
+      return false;
+    }
+  } catch(e) {
+    if (typeof showToast === 'function') showToast('[BB-PREFETCH] Gagal: ' + (e && e.message || e) + ' url=' + url.slice(-30), 'red');
+    return false;
+  }
+}
+
 async function loadBillboardImages(){
   try {
     const res = await window._supaFetch('/rest/v1/billboards?select=*&order=slide_index.asc');
@@ -12338,6 +12369,10 @@ async function loadBillboardImages(){
       const idx = Number(d.slide_index ?? 0);
       if(d.img_url && typeof d.img_url === 'string' && d.img_url.startsWith('http')) {
         window.applyBillboardImage(idx, d.img_url, d.custom_text || '', d.ad_id || '');
+        // Prefetch eksplisit ke IMG_CACHE supaya billboard bisa tampil offline
+        // walau halaman di-restart total (swipe-close), tidak cuma sekadar
+        // mengandalkan <img> tag yang sudah ke-load di memori.
+        _prefetchImageToCache(d.img_url);
       }
     });
     // Simpan hasil fetch sukses ke cache, supaya sesi berikutnya (termasuk
