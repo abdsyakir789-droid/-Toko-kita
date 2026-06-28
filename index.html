@@ -748,6 +748,11 @@ button, .btn {
 html{scroll-behavior:smooth}
 #detailScrollBody{scroll-behavior:smooth}
 
+/* Cegah Chrome Android mengambil alih gesture tarik-ke-bawah
+   sebagai native pull-to-refresh browser (yang langsung reload total
+   sebelum custom pull-to-refresh kita sempat terdeteksi). */
+html,body{overscroll-behavior-y:contain}
+
 /* RECOM / SELLER OTHER CARD */
 .recom-card{
   border-radius:18px;overflow:hidden;background:#fff;
@@ -10314,6 +10319,15 @@ function renderFollowingStoryBar(currentUser, sellers) {
 
   const igGrad = 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)';
 
+  // Baca uid yang sudah dilihat dari localStorage
+  let _seenSet = new Set();
+  try {
+    const myUid = currentUser ? (currentUser.uid || currentUser.id) : 'guest';
+    const seenKey = 'ym_story_seen_' + myUid;
+    const seen = JSON.parse(localStorage.getItem(seenKey) || '[]');
+    _seenSet = new Set(seen);
+  } catch(e) {}
+
   function storyItem({ photoUrl, label, isMe, sellerUid, sellerName, sellerPhoto }) {
     const firstChar = (label||'?')[0].toUpperCase();
     const avatarInner = photoUrl
@@ -10325,9 +10339,13 @@ function renderFollowingStoryBar(currentUser, sellers) {
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </div>` : '';
 
+    const alreadySeen = !isMe && sellerUid && _seenSet.has(sellerUid);
+    const ringBg = alreadySeen ? '#d1d5db' : igGrad;
+    const seenAttr = !isMe && sellerUid ? `data-story-uid="${sellerUid}" data-story-seen="${alreadySeen ? 1 : 0}"` : '';
+
     const avatarWrap = isMe
       ? `<div style="width:68px;height:68px;border-radius:50%;border:2.5px solid #d1d5db;overflow:hidden;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10B981,#064E3B)">${avatarInner}</div>`
-      : `<div style="padding:2.5px;border-radius:50%;background:${igGrad};display:inline-flex">
+      : `<div ${seenAttr} style="padding:2.5px;border-radius:50%;background:${ringBg};display:inline-flex;transition:background 0.3s">
            <div style="width:64px;height:64px;border-radius:50%;border:2.5px solid #fff;overflow:hidden;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10B981,#064E3B)">${avatarInner}</div>
          </div>`;
 
@@ -10339,7 +10357,7 @@ function renderFollowingStoryBar(currentUser, sellers) {
           ${avatarWrap}
           ${plusBtn}
         </div>
-        <span style="font-size:11px;font-weight:600;color:#111827;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;padding:0 4px">${label}</span>
+        <span style="font-size:11px;font-weight:600;color:${alreadySeen ? '#9ca3af' : '#111827'};text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;padding:0 4px">${label}</span>
       </div>`;
   }
 
@@ -10380,6 +10398,25 @@ window.openStoryViewer = async function(uid, name, photoUrl) {
   } catch(e) { console.warn('[storyViewer fetch]', e.message); }
 
   if(!stories.length) { showToast('Tidak ada story aktif dari toko ini', 'red'); return; }
+
+  // Tandai story seller ini sudah dilihat di localStorage
+  try {
+    const myUid = window._S.user ? (window._S.user.uid || window._S.user.id) : 'guest';
+    const seenKey = 'ym_story_seen_' + myUid;
+    const seen = JSON.parse(localStorage.getItem(seenKey) || '[]');
+    if(!seen.includes(uid)) seen.push(uid);
+    if(seen.length > 200) seen.splice(0, seen.length - 200);
+    localStorage.setItem(seenKey, JSON.stringify(seen));
+    // Update ring avatar langsung tanpa re-render
+    const el = document.querySelector('[data-story-uid="' + uid + '"]');
+    if(el) {
+      el.setAttribute('data-story-seen', '1');
+      el.style.background = '#d1d5db';
+      // Update label warna juga
+      const labelEl = el.closest('[style*="flex-direction:column"]');
+      if(labelEl) { const sp = labelEl.querySelector('span:last-child'); if(sp) sp.style.color = '#9ca3af'; }
+    }
+  } catch(e) {}
 
   _storyViewerData.stories = stories;
   _storyViewerData.idx = 0;
@@ -19274,7 +19311,24 @@ window.closeKelolaToko = function() {
     if (triggered) {
       indicator.style.height = MAX_PULL + 'px';
       spinner.classList.add('ptr-spinning');
-      setTimeout(() => { location.reload(); }, 200);
+      // Refresh data ads tanpa reload browser (foto lama tetap tampil
+      // sampai foto baru siap, gaya stale-while-revalidate seperti Tokopedia).
+      // Sebelumnya pakai location.reload() yang membuang seluruh DOM/state —
+      // itu sebabnya semua foto sempat blank total saat pull-to-refresh.
+      try {
+        if (typeof window.startAdsListener === 'function') {
+          window.startAdsListener().catch(e => console.warn('[PTR] startAdsListener error:', e && e.message || e));
+        } else {
+          location.reload();
+          return;
+        }
+      } catch (e) {
+        console.warn('[PTR] Exception:', e && e.message || e);
+      }
+      setTimeout(() => {
+        spinner.classList.remove('ptr-spinning');
+        indicator.style.height = '0px';
+      }, 600);
     } else {
       indicator.style.height = '0px';
     }
