@@ -5880,9 +5880,7 @@ window._idb = window._idb || (() => {
 
   function _open() {
     return new Promise((resolve, reject) => {
-      // [IDB-DEBUG] Cek apakah API indexedDB bahkan tersedia di environment ini
       if (!window.indexedDB) {
-        if (typeof showToast === 'function') showToast('[IDB-DEBUG] indexedDB API tidak tersedia!', 'red');
         reject(new Error('indexedDB not available'));
         return;
       }
@@ -5895,8 +5893,6 @@ window._idb = window._idb || (() => {
       };
       req.onsuccess = e => resolve(e.target.result);
       req.onerror   = e => {
-        // [IDB-DEBUG] indexedDB.open() gagal — ini titik kritis yang dicurigai di iOS
-        if (typeof showToast === 'function') showToast('[IDB-DEBUG] _open() gagal: ' + (e.target.error && e.target.error.message || e.target.error), 'red');
         reject(e.target.error);
       };
     });
@@ -5909,19 +5905,13 @@ window._idb = window._idb || (() => {
         const tx  = db.transaction(STORE_NAME, 'readonly');
         const req = tx.objectStore(STORE_NAME).get(key);
         req.onsuccess = () => {
-          // [IDB-DEBUG] Tampilkan hasil get untuk key billboard/ads (biar tidak spam, filter key tertentu)
-          if (typeof showToast === 'function' && (key === 'ym_ads_cache_v2' || key === 'ym_billboard_cache_v1')) {
-            showToast('[IDB-DEBUG] get(' + key + ') = ' + (req.result ? 'ADA DATA' : 'NULL/KOSONG'), req.result ? 'green' : 'red');
-          }
           resolve(req.result ?? null);
         };
         req.onerror   = () => {
-          if (typeof showToast === 'function') showToast('[IDB-DEBUG] get(' + key + ') request error: ' + (req.error && req.error.message || req.error), 'red');
           resolve(null);
         };
       });
     } catch(e) {
-      if (typeof showToast === 'function') showToast('[IDB-DEBUG] get(' + key + ') exception: ' + (e && e.message || e), 'red');
       return null;
     }
   }
@@ -5934,12 +5924,10 @@ window._idb = window._idb || (() => {
         const req = tx.objectStore(STORE_NAME).put(value, key);
         req.onsuccess = () => resolve(true);
         req.onerror   = () => {
-          if (typeof showToast === 'function') showToast('[IDB-DEBUG] set(' + key + ') request error: ' + (req.error && req.error.message || req.error), 'red');
           resolve(false);
         };
       });
     } catch(e) {
-      if (typeof showToast === 'function') showToast('[IDB-DEBUG] set(' + key + ') exception: ' + (e && e.message || e), 'red');
       return false;
     }
   }
@@ -6030,8 +6018,6 @@ async function startAdsListener() {
   if(_adsChannel) { supabase.removeChannel(_adsChannel); _adsChannel = null; }
 
   const isOffline = !navigator.onLine;
-  // [IDB-DEBUG] Tampilkan status koneksi saat startAdsListener dipanggil
-  if (typeof showToast === 'function') showToast('[IDB-DEBUG] startAdsListener, isOffline=' + isOffline, isOffline ? 'red' : 'green');
 
   // ── SKELETON: Tampilkan skeleton hanya jika tidak ada snapshot localStorage ──
   const _grid = document.getElementById('productGrid');
@@ -6042,26 +6028,6 @@ async function startAdsListener() {
 
   // ── LAYER 1 & 2: RAM cache (window._S.fbAds) & IndexedDB ──
   const localCached = await _readAdsCache(isOffline);
-  // [IDB-DEBUG] Tampilkan hasil pembacaan cache ads
-  if (typeof showToast === 'function') showToast('[IDB-DEBUG] localCached = ' + (localCached ? ('ADA, ' + localCached.length + ' item') : 'NULL'), localCached ? 'green' : 'red');
-  // [IMG-DEBUG] Cek langsung isi Cache API (IMG_CACHE milik Service Worker) untuk
-  // gambar produk pertama, supaya tahu pasti apakah gambar itu tersimpan di cache
-  // atau tidak — tanpa mengubah logic Service Worker sama sekali (cuma observasi).
-  if (localCached && localCached.length > 0 && typeof showToast === 'function' && window.caches) {
-    const _testImgUrl = localCached[0].imgUrl;
-    if (_testImgUrl) {
-      showToast('[IMG-DEBUG] Testing URL: ' + _testImgUrl.slice(0, 50) + '...', 'green');
-      caches.open('yallamart-img-v1').then(async cache => {
-        const matched = await cache.match(_testImgUrl);
-        showToast('[IMG-DEBUG] cache.match() = ' + (matched ? 'KETEMU di cache' : 'TIDAK ADA di cache'), matched ? 'green' : 'red');
-        // Hitung juga total entry yang ada di IMG_CACHE saat ini
-        const allKeys = await cache.keys();
-        showToast('[IMG-DEBUG] Total entry di IMG_CACHE: ' + allKeys.length, 'green');
-      }).catch(e => showToast('[IMG-DEBUG] caches.open() exception: ' + (e && e.message || e), 'red'));
-    } else {
-      showToast('[IMG-DEBUG] localCached[0].imgUrl kosong/tidak ada', 'red');
-    }
-  }
   if (localCached && localCached.length > 0) {
     // Tampilkan IndexedDB cache langsung (instant)
     _applyAds(localCached);
@@ -12696,34 +12662,9 @@ window.sendBroadcastPushBatch = async function(userIds, title, body) {
 </script>
 
 <script>
-// [SW-DEBUG] Cek status controller paling awal mungkin (sebelum window.load),
-// untuk lihat apakah SW sudah mengontrol halaman ini SEJAK AWAL atau belum.
-if (typeof showToast === 'function') {
-  showToast('[SW-DEBUG] Awal load, controller=' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'ADA' : 'BELUM ADA'), navigator.serviceWorker && navigator.serviceWorker.controller ? 'green' : 'red');
-}
-if ('serviceWorker' in navigator) {
-  // [SW-DEBUG] Kalau controller berubah (SW baru mengambil alih kontrol halaman)
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (typeof showToast === 'function') showToast('[SW-DEBUG] controllerchange terjadi (SW baru ambil kontrol)', 'green');
-  });
-  // [SW-IMG-DEBUG] Terima log dari fetch handler gambar di service-worker.js
-  // (sementara, untuk diagnosa kenapa IMG_CACHE selalu 0 entry — akan dihapus
-  // setelah ketemu akar masalahnya).
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SW_IMG_DEBUG' && typeof showToast === 'function') {
-      showToast('[SW-IMG-DEBUG] ' + event.data.msg, 'green');
-    }
-  });
-}
-</script>
-<script>
 // Register Service Worker untuk PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
-    // [SW-DEBUG] Cek status controller saat window.load (setelah semua resource selesai)
-    if (typeof showToast === 'function') {
-      showToast('[SW-DEBUG] window.load, controller=' + (navigator.serviceWorker.controller ? 'ADA' : 'BELUM ADA'), navigator.serviceWorker.controller ? 'green' : 'red');
-    }
     try {
       const regs = await navigator.serviceWorker.getRegistrations();
       for (const reg of regs) {
@@ -12740,15 +12681,9 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js')
       .then(reg => {
         console.log('[PWA] Service Worker terdaftar:', reg.scope);
-        // [SW-DEBUG] Tampilkan state SW setelah register (installing/waiting/active)
-        if (typeof showToast === 'function') {
-          const state = reg.active ? 'active' : (reg.waiting ? 'waiting' : (reg.installing ? 'installing' : 'unknown'));
-          showToast('[SW-DEBUG] register sukses, state=' + state, 'green');
-        }
       })
       .catch(err => {
         console.warn('[PWA] Service Worker gagal (non-critical):', err);
-        if (typeof showToast === 'function') showToast('[SW-DEBUG] register GAGAL: ' + (err && err.message || err), 'red');
       });
   });
 }
