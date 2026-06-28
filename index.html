@@ -10657,7 +10657,8 @@ function _renderStoryFrame() {
 
   // Auto next setelah 5 detik
   if(_storyViewerData.timer) clearTimeout(_storyViewerData.timer);
-  _storyViewerData.timer = setTimeout(nextStory, 5000);
+  const _storyDuration = (story.music_url) ? 25000 : 7000;
+  _storyViewerData.timer = setTimeout(nextStory, _storyDuration);
 }
 
 window.nextStory = function() {
@@ -10782,13 +10783,13 @@ window.handleStoryFileSelected = function(input) {
 // State sementara editor
 // ── Daftar Lagu Story ────────────────────────────────────────
 window._STORY_SONGS = [
-  { title: 'This Song',       artist: '',               url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660892/this_song____songlyrics__fyp__rekomendasion__kanvas_1_aimv2u.mp3' },
-  { title: 'Sou Favela',      artist: 'Vitinho Ferrari', url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660876/Sou_favela__vitinhoferrari__soufavela__mcbruninho__fyp__goviral_1_hlxgzp.m4a' },
-  { title: 'Mentok Disitu',   artist: '',               url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660859/Mentok_disitu_situ_aja_1_zjhbru.mp3' },
-  { title: 'Masih Pada Inget', artist: '',              url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660839/masih_pada_inget_lagu_iniii_1_vdwizn.mp3' },
-  { title: 'France World Cup', artist: '',              url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660814/France_ready_world_cup_2026__fyp__france__masukberanda__jjbo_1_gpkb0f.mp3' },
-  { title: 'DJ JJ WG x Like This x Oh Sayang', artist: '', url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660782/DJ_JJ_WG_X_l_LIKE_THIS_X_OH_SAYANG__dj__llikethis__musik_story_1_jmfzxp.mp3' },
-  { title: 'Mbappe Football', artist: 'France',         url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660744/mbappe_fotball_france_1_wlkbtn.mp3' }
+  { title: 'This Song',                    artist: '', url: 'https://pub-9dd2194675504a8c9d0f67fd0ce3aa67.r2.dev/this_song_!!!_%23songlyrics_%23fyp_%23rekomendasion_%23kanvas%20(1).mp3' },
+  { title: 'Sou Favela',                   artist: 'Vitinho Ferrari', url: 'https://pub-9dd2194675504a8c9d0f67fd0ce3aa67.r2.dev/Sou_favela_%23vitinhoferrari_%23soufavela_%23mcbruninho_%23fyp_%23goviral%20(1).mp3' },
+  { title: 'Mentok Disitu',                artist: '', url: 'https://pub-9dd2194675504a8c9d0f67fd0ce3aa67.r2.dev/Mentok%20disitu%20situ%20aja%20(1).mp3' },
+  { title: 'Masih Pada Inget',             artist: '', url: 'https://pub-9dd2194675504a8c9d0f67fd0ce3aa67.r2.dev/masih%20pada%20inget%20lagu%20iniii%20(1).mp3' },
+  { title: 'France World Cup 2026',        artist: '', url: 'https://pub-9dd2194675504a8c9d0f67fd0ce3aa67.r2.dev/France_ready_world_cup_2026_%23fyp_%23france_%23masukberanda_%23jjbo%20(1).mp3' },
+  { title: 'DJ JJ WG x Like This x Oh Sayang', artist: '', url: 'https://pub-9dd2194675504a8c9d0f67fd0ce3aa67.r2.dev/DJ_JJ_WG_X_l_LIKE_THIS_X_OH_SAYANG_%23dj_%23llikethis_%23musik_story%20(1).mp3' },
+  { title: 'Mbappe Football',              artist: 'France', url: 'https://pub-9dd2194675504a8c9d0f67fd0ce3aa67.r2.dev/%23mbappe%20%23fotball%20%23france%20(1).mp3' }
 ];
 
 var _storyEditorState = { file: null, songTitle: '', songArtist: '', songUrl: '', songStart: 0 };
