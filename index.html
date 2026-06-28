@@ -10263,6 +10263,7 @@ window.toggleFollow = async function() {
           sender_name: u.name, sender_uid: u.uid, user_id: sellerUid,
           is_read: false, created_at: new Date().toISOString() })
       });
+      if(window._clearFollowingCache) await window._clearFollowingCache();
       showToast('Berhasil follow toko ini!', 'green');
       trackEvent('follow_seller', { seller_uid: sellerUid });
       window.sendPushToUser(sellerUid, '👥 Pengikut Baru!', (u.name||'Seseorang') + ' mulai mengikuti toko kamu', '/').catch(function(e){
@@ -10270,6 +10271,7 @@ window.toggleFollow = async function() {
       });
     } else {
       await window._supaFetch('/rest/v1/follows?id=eq.'+existing.id, { method: 'DELETE' });
+      if(window._clearFollowingCache) await window._clearFollowingCache();
       showToast('Berhenti mengikuti toko', 'green');
     }
     renderEtalaseFollow(sellerUid);
@@ -10756,85 +10758,54 @@ window.openFollowingStores = async function() {
       }
     };
 
-    // ── Render: per seller, lalu per iklan sebagai item feed ─────
+    // ── Render: satu card per toko, 4 foto horizontal ────────────
     users.forEach(seller => {
       const followerCount = allFollows.filter(f => f.seller_uid === seller.uid).length;
       const storePosts    = allPosts.filter(p => p.seller_uid === seller.uid).slice(0, 4);
-      console.log('[following] seller:', seller.uid, seller.name, '| posts:', storePosts.length, '| allPosts sample:', allPosts.slice(0,2).map(x=>x.seller_uid));
       if(storePosts.length === 0) return; // skip seller tanpa produk
 
-      // ── Wrapper per toko ─────────────────────────────────────
       const storeWrap = document.createElement('div');
-      storeWrap.style.cssText = 'background:#fff;margin-bottom:8px;border-radius:0';
+      storeWrap.style.cssText = 'background:#fff;margin-bottom:8px;border-top:1px solid #f1f5f9';
 
-      // ── Per iklan: foto penuh + ikon + teks ──────────────────
-      storePosts.forEach(p => {
-        const adId    = p.id;
-        const adTitle = p.title || p.name || '';
-        const adPrice = p.price || 0;
-        const adImg   = p.img_url || '';
-        const loved   = _isWishlisted(adId);
-
-        const feedItem = document.createElement('div');
-        feedItem.style.cssText = 'width:100%;background:#fff;border-top:1px solid #f8fafc';
-
-        feedItem.innerHTML = `
-          <!-- Bar header: foto profil + nama toko + titik tiga -->
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#fff;cursor:pointer"
-               onclick="openSellerFromFollowing('${seller.uid}','${(seller.name||'').replace(/'/g,"\'")}','${seller.photo_url||''}')">
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,#10B981,#064E3B);display:flex;align-items:center;justify-content:center">
-                ${seller.photo_url
-                  ? `<img src="${seller.photo_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`
-                  : `<span style="color:#fff;font-weight:900;font-size:14px">${(seller.name||'?')[0].toUpperCase()}</span>`
-                }
-              </div>
-              <span style="font-size:13px;font-weight:700;color:#0f172a">${seller.name||'Toko'}</span>
-            </div>
-            <svg onclick="event.stopPropagation()" width="20" height="20" viewBox="0 0 24 24" fill="#9ca3af"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-          </div>
-
-          <!-- Foto produk full-width -->
-          <div style="width:100%;aspect-ratio:1/1;background:#f3f4f6;overflow:hidden;cursor:pointer"
-               onclick="openDetail('${adId}')">
+      // 4 foto horizontal
+      const photosHtml = storePosts.map(p => {
+        const adImg = p.img_url || '';
+        return `
+          <div onclick="openDetail('${p.id}')"
+               style="width:calc(25% - 3px);flex-shrink:0;aspect-ratio:1/1;background:#f3f4f6;overflow:hidden;border-radius:6px;cursor:pointer">
             ${adImg
-              ? `<img src="${adImg}" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.style.background='#e5e7eb'">`
-              : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-image" style="font-size:32px;color:#d1d5db"></i></div>`
+              ? `<img src="${adImg}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentElement.style.background='#e5e7eb'">`
+              : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-image" style="font-size:18px;color:#d1d5db"></i></div>`
             }
-          </div>
+          </div>`;
+      }).join('');
 
-          <!-- Baris ikon interaksi -->
-          <div style="display:flex;flex-direction:row;align-items:center;gap:16px;padding:10px 14px 4px">
-            <!-- Love / Wishlist -->
-            <button id="feedHeart_${adId}"
-              onclick="event.stopPropagation();_feedToggleWishlist('${adId}','${adTitle.replace(/'/g,"\\'")}',${adPrice},'${adImg}',this)"
-              style="background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center">
-              ${loved
-                ? `<i class="fa-solid fa-heart" style="font-size:22px;color:#ef4444"></i>`
-                : `<i class="fa-regular fa-heart" style="font-size:22px;color:#111827"></i>`
+      storeWrap.innerHTML = `
+        <!-- Header toko -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px;cursor:pointer"
+             onclick="openSellerFromFollowing('${seller.uid}','${(seller.name||'').replace(/'/g,"\\'")}','')">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,#10B981,#064E3B);display:flex;align-items:center;justify-content:center">
+              ${seller.photo_url
+                ? `<img src="${seller.photo_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`
+                : `<span style="color:#fff;font-weight:900;font-size:14px">${(seller.name||'?')[0].toUpperCase()}</span>`
               }
-            </button>
-            <!-- Komentar / Ulasan -->
-            <button onclick="event.stopPropagation();openReviewFullScreen()"
-              style="background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center">
-              <i class="fa-regular fa-comment" style="font-size:21px;color:#111827"></i>
-            </button>
-            <!-- Share -->
-            <button onclick="event.stopPropagation();_feedShare('${adId}','${adTitle.replace(/'/g,"\\'")}' )"
-              style="background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center">
-              <i class="fa-regular fa-paper-plane" style="font-size:20px;color:#111827"></i>
-            </button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:1px">
+              <span style="font-size:13px;font-weight:700;color:#0f172a;line-height:1.2">${seller.name||'Toko'}</span>
+              <span style="font-size:11px;color:#6b7280">${followerCount} pengikut</span>
+            </div>
           </div>
-
-          <!-- Teks info: harga lalu caption -->
-          <div style="display:flex;flex-direction:column;padding:2px 14px 14px">
-            ${adPrice ? `<p style="font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:800;color:#111827;margin:0 0 2px">${_fmtPrice(adPrice)}</p>` : ''}
-            ${adTitle ? `<p style="font-family:'Inter',sans-serif;font-size:13px;color:#374151;margin:0;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${adTitle}</p>` : ''}
-          </div>
-        `;
-
-        storeWrap.appendChild(feedItem);
-      });
+          <span style="font-size:11px;font-weight:600;color:#10B981;padding:4px 10px;border:1.5px solid #10B981;border-radius:20px"
+                onclick="event.stopPropagation();openSellerFromFollowing('${seller.uid}','${(seller.name||'').replace(/'/g,"\\'")}','')">
+            Lihat Toko
+          </span>
+        </div>
+        <!-- 4 foto produk horizontal -->
+        <div style="display:flex;flex-direction:row;gap:4px;padding:0 10px 12px">
+          ${photosHtml}
+        </div>
+      `;
 
       listEl.appendChild(storeWrap);
     });
@@ -10855,7 +10826,7 @@ window.closeFollowingStores = function() {
 // Buka etalase seller dari halaman following
 window.openSellerFromFollowing = async function(uid, name, photoUrl) {
   const cached = (window._S.fbAds||[]).filter(a => a.sellerUid === uid);
-  if(cached.length > 0) { viewSellerStore(uid); return; }
+  if(cached.length > 0) { closeFollowingStores(); viewSellerStore(uid); return; }
   try {
     const res = await window._supaFetch('/rest/v1/ads?seller_uid=eq.' + uid + '&select=*&order=created_at.desc');
     const rows = res.ok ? await res.json() : [];
@@ -10873,6 +10844,7 @@ window.openSellerFromFollowing = async function(uid, name, photoUrl) {
     if(!window._S.fbAds) window._S.fbAds = [];
     mapped.forEach(ad => { if(!window._S.fbAds.find(a => a.id === ad.id)) window._S.fbAds.push(ad); });
   } catch(e) { console.warn('[openSellerFromFollowing]', e.message); }
+  closeFollowingStores();
   viewSellerStore(uid);
 };
 
