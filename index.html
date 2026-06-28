@@ -4408,7 +4408,7 @@ h3.text-sm.font-bold.text-gray-800 {
         oninput="handleChatTyping();this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';"
         onfocus="document.getElementById('chatRoomInputBar').classList.add('kb-open')"
         onblur="document.getElementById('chatRoomInputBar').classList.remove('kb-open')"></textarea>
-      <button onclick="sendChatMsg()" class="w-10 h-10 bg-primary hover:bg-pd text-white rounded-full flex items-center justify-center flex-shrink-0 transition-colors shadow-sm">
+      <button id="chatSendBtn" onclick="sendChatMsg()" class="w-10 h-10 bg-primary hover:bg-pd text-white rounded-full flex items-center justify-center flex-shrink-0 transition-colors shadow-sm">
         <i class="fa-solid fa-paper-plane text-sm"></i>
       </button>
     </div>
@@ -9328,6 +9328,15 @@ window.sendChatMsg = async () => {
   const txt = inp.value.trim();
   if(!txt) return;
   if(!window._S.user) { showToast('Login dulu','red'); return; }
+  // ── Guard anti double-submit: kalau masih ada proses kirim pesan berjalan
+  // (misal jaringan lemot, user tap kirim berkali-kali), TOLAK eksekusi baru
+  // sampai yang sebelumnya selesai (sukses/gagal). Ini cegah pesan ke-kirim
+  // dobel (dan akibatnya notifikasi dobel) saat koneksi lambat. ──
+  if (window._sendChatInProgress) { showToast('Mengirim pesan sebelumnya, tunggu sebentar...', 'red'); return; }
+  window._sendChatInProgress = true;
+  var _sendBtn = document.getElementById('chatSendBtn');
+  if (_sendBtn) { _sendBtn.disabled = true; _sendBtn.style.opacity = '0.5'; _sendBtn.style.pointerEvents = 'none'; }
+  try {
   // Poll _FB sampai ready
   let _w = 0;
   while(!window._FB && _w < 25) { await new Promise(r=>setTimeout(r,200)); _w++; }
@@ -9424,6 +9433,10 @@ window.sendChatMsg = async () => {
       showToast('Gagal kirim: '+(e.message||e.code),'red');
     }
     inp.value = txt;
+  }
+  } finally {
+    window._sendChatInProgress = false;
+    if (_sendBtn) { _sendBtn.disabled = false; _sendBtn.style.opacity = ''; _sendBtn.style.pointerEvents = ''; }
   }
 };
 
