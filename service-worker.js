@@ -64,6 +64,14 @@ self.addEventListener('activate', event => {
   );
 });
 
+// [SW-IMG-DEBUG] Kirim log ke semua halaman yang terhubung (karena console SW
+// tidak terlihat di iOS tanpa Mac). Tidak mengubah logic apa pun, cuma observasi.
+function debugLog(msg) {
+  self.clients.matchAll().then(list => {
+    list.forEach(c => c.postMessage({ type: 'SW_IMG_DEBUG', msg }));
+  }).catch(()=>{});
+}
+
 self.addEventListener('fetch', event => {
   const req = event.request;
   const url = new URL(req.url);
@@ -82,14 +90,24 @@ self.addEventListener('fetch', event => {
         // Fetch network di background (update cache)
         const networkFetch = fetchWithTimeout(req, 5000)
           .then(response => {
+            // [SW-IMG-DEBUG] Observasi status & type response gambar
+            debugLog('fetch img status=' + (response ? response.status : 'no-response') +
+                      ' type=' + (response ? response.type : '-') +
+                      ' url=' + url.pathname.slice(-40));
             if (response && response.status === 200) {
               cache.put(req, response.clone());
+              debugLog('cache.put() DIPANGGIL untuk ' + url.pathname.slice(-40));
               // Trim cache kalau sudah terlalu banyak (fire & forget)
               trimImgCache();
+            } else {
+              debugLog('cache.put() DI-SKIP (status bukan 200) untuk ' + url.pathname.slice(-40));
             }
             return response;
           })
-          .catch(() => cached || new Response('', { status: 408 }));
+          .catch(e => {
+            debugLog('networkFetch CATCH: ' + (e && e.message || e) + ' url=' + url.pathname.slice(-40));
+            return cached || new Response('', { status: 408 });
+          });
 
         // Return cache dulu kalau ada (stale-while-revalidate)
         // Kalau belum ada di cache, tunggu network
