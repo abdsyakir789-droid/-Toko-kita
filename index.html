@@ -56,6 +56,9 @@ html { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
       el.innerHTML = '';
       el.appendChild(svg);
     }
+    // Expose ke window supaya bisa dipanggil ulang (retry) oleh pull-to-refresh
+    // kalau gagal render saat load awal (mis. karena offline saat Lucide CDN dimuat).
+    window.renderMegaphone = renderMegaphone;
     renderMegaphone(document.getElementById('megaphoneMob'), 18, '#000000');
     renderMegaphone(document.getElementById('megaphoneDesktop'), 20, '#000000');
   });
@@ -12259,6 +12262,9 @@ async function loadBillboardImages(){
     console.warn('[Billboard] Gagal load:', e.message);
   }
 }
+// Expose ke window supaya bisa dipanggil ulang (retry) oleh pull-to-refresh
+// kalau gagal load saat init (mis. karena offline saat itu).
+window.loadBillboardImages = loadBillboardImages;
 
 // ── Mobile Layout Init ─────────────────────────────────────────
 (function initMobileLayout() {
@@ -19324,6 +19330,28 @@ window.closeKelolaToko = function() {
         }
       } catch (e) {
         console.warn('[PTR] Exception:', e && e.message || e);
+      }
+      // Retry billboard — sebelumnya billboard cuma di-load 2x saat init
+      // (setTimeout 1.5s & 4s), jadi kalau device offline saat itu, billboard
+      // akan tetap kosong selamanya sampai halaman di-restart total.
+      // Pull-to-refresh sekarang ikut retry supaya tidak perlu restart app.
+      try {
+        if (typeof window.loadBillboardImages === 'function') {
+          window.loadBillboardImages().catch(e => console.warn('[PTR] loadBillboardImages error:', e && e.message || e));
+        }
+      } catch (e) {
+        console.warn('[PTR] Billboard exception:', e && e.message || e);
+      }
+      // Retry render icon megaphone (Yallainfo) — sebelumnya hanya dirender
+      // sekali saat DOMContentLoaded, jadi kalau CDN Lucide gagal load saat
+      // offline, icon akan tetap kosong selamanya sampai halaman di-restart.
+      try {
+        if (typeof window.renderMegaphone === 'function' && window.lucide) {
+          window.renderMegaphone(document.getElementById('megaphoneMob'), 18, '#000000');
+          window.renderMegaphone(document.getElementById('megaphoneDesktop'), 20, '#000000');
+        }
+      } catch (e) {
+        console.warn('[PTR] Megaphone icon exception:', e && e.message || e);
       }
       setTimeout(() => {
         spinner.classList.remove('ptr-spinning');
