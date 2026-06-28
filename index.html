@@ -12307,20 +12307,16 @@ async function _prefetchImageToCache(url) {
     const cache = await caches.open('yallamart-img-v1');
     const existing = await cache.match(url);
     if (existing) {
-      if (typeof showToast === 'function') showToast('[BB-PREFETCH] Sudah ada di cache: ' + url.slice(-30), 'green');
       return true; // sudah ada, tidak perlu fetch ulang
     }
     const res = await fetch(url, { mode: 'cors' });
     if (res && res.ok) {
       await cache.put(url, res.clone());
-      if (typeof showToast === 'function') showToast('[BB-PREFETCH] Berhasil simpan: ' + url.slice(-30), 'green');
       return true;
     } else {
-      if (typeof showToast === 'function') showToast('[BB-PREFETCH] Response tidak ok (' + (res && res.status) + '): ' + url.slice(-30), 'red');
       return false;
     }
   } catch(e) {
-    if (typeof showToast === 'function') showToast('[BB-PREFETCH] Gagal: ' + (e && e.message || e) + ' url=' + url.slice(-30), 'red');
     return false;
   }
 }
