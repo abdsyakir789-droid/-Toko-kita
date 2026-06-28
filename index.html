@@ -3454,6 +3454,45 @@ h3.text-sm.font-bold.text-gray-800 {
     </div>
   </div>
 
+  <!-- ── Audio Trimmer Modal ──────────────────────────────────── -->
+  <div id="storyAudioTrimmer" style="display:none;position:fixed;inset:0;z-index:1001;background:rgba(0,0,0,0.85);flex-direction:column;align-items:center;justify-content:flex-end">
+    <div style="width:100%;background:#1a1a2e;border-radius:24px 24px 0 0;padding:20px 20px 36px">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <button onclick="closeAudioTrimmer()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:13px;cursor:pointer">Batal</button>
+        <span style="color:#fff;font-size:14px;font-weight:700" id="trimmerSongName">Nama Lagu</span>
+        <button onclick="confirmAudioTrim()" style="background:none;border:none;color:#10B981;font-size:13px;font-weight:700;cursor:pointer">Pakai</button>
+      </div>
+
+      <!-- Waveform visual sederhana -->
+      <div style="position:relative;height:56px;background:rgba(255,255,255,0.06);border-radius:10px;overflow:hidden;margin-bottom:14px">
+        <canvas id="trimmerWaveform" style="width:100%;height:100%;display:block"></canvas>
+        <!-- Window 30 detik yang bisa digeser -->
+        <div id="trimmerWindow" style="position:absolute;top:0;bottom:0;background:rgba(16,185,129,0.25);border:2px solid #10B981;border-radius:6px;cursor:grab;touch-action:none"></div>
+      </div>
+
+      <!-- Slider start -->
+      <input type="range" id="trimmerSlider" min="0" value="0" step="0.1"
+        style="width:100%;accent-color:#10B981;cursor:pointer;margin-bottom:10px"
+        oninput="onTrimmerSlide(this.value)">
+
+      <!-- Info waktu -->
+      <div style="display:flex;justify-content:space-between;color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:16px">
+        <span id="trimmerStartTime">0:00</span>
+        <span style="color:#10B981;font-size:12px;font-weight:600">▶ 30 detik</span>
+        <span id="trimmerEndTime">0:30</span>
+      </div>
+
+      <!-- Preview play/pause -->
+      <button id="trimmerPlayBtn" onclick="toggleTrimmerPreview()" style="width:100%;padding:13px;background:#10B981;border:none;border-radius:14px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+        <i class="fa-solid fa-play" id="trimmerPlayIcon"></i>
+        <span>Preview Lagu</span>
+      </button>
+    </div>
+  </div>
+  <!-- Hidden audio untuk preview trimmer -->
+  <audio id="trimmerAudio" preload="metadata"></audio>
+
   <!-- ── Story Viewer Modal ──────────────────────────────────── -->
   <div id="storyViewerModal" style="display:none;position:fixed;inset:0;z-index:999;background:#000;flex-direction:column" onclick="closeStoryViewer()">
     <!-- Progress bar -->
@@ -3468,6 +3507,14 @@ h3.text-sm.font-bold.text-gray-800 {
       <button onclick="event.stopPropagation();closeStoryViewer()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
     </div>
     <!-- Tombol tambah story (hanya muncul saat lihat story sendiri) -->
+    <!-- View count — hanya tampil saat lihat story sendiri -->
+    <div id="storyViewerViewCount" style="display:none;position:absolute;bottom:90px;left:50%;transform:translateX(-50%);z-index:2;white-space:nowrap">
+      <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);border-radius:20px;padding:6px 14px">
+        <i class="fa-solid fa-eye" style="color:#fff;font-size:13px"></i>
+        <span id="storyViewerViewCountText" style="color:#fff;font-size:13px;font-weight:700">0 dilihat</span>
+      </div>
+    </div>
+
     <div id="storyViewerAddBtn" style="display:none;position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:2">
       <button onclick="event.stopPropagation();closeStoryViewer();setTimeout(()=>{const i=document.getElementById('storyFileInput');if(i){i.value='';i.click();}},200)" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.2);border:1.5px solid rgba(255,255,255,0.5);color:#fff;font-size:13px;font-weight:700;padding:10px 20px;border-radius:999px;cursor:pointer;backdrop-filter:blur(8px)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -10525,6 +10572,34 @@ function _renderStoryFrame() {
   const img = document.getElementById('storyViewerImg');
   if(img) img.src = story.img_url || '';
 
+  // ── View tracking ─────────────────────────────────────────
+  const viewCountEl     = document.getElementById('storyViewerViewCount');
+  const viewCountTextEl = document.getElementById('storyViewerViewCountText');
+  const isMe = _storyViewerData.isMe || false;
+
+  if(isMe) {
+    // Pemilik lihat story sendiri — tampilkan jumlah view
+    if(viewCountEl) viewCountEl.style.display = 'block';
+    if(viewCountTextEl) viewCountTextEl.textContent = '...';
+    // Fetch jumlah view dari story_views
+    window._supaFetch('/rest/v1/story_views?story_id=eq.' + story.id + '&select=id')
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(rows){
+        if(viewCountTextEl) viewCountTextEl.textContent = rows.length + ' dilihat';
+      }).catch(function(){});
+  } else {
+    // Viewer — sembunyikan view count, catat view ke DB
+    if(viewCountEl) viewCountEl.style.display = 'none';
+    const myUid = window._S.user ? (window._S.user.uid || window._S.user.id) : null;
+    if(myUid && story.id) {
+      window._supaFetch('/rest/v1/story_views', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=minimal,resolution=ignore-duplicates' },
+        body: JSON.stringify({ story_id: story.id, viewer_uid: myUid })
+      }).catch(function(){});
+    }
+  }
+
   // Caption
   const captionBox  = document.getElementById('storyViewerCaption');
   const captionText = document.getElementById('storyViewerCaptionText');
@@ -10537,15 +10612,25 @@ function _renderStoryFrame() {
     }
   }
 
-  // Info lagu
+  // Info lagu + auto-play dari music_start
   const songBox  = document.getElementById('storyViewerSong');
   const songText = document.getElementById('storyViewerSongText');
   if(songBox && songText) {
-    if(story.music_title) {
+    if(story.music_title && story.music_url) {
       songText.textContent = story.music_title;
       songBox.style.display = 'block';
+      // Stop audio lama jika ada
+      if(window._storyAudio) { window._storyAudio.pause(); window._storyAudio = null; }
+      const aud = new Audio(story.music_url);
+      aud.currentTime = story.music_start || 0;
+      aud.volume = 0.8;
+      aud.play().catch(function(){});
+      window._storyAudio = aud;
+      // Stop otomatis setelah 30 detik
+      setTimeout(function(){ if(window._storyAudio === aud) { aud.pause(); } }, 30000);
     } else {
       songBox.style.display = 'none';
+      if(window._storyAudio) { window._storyAudio.pause(); window._storyAudio = null; }
     }
   }
 
@@ -10593,6 +10678,7 @@ window.closeStoryViewer = function() {
   const modal = document.getElementById('storyViewerModal');
   if(modal) modal.style.display = 'none';
   document.body.style.overflow = '';
+  if(window._storyAudio) { window._storyAudio.pause(); window._storyAudio = null; }
 };
 
 window.openStoryUpload = async function() {
@@ -10694,7 +10780,18 @@ window.handleStoryFileSelected = function(input) {
 };
 
 // State sementara editor
-var _storyEditorState = { file: null, songTitle: '', songUrl: '' };
+// ── Daftar Lagu Story ────────────────────────────────────────
+window._STORY_SONGS = [
+  { title: 'This Song',       artist: '',               url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660892/this_song____songlyrics__fyp__rekomendasion__kanvas_1_aimv2u.mp3' },
+  { title: 'Sou Favela',      artist: 'Vitinho Ferrari', url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660876/Sou_favela__vitinhoferrari__soufavela__mcbruninho__fyp__goviral_1_hlxgzp.m4a' },
+  { title: 'Mentok Disitu',   artist: '',               url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660859/Mentok_disitu_situ_aja_1_zjhbru.mp3' },
+  { title: 'Masih Pada Inget', artist: '',              url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660839/masih_pada_inget_lagu_iniii_1_vdwizn.mp3' },
+  { title: 'France World Cup', artist: '',              url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660814/France_ready_world_cup_2026__fyp__france__masukberanda__jjbo_1_gpkb0f.mp3' },
+  { title: 'DJ JJ WG x Like This x Oh Sayang', artist: '', url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660782/DJ_JJ_WG_X_l_LIKE_THIS_X_OH_SAYANG__dj__llikethis__musik_story_1_jmfzxp.mp3' },
+  { title: 'Mbappe Football', artist: 'France',         url: 'https://res.cloudinary.com/dnf2njjpz/video/upload/v1782660744/mbappe_fotball_france_1_wlkbtn.mp3' }
+];
+
+var _storyEditorState = { file: null, songTitle: '', songArtist: '', songUrl: '', songStart: 0 };
 
 window.closeStoryEditor = function() {
   const modal = document.getElementById('storyEditorModal');
@@ -10715,14 +10812,172 @@ window.toggleStorySongPicker = function() {
 };
 
 window.selectStorySong = function(url, title, artist) {
-  _storyEditorState.songUrl   = url;
-  _storyEditorState.songTitle = title;
-  const label = document.getElementById('storyEditorSongLabel');
-  if(label) label.textContent = url ? ('\uD83C\uDFB5 ' + title + (artist ? ' \u2014 ' + artist : '')) : 'Pilih Lagu (Opsional)';
+  // Tutup dropdown dulu
   const listEl  = document.getElementById('storyEditorSongList');
   const chevron = document.getElementById('storyEditorSongChevron');
   if(listEl)  listEl.style.display = 'none';
   if(chevron) chevron.style.transform = '';
+
+  if(!url) {
+    // Tanpa lagu
+    _storyEditorState.songUrl   = '';
+    _storyEditorState.songTitle = '';
+    _storyEditorState.songStart = 0;
+    _storyEditorState.songArtist = '';
+    const label = document.getElementById('storyEditorSongLabel');
+    if(label) label.textContent = 'Pilih Lagu (Opsional)';
+    return;
+  }
+
+  // Buka trimmer
+  _trimmerState = { url: url, title: title, artist: artist || '', start: 0, duration: 0, playing: false };
+  openAudioTrimmer(url, title, artist || '');
+};
+
+// ── Audio Trimmer ─────────────────────────────────────────────
+var _trimmerState = { url: '', title: '', artist: '', start: 0, duration: 0, playing: false };
+
+window.openAudioTrimmer = function(url, title, artist) {
+  const modal    = document.getElementById('storyAudioTrimmer');
+  const nameEl   = document.getElementById('trimmerSongName');
+  const audio    = document.getElementById('trimmerAudio');
+  const slider   = document.getElementById('trimmerSlider');
+  const startEl  = document.getElementById('trimmerStartTime');
+  const endEl    = document.getElementById('trimmerEndTime');
+  const playIcon = document.getElementById('trimmerPlayIcon');
+
+  if(nameEl) nameEl.textContent = title + (artist ? ' — ' + artist : '');
+  if(playIcon) playIcon.className = 'fa-solid fa-play';
+  _trimmerState.playing = false;
+
+  // Load audio untuk dapat durasi
+  audio.src = url;
+  audio.onloadedmetadata = function() {
+    const dur = Math.floor(audio.duration);
+    _trimmerState.duration = dur;
+    const maxStart = Math.max(0, dur - 30);
+    if(slider) {
+      slider.max   = maxStart;
+      slider.value = 0;
+    }
+    updateTrimmerUI(0, dur);
+    drawTrimmerWaveform(dur);
+  };
+  audio.load();
+
+  if(modal) modal.style.display = 'flex';
+};
+
+window.closeAudioTrimmer = function() {
+  const modal = document.getElementById('storyAudioTrimmer');
+  const audio = document.getElementById('trimmerAudio');
+  if(audio) { audio.pause(); audio.src = ''; }
+  _trimmerState.playing = false;
+  const playIcon = document.getElementById('trimmerPlayIcon');
+  if(playIcon) playIcon.className = 'fa-solid fa-play';
+  if(modal) modal.style.display = 'none';
+};
+
+window.confirmAudioTrim = function() {
+  // Simpan ke state editor
+  _storyEditorState.songUrl    = _trimmerState.url;
+  _storyEditorState.songTitle  = _trimmerState.title;
+  _storyEditorState.songArtist = _trimmerState.artist;
+  _storyEditorState.songStart  = _trimmerState.start;
+
+  const label = document.getElementById('storyEditorSongLabel');
+  const startSec = Math.floor(_trimmerState.start);
+  const m = Math.floor(startSec / 60), s = startSec % 60;
+  const startStr = m + ':' + (s < 10 ? '0' : '') + s;
+  if(label) label.textContent = '\uD83C\uDFB5 ' + _trimmerState.title +
+    (_trimmerState.artist ? ' \u2014 ' + _trimmerState.artist : '') +
+    ' (dari ' + startStr + ')';
+
+  closeAudioTrimmer();
+};
+
+window.onTrimmerSlide = function(val) {
+  _trimmerState.start = parseFloat(val);
+  updateTrimmerUI(parseFloat(val), _trimmerState.duration);
+
+  // Update posisi window visual
+  const dur = _trimmerState.duration;
+  if(dur > 0) {
+    const pct     = parseFloat(val) / dur * 100;
+    const winPct  = Math.min(30, dur) / dur * 100;
+    const winEl   = document.getElementById('trimmerWindow');
+    if(winEl) {
+      winEl.style.left  = pct + '%';
+      winEl.style.width = winPct + '%';
+    }
+  }
+
+  // Kalau sedang preview, seek ke posisi baru
+  const audio = document.getElementById('trimmerAudio');
+  if(audio && _trimmerState.playing) {
+    audio.currentTime = parseFloat(val);
+  }
+};
+
+function updateTrimmerUI(start, duration) {
+  const startEl = document.getElementById('trimmerStartTime');
+  const endEl   = document.getElementById('trimmerEndTime');
+  const fmtTime = function(t) {
+    const sec = Math.floor(t);
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  };
+  if(startEl) startEl.textContent = fmtTime(start);
+  if(endEl)   endEl.textContent   = fmtTime(Math.min(start + 30, duration));
+}
+
+function drawTrimmerWaveform(duration) {
+  const canvas = document.getElementById('trimmerWaveform');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Bar waveform acak tapi simetris — visual placeholder
+  const bars = 60;
+  const barW = W / bars;
+  ctx.fillStyle = 'rgba(16,185,129,0.6)';
+  for(let i = 0; i < bars; i++) {
+    const h = (0.3 + Math.abs(Math.sin(i * 0.7 + duration * 0.1)) * 0.65) * H;
+    ctx.fillRect(i * barW + 1, (H - h) / 2, barW - 2, h);
+  }
+}
+
+window.toggleTrimmerPreview = function() {
+  const audio    = document.getElementById('trimmerAudio');
+  const playIcon = document.getElementById('trimmerPlayIcon');
+  const playBtn  = document.getElementById('trimmerPlayBtn');
+  if(!audio) return;
+
+  if(_trimmerState.playing) {
+    audio.pause();
+    _trimmerState.playing = false;
+    if(playIcon) playIcon.className = 'fa-solid fa-play';
+    if(playBtn) playBtn.querySelector('span').textContent = 'Preview Lagu';
+  } else {
+    audio.currentTime = _trimmerState.start;
+    audio.play();
+    _trimmerState.playing = true;
+    if(playIcon) playIcon.className = 'fa-solid fa-pause';
+    if(playBtn) playBtn.querySelector('span').textContent = 'Pause';
+
+    // Stop otomatis setelah 30 detik
+    setTimeout(function() {
+      if(_trimmerState.playing) {
+        audio.pause();
+        _trimmerState.playing = false;
+        if(playIcon) playIcon.className = 'fa-solid fa-play';
+        if(playBtn) playBtn.querySelector('span').textContent = 'Preview Lagu';
+      }
+    }, 30000);
+  }
 };
 
 window.submitStoryEditor = async function() {
@@ -10806,6 +11061,7 @@ window.submitStoryEditor = async function() {
         caption:     caption  || null,
         music_title: songTitle || null,
         music_url:   songUrl   || null,
+        music_start: _storyEditorState.songStart || 0,
         created_at:  new Date().toISOString(),
         expires_at:  new Date(Date.now() + 24*60*60*1000).toISOString()
       })
