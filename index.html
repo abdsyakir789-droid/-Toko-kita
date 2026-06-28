@@ -6044,6 +6044,24 @@ async function startAdsListener() {
   const localCached = await _readAdsCache(isOffline);
   // [IDB-DEBUG] Tampilkan hasil pembacaan cache ads
   if (typeof showToast === 'function') showToast('[IDB-DEBUG] localCached = ' + (localCached ? ('ADA, ' + localCached.length + ' item') : 'NULL'), localCached ? 'green' : 'red');
+  // [IMG-DEBUG] Cek langsung isi Cache API (IMG_CACHE milik Service Worker) untuk
+  // gambar produk pertama, supaya tahu pasti apakah gambar itu tersimpan di cache
+  // atau tidak — tanpa mengubah logic Service Worker sama sekali (cuma observasi).
+  if (localCached && localCached.length > 0 && typeof showToast === 'function' && window.caches) {
+    const _testImgUrl = localCached[0].imgUrl;
+    if (_testImgUrl) {
+      showToast('[IMG-DEBUG] Testing URL: ' + _testImgUrl.slice(0, 50) + '...', 'green');
+      caches.open('yallamart-img-v1').then(async cache => {
+        const matched = await cache.match(_testImgUrl);
+        showToast('[IMG-DEBUG] cache.match() = ' + (matched ? 'KETEMU di cache' : 'TIDAK ADA di cache'), matched ? 'green' : 'red');
+        // Hitung juga total entry yang ada di IMG_CACHE saat ini
+        const allKeys = await cache.keys();
+        showToast('[IMG-DEBUG] Total entry di IMG_CACHE: ' + allKeys.length, 'green');
+      }).catch(e => showToast('[IMG-DEBUG] caches.open() exception: ' + (e && e.message || e), 'red'));
+    } else {
+      showToast('[IMG-DEBUG] localCached[0].imgUrl kosong/tidak ada', 'red');
+    }
+  }
   if (localCached && localCached.length > 0) {
     // Tampilkan IndexedDB cache langsung (instant)
     _applyAds(localCached);
