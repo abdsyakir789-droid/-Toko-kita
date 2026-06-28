@@ -4940,7 +4940,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
           var uid = null;
           try { var t=window._S&&window._S._accessToken; if(t){var d=JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); uid=d.sub;} } catch(e){}
           if (!uid) return;
-          fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions', {
+          fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions?on_conflict=user_id,endpoint', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -5018,7 +5018,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
                 var subJson = sub.toJSON();
                 var uid = window._S.user?.uid || window._S.user?.id;
                 if(uid && subJson.endpoint) {
-                  fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions', {
+                  fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions?on_conflict=user_id,endpoint', {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
@@ -14332,7 +14332,7 @@ window.ycSendChat = async function() {
 // ── Aktivasi Notifikasi via Webpushr ─────────────────────────
 
   function saveSubscription(subJson, userId) {
-    fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions', {
+    fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions?on_conflict=user_id,endpoint', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -14416,7 +14416,7 @@ window.activateWebpushrNotif = function() {
         } else {
           saveSubscription(subJson, _userId);
         }
-        fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions', {
+        fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions?on_conflict=user_id,endpoint', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -17350,7 +17350,7 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
 
   function saveSub(sub, uid, token) {
     var sj = sub.toJSON();
-    fetch(SUPA_URL + '/rest/v1/push_subscriptions', {
+    fetch(SUPA_URL + '/rest/v1/push_subscriptions?on_conflict=user_id,endpoint', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
