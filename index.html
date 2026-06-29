@@ -10679,20 +10679,33 @@ function _renderStoryFrame() {
     // Pemilik lihat story sendiri — tampilkan jumlah view
     if(viewCountEl) viewCountEl.style.display = 'flex';
     if(viewCountTextEl) viewCountTextEl.textContent = '...';
-    // Fetch jumlah view dari story_views
-    window._supaFetch('/rest/v1/story_views?story_id=eq.' + story.id + '&select=id')
-      .then(function(r){ return r.ok ? r.json() : []; })
-      .then(function(rows){
-        if(viewCountTextEl) viewCountTextEl.textContent = rows.length + ' dilihat';
-      }).catch(function(){});
+    // Fetch count langsung dari DB — efisien, tidak perlu ambil semua row
+    window._supaFetch('/rest/v1/story_views?story_id=eq.' + story.id + '&select=id', {
+      headers: { 'Prefer': 'count=exact', 'Range-Unit': 'items', 'Range': '0-0' }
+    }).then(function(r) {
+      const count = r.headers.get('Content-Range');
+      // Content-Range format: "0-0/N" dimana N = total count
+      if(count) {
+        const total = count.split('/')[1];
+        if(viewCountTextEl) viewCountTextEl.textContent = (total || '0') + ' dilihat';
+      } else {
+        // Fallback: hitung dari body
+        return r.json().then(function(rows) {
+          if(viewCountTextEl) viewCountTextEl.textContent = (rows.length || 0) + ' dilihat';
+        });
+      }
+    }).catch(function(){
+      if(viewCountTextEl) viewCountTextEl.textContent = '0 dilihat';
+    });
   } else {
     // Viewer — sembunyikan view count, catat view ke DB
     if(viewCountEl) viewCountEl.style.display = 'none';
     const myUid = window._S.user ? (window._S.user.uid || window._S.user.id) : null;
     if(myUid && story.id) {
+      // Gunakan prefer key (bukan headers) agar tidak conflict dengan _supaFetch
       window._supaFetch('/rest/v1/story_views', {
         method: 'POST',
-        headers: { 'Prefer': 'return=minimal,resolution=ignore-duplicates' },
+        prefer: 'return=minimal,resolution=ignore-duplicates',
         body: JSON.stringify({ story_id: story.id, viewer_uid: myUid })
       }).catch(function(){});
     }
