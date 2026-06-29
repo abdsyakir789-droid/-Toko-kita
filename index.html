@@ -3524,7 +3524,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <button onclick="closeAudioTrimmer()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:13px;cursor:pointer">Batal</button>
         <span style="color:#fff;font-size:14px;font-weight:700" id="trimmerSongName">Nama Lagu</span>
-        <button onclick="confirmAudioTrim()" style="background:none;border:none;color:#10B981;font-size:13px;font-weight:700;cursor:pointer">Pakai</button>
+        <button onclick="confirmAudioTrim()" style="background:none;border:none;color:#10B981;font-size:14px;font-weight:700;cursor:pointer">Tambahkan</button>
       </div>
 
       <!-- Waveform visual sederhana -->
@@ -3560,45 +3560,52 @@ h3.text-sm.font-bold.text-gray-800 {
   <div id="storyViewerModal" style="display:none;position:fixed;inset:0;z-index:999;background:#000;flex-direction:column" onclick="closeStoryViewer()">
     <!-- Progress bar -->
     <div style="position:absolute;top:0;left:0;right:0;z-index:2;padding:10px 10px 0;display:flex;gap:4px" id="storyProgressBars"></div>
-    <!-- Header: avatar + nama + tombol tutup -->
+
+    <!-- Header: avatar + nama + waktu + judul lagu + tombol tutup -->
     <div style="position:absolute;top:24px;left:0;right:0;z-index:2;display:flex;align-items:center;gap:10px;padding:0 14px">
       <div id="storyViewerAvatar" style="width:36px;height:36px;border-radius:50%;background:#374151;overflow:hidden;flex-shrink:0;border:2px solid #fff"></div>
-      <div style="flex:1">
-        <p id="storyViewerName" style="color:#fff;font-size:13px;font-weight:700;margin:0"></p>
-        <p id="storyViewerTime" style="color:rgba(255,255,255,0.6);font-size:11px;margin:0"></p>
+      <div style="flex:1;min-width:0">
+        <p id="storyViewerName" style="color:#fff;font-size:13px;font-weight:700;margin:0;line-height:1.3"></p>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow:hidden">
+          <p id="storyViewerTime" style="color:rgba(255,255,255,0.6);font-size:11px;margin:0;flex-shrink:0"></p>
+          <!-- Judul lagu di header — sebelah kanan waktu -->
+          <div id="storyViewerSong" style="display:none;align-items:center;gap:4px;overflow:hidden;max-width:160px">
+            <i class="fa-solid fa-music" style="color:#10B981;font-size:10px;flex-shrink:0;animation:spin 3s linear infinite"></i>
+            <span id="storyViewerSongText" style="color:rgba(255,255,255,0.8);font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
+          </div>
+        </div>
       </div>
-      <button onclick="event.stopPropagation();closeStoryViewer()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
-    </div>
-    <!-- Tombol tambah story (hanya muncul saat lihat story sendiri) -->
-    <!-- View count — hanya tampil saat lihat story sendiri -->
-    <div id="storyViewerViewCount" style="display:none;position:absolute;bottom:90px;left:50%;transform:translateX(-50%);z-index:2;white-space:nowrap">
-      <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);border-radius:20px;padding:6px 14px">
-        <i class="fa-solid fa-eye" style="color:#fff;font-size:13px"></i>
-        <span id="storyViewerViewCountText" style="color:#fff;font-size:13px;font-weight:700">0 dilihat</span>
-      </div>
+      <button onclick="event.stopPropagation();closeStoryViewer()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">✕</button>
     </div>
 
-    <div id="storyViewerAddBtn" style="display:none;position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:2">
+    <!-- Tombol Tambah Status — disembunyikan secara visual, logika tetap ada -->
+    <div id="storyViewerAddBtn" style="display:none;position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:2;visibility:hidden;pointer-events:none">
       <button onclick="event.stopPropagation();closeStoryViewer();setTimeout(()=>{const i=document.getElementById('storyFileInput');if(i){i.value='';i.click();}},200)" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.2);border:1.5px solid rgba(255,255,255,0.5);color:#fff;font-size:13px;font-weight:700;padding:10px 20px;border-radius:999px;cursor:pointer;backdrop-filter:blur(8px)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Tambah Status
       </button>
     </div>
+
     <!-- Gambar story -->
     <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
       <img id="storyViewerImg" src="" style="max-width:100%;max-height:100%;object-fit:contain" onclick="event.stopPropagation()">
     </div>
-    <!-- Caption story -->
-    <div id="storyViewerCaption" style="display:none;position:absolute;bottom:70px;left:0;right:0;z-index:2;padding:0 16px;pointer-events:none">
-      <p style="color:#fff;font-size:14px;font-weight:500;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,0.8);line-height:1.5;margin:0;background:rgba(0,0,0,0.3);border-radius:10px;padding:8px 12px;backdrop-filter:blur(4px)" id="storyViewerCaptionText"></p>
-    </div>
-    <!-- Info lagu -->
-    <div id="storyViewerSong" style="display:none;position:absolute;bottom:24px;left:0;right:0;z-index:2;padding:0 16px;pointer-events:none">
-      <div style="display:flex;align-items:center;justify-content:center;gap:6px">
-        <i class="fa-solid fa-music" style="color:#fff;font-size:11px;animation:spin 3s linear infinite"></i>
-        <span id="storyViewerSongText" style="color:#fff;font-size:12px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,0.8)"></span>
+
+    <!-- Grup bawah: caption di atas, view count tepat di bawah caption -->
+    <div style="position:absolute;bottom:28px;left:0;right:0;z-index:2;padding:0 16px;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px">
+      <!-- Caption — tampil lebih dulu dari atas -->
+      <div id="storyViewerCaption" style="display:none;width:100%">
+        <p style="color:#fff;font-size:14px;font-weight:500;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,0.8);line-height:1.5;margin:0;background:rgba(0,0,0,0.3);border-radius:12px;padding:8px 14px;backdrop-filter:blur(4px)" id="storyViewerCaptionText"></p>
+      </div>
+      <!-- View count — selalu di bawah caption, tidak pernah tertutup -->
+      <div id="storyViewerViewCount" style="display:none;pointer-events:none">
+        <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);border-radius:20px;padding:5px 12px">
+          <i class="fa-solid fa-eye" style="color:#fff;font-size:12px"></i>
+          <span id="storyViewerViewCountText" style="color:#fff;font-size:12px;font-weight:700">0 dilihat</span>
+        </div>
       </div>
     </div>
+
     <!-- Tap kiri/kanan untuk navigasi -->
     <div style="position:absolute;inset:0;display:flex;z-index:1">
       <div style="flex:1" onclick="event.stopPropagation();prevStory()"></div>
@@ -10670,7 +10677,7 @@ function _renderStoryFrame() {
 
   if(isMe) {
     // Pemilik lihat story sendiri — tampilkan jumlah view
-    if(viewCountEl) viewCountEl.style.display = 'block';
+    if(viewCountEl) viewCountEl.style.display = 'flex';
     if(viewCountTextEl) viewCountTextEl.textContent = '...';
     // Fetch jumlah view dari story_views
     window._supaFetch('/rest/v1/story_views?story_id=eq.' + story.id + '&select=id')
@@ -10709,7 +10716,7 @@ function _renderStoryFrame() {
   if(songBox && songText) {
     if(story.music_title && story.music_url) {
       songText.textContent = story.music_title;
-      songBox.style.display = 'block';
+      songBox.style.display = 'flex';
       // Stop audio lama jika ada
       if(window._storyAudio) { window._storyAudio.pause(); window._storyAudio = null; }
       const aud = new Audio(story.music_url);
@@ -10860,14 +10867,24 @@ window.handleStoryFileSelected = function(input) {
     if(songs.length === 0) {
       listEl.innerHTML = '<div style="padding:12px 14px;color:rgba(255,255,255,0.4);font-size:12px;text-align:center">Belum ada lagu tersedia</div>';
     } else {
-      listEl.innerHTML = songs.map(function(s) {
-        return '<div onclick="selectStorySong(\'' + s.url + '\',\'' + s.title.replace(/'/g,"\\'") + '\',\'' + (s.artist||'').replace(/'/g,"\\'") + '\'); event.stopPropagation()"' +
-          ' style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.07)">' +
-          '<div style="width:32px;height:32px;border-radius:50%;background:#10B981;display:flex;align-items:center;justify-content:center">' +
-          '<i class="fa-solid fa-music" style="color:#fff;font-size:12px"></i></div>' +
-          '<div style="flex:1;min-width:0"><div style="color:#fff;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + s.title + '</div>' +
+      listEl.innerHTML = songs.map(function(s, idx) {
+        var safeUrl    = s.url.replace(/'/g, "\\'");
+        var safeTitle  = s.title.replace(/'/g, "\\'");
+        var safeArtist = (s.artist||'').replace(/'/g, "\\'");
+        return '<div id="songItem_' + idx + '" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.07)">' +
+          // Kiri: ikon play/pause + info lagu — klik untuk preview
+          '<div onclick="previewStorySong(\'' + safeUrl + '\',\'' + safeTitle + '\',\'' + safeArtist + '\',' + idx + '); event.stopPropagation()" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer">' +
+          '<div id="songIcon_' + idx + '" style="width:32px;height:32px;border-radius:50%;background:#10B981;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+          '<i class="fa-solid fa-play" style="color:#fff;font-size:11px"></i></div>' +
+          '<div style="flex:1;min-width:0">' +
+          '<div style="color:#fff;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + s.title + '</div>' +
           (s.artist ? '<div style="color:rgba(255,255,255,0.5);font-size:11px">' + s.artist + '</div>' : '') +
-          '</div></div>';
+          '</div></div>' +
+          // Kanan: ikon + untuk buka trimmer
+          '<div onclick="selectStorySong(\'' + safeUrl + '\',\'' + safeTitle + '\',\'' + safeArtist + '\'); event.stopPropagation()" ' +
+          'style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer">' +
+          '<i class="fa-solid fa-plus" style="color:#10B981;font-size:13px"></i></div>' +
+          '</div>';
       }).join('');
     }
   }
@@ -10896,6 +10913,7 @@ window.closeStoryEditor = function() {
   if(modal) modal.style.display = 'none';
   document.body.style.overflow = '';
   _storyEditorState = { file: null, songTitle: '', songArtist: '', songUrl: '', songStart: 0 };
+  _stopSongPreview();
   _cropState.active = false; _cropState.croppedDataUrl = '';
   const cropIcon = document.getElementById('storyCropIcon');
   if(cropIcon) cropIcon.style.color = '#fff';
@@ -10916,6 +10934,51 @@ window.toggleStorySongPicker = function() {
     if(musicIcon) musicIcon.style.color = '#10B981';
   }
 };
+
+// ── Preview lagu saat klik judul (sebelum trim) ──────────────
+var _previewAudio = null;
+var _previewIdx   = -1;
+
+window.previewStorySong = function(url, title, artist, idx) {
+  // Kalau klik lagu yang sedang preview → toggle pause/play
+  if(_previewIdx === idx && _previewAudio && !_previewAudio.paused) {
+    _previewAudio.pause();
+    _setPreviewIcon(idx, false);
+    return;
+  }
+  // Stop preview sebelumnya
+  if(_previewAudio) { _previewAudio.pause(); _previewAudio.src = ''; }
+  if(_previewIdx >= 0) _setPreviewIcon(_previewIdx, false);
+
+  _previewIdx = idx;
+  _previewAudio = new Audio(url);
+  _previewAudio.volume = 0.8;
+  _previewAudio.play().then(function() {
+    _setPreviewIcon(idx, true);
+  }).catch(function(){});
+  // Stop otomatis setelah 30 detik
+  _previewAudio.onended = function() { _setPreviewIcon(idx, false); _previewIdx = -1; };
+  setTimeout(function() {
+    if(_previewAudio && !_previewAudio.paused) {
+      _previewAudio.pause();
+      _setPreviewIcon(idx, false);
+    }
+  }, 30000);
+};
+
+function _setPreviewIcon(idx, playing) {
+  const iconEl = document.getElementById('songIcon_' + idx);
+  if(!iconEl) return;
+  iconEl.style.background = playing ? '#ef4444' : '#10B981';
+  const i = iconEl.querySelector('i');
+  if(i) i.className = playing ? 'fa-solid fa-pause' : 'fa-solid fa-play';
+  i.style.fontSize = playing ? '12px' : '11px';
+}
+
+function _stopSongPreview() {
+  if(_previewAudio) { _previewAudio.pause(); _previewAudio.src = ''; _previewAudio = null; }
+  if(_previewIdx >= 0) { _setPreviewIcon(_previewIdx, false); _previewIdx = -1; }
+}
 
 window.selectStorySong = function(url, title, artist) {
   // Tutup dropdown dulu
@@ -10941,6 +11004,8 @@ window.selectStorySong = function(url, title, artist) {
     return;
   }
 
+  // Stop preview dulu sebelum buka trimmer
+  _stopSongPreview();
   // Buka trimmer
   _trimmerState = { url: url, title: title, artist: artist || '', start: 0, duration: 0, playing: false };
   openAudioTrimmer(url, title, artist || '');
@@ -10974,6 +11039,24 @@ window.openAudioTrimmer = function(url, title, artist) {
     }
     updateTrimmerUI(0, dur);
     drawTrimmerWaveform(dur);
+    // Auto-play preview saat trimmer terbuka
+    audio.currentTime = 0;
+    audio.play().then(function() {
+      _trimmerState.playing = true;
+      if(playIcon) playIcon.className = 'fa-solid fa-pause';
+      const btn = document.getElementById('trimmerPlayBtn');
+      if(btn) btn.querySelector('span').textContent = 'Pause';
+      // Stop otomatis setelah 30 detik
+      setTimeout(function() {
+        if(_trimmerState.playing) {
+          audio.pause();
+          _trimmerState.playing = false;
+          if(playIcon) playIcon.className = 'fa-solid fa-play';
+          const btn = document.getElementById('trimmerPlayBtn');
+          if(btn) btn.querySelector('span').textContent = 'Preview Lagu';
+        }
+      }, 30000);
+    }).catch(function(){});
   };
   audio.load();
 
