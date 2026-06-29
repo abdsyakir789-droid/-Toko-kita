@@ -9430,27 +9430,27 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
                     <button id="obtn-diproses-${m.id}" ${m.status?'disabled':''} onclick="updateOrderStatus('diproses','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='diproses'||m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='diproses'||m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='diproses'||m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status?'not-allowed':'pointer'};opacity:${m.status?'0.5':'1'}">
                       <i class="fa-solid fa-box-open" style="font-size:10px"></i> Diproses
                     </button>
-                    <button id="obtn-diantar-${m.id}" ${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'disabled':''} onclick="updateOrderStatus('diantar','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'not-allowed':'pointer'};opacity:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'0.5':'1'}">
+                    <button id="obtn-diantar-${m.id}" ${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'disabled':''} onclick="updateOrderStatus('diantar','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'0.5':'1'}">
                       <i class="fa-solid fa-truck" style="font-size:10px"></i> Diantar
                     </button>
-                    <button id="obtn-sampai-${m.id}" ${m.status==='sampai'||m.status==='selesai'?'disabled':''} onclick="updateOrderStatus('sampai','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='sampai'||m.status==='selesai'?'not-allowed':'pointer'};opacity:${m.status==='sampai'||m.status==='selesai'?'0.5':'1'}">
+                    <button id="obtn-sampai-${m.id}" ${m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'disabled':''} onclick="updateOrderStatus('sampai','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'0.5':'1'}">
                       <i class="fa-solid fa-location-dot" style="font-size:10px"></i> Sampai
                     </button>
                   </div>
                   <div style="display:flex;gap:6px;justify-content:center">
-                    <button id="obtn-selesai-${m.id}" ${m.status==='selesai'?'disabled':''} onclick="updateOrderStatus('selesai','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 32px;border-radius:20px;border:1.5px solid ${m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='selesai'?'not-allowed':'pointer'};opacity:${m.status==='selesai'?'0.5':'1'}">
+                    <button id="obtn-selesai-${m.id}" ${m.status==='selesai'||m.status==='dibatalkan'?'disabled':''} onclick="updateOrderStatus('selesai','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 32px;border-radius:20px;border:1.5px solid ${m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='selesai'||m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='selesai'||m.status==='dibatalkan'?'0.5':'1'}">
                       <i class="fa-solid fa-circle-check" style="font-size:10px"></i> Selesai
                     </button>
-                    <button onclick="openBuyerAddress('${orderData.buyerUid||window._S.activeChatBuyerId||''}','${orderData.sellerUid||''}')" style="display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 18px;border-radius:20px;border:1.5px solid #9ca3af;background:#f3f4f6;color:#374151;font-size:11px;font-weight:700;cursor:pointer">
+                    <button id="obtn-alamat-${m.id}" ${m.status==='dibatalkan'?'disabled':''} onclick="openBuyerAddress('${orderData.buyerUid||window._S.activeChatBuyerId||''}','${orderData.sellerUid||''}')" style="display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 18px;border-radius:20px;border:1.5px solid #9ca3af;background:#f3f4f6;color:#374151;font-size:11px;font-weight:700;cursor:${m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='dibatalkan'?'0.5':'1'}">
                       <i class="fa-solid fa-location-dot" style="font-size:10px"></i> Alamat
                     </button>
                   </div>
                 </div>
               </div>
-              ${m.status==='dibatalkan' ? `<div style="background:#EF4444;color:#000;text-align:center;padding:8px 12px;font-size:11px;font-weight:700">Pesanan dibatalkan</div>` : ''}` : (window._S.user && window._S.user.uid===(orderData.buyerUid||window._S.activeChatBuyerId||'') && m.status!=='selesai' && m.status!=='dibatalkan' ? `
+              ${m.status==='dibatalkan' ? `<div style="background:#EF4444;color:#000;text-align:center;padding:8px 12px;font-size:11px;font-weight:700">Pesanan dibatalkan</div>` : ''}` : (window._S.user && window._S.user.uid===(orderData.buyerUid||window._S.activeChatBuyerId||'') && m.status!=='selesai' ? `
               <div style="padding:8px 12px 10px;border-top:1px solid #f1f5f9">
-                <button onclick="cancelOrderByBuyer('${window._S.activeChatId||''}','${orderData.buyerUid||window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 0;border-radius:20px;border:1.5px solid #DC2626;background:#FEE2E2;color:#DC2626;font-size:11px;font-weight:700;cursor:pointer">
-                  <i class="fa-solid fa-xmark" style="font-size:10px"></i> Batalkan
+                <button id="obtn-cancel-${m.id}" ${m.status==='dibatalkan'?'disabled':''} onclick="cancelOrderByBuyer('${window._S.activeChatId||''}','${orderData.buyerUid||window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 0;border-radius:20px;border:1.5px solid ${m.status==='dibatalkan'?'#9ca3af':'#DC2626'};background:${m.status==='dibatalkan'?'#f3f4f6':'#FEE2E2'};color:${m.status==='dibatalkan'?'#374151':'#DC2626'};font-size:11px;font-weight:700;cursor:${m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='dibatalkan'?'0.5':'1'}">
+                  <i class="fa-solid fa-xmark" style="font-size:10px"></i> Batalkan pesanan
                 </button>
               </div>
               ` : '')}
@@ -18146,14 +18146,18 @@ window.cancelOrderByBuyer = async function(chatId, buyerId, msgId, sellerUid) {
       body: JSON.stringify({ status: 'dibatalkan' })
     }).catch(function(){});
 
-    // Sembunyikan tombol Batalkan di sisi pembeli setelah berhasil
+    // Kunci tombol "Batalkan pesanan" secara instan (disabled, abu-abu) — status permanen tetap dibaca ulang dari DB (m.status) tiap kali chat di-render/refresh
     try {
-      var _btns = document.querySelectorAll('button[onclick*="cancelOrderByBuyer"]');
-      _btns.forEach(function(b){
-        if(b.getAttribute('onclick') && b.getAttribute('onclick').indexOf("'"+msgId+"'") !== -1 && b.parentElement) {
-          b.parentElement.style.display = 'none';
-        }
-      });
+      var _cbtn = document.getElementById('obtn-cancel-'+msgId);
+      if(_cbtn) {
+        _cbtn.disabled = true;
+        _cbtn.style.cursor = 'not-allowed';
+        _cbtn.style.opacity = '0.5';
+        _cbtn.style.background = '#f3f4f6';
+        _cbtn.style.borderColor = '#9ca3af';
+        _cbtn.style.color = '#374151';
+        _cbtn.onclick = null;
+      }
     } catch(_he) {}
 
     // Kirim notifikasi ke penjual
