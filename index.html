@@ -2888,7 +2888,7 @@ h3.text-sm.font-bold.text-gray-800 {
   <!-- CATEGORY GRID -->
   <section class="mt-2">
     <div class="bg-white rounded-2xl px-3 py-2 border border-gray-100">
-      <div class="msc flex md:grid md:grid-cols-10 gap-2">
+      <div class="msc flex md:grid md:grid-cols-11 gap-2">
         <button onclick="filterCat('semua')" data-cat="semua" class="cb active flex-shrink-0 flex flex-col items-center gap-1 px-2 py-1.5">
           <div class="w-11 h-11 flex items-center justify-center"><img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1780851336/mobile_app_icon__3D_glossy_grid_9_squares_symbol____emerald_green_color_10B981__rounded_square_shap-removebg-preview_pjkqck.png" class="w-11 h-11 object-contain" alt="Semua"/></div>
           <span class="text-[10px] font-semibold whitespace-nowrap">Semua</span>
@@ -2928,6 +2928,10 @@ h3.text-sm.font-bold.text-gray-800 {
         <button onclick="filterCat('rumah')" data-cat="rumah" class="cb flex-shrink-0 flex flex-col items-center gap-1 px-2 py-1.5">
           <div class="w-11 h-11 flex items-center justify-center"><img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1780851337/Designer__3_-removebg-preview_xtcmyx.png" class="w-11 h-11 object-contain" alt="Rumah"/></div>
           <span class="text-[10px] font-semibold whitespace-nowrap">Rumah</span>
+        </button>
+        <button onclick="filterCat('barang-bekas')" data-cat="barang-bekas" class="cb flex-shrink-0 flex flex-col items-center gap-1 px-2 py-1.5">
+          <div class="w-11 h-11 flex items-center justify-center"><img src="https://res.cloudinary.com/dnf2njjpz/image/upload/v1782697228/_Qlmu5PqKWVanJBrAJVzHTg_13HPCbvLRMmuMLaxmbpL6Q_cover_hd_icrwvd.png" class="w-11 h-11 object-contain" alt="Barang Bekas"/></div>
+          <span class="text-[10px] font-semibold whitespace-nowrap">Barang Bekas</span>
         </button>
       </div>
     </div>
@@ -4084,6 +4088,7 @@ h3.text-sm.font-bold.text-gray-800 {
           <option value="buku">Buku</option>
           <option value="gaming">Gaming</option>
           <option value="rumah">Rumah</option>
+          <option value="barang-bekas">Barang Bekas</option>
           <option value="promo">Promo</option>
         </select>
       </div>
@@ -8704,7 +8709,7 @@ window.filterCat = c => {
     const a=b.dataset.nav===c;
     b.className=`ntab text-xs px-3 py-2.5 font-${a?'bold':'medium'} ${a?'active text-primary':'text-gray-500 hover:text-primary'} transition-colors`;
   });
-  const L={semua:'Semua',elektronik:'Elektronik',fashion:'Fashion',kecantikan:'Kecantikan',makanan:'Makanan',olahraga:'Olahraga','gratis-ongkir':'Gratis Ongkir',promo:'Promo',official:'Official Store',buku:'Buku',gaming:'Gaming',rumah:'Rumah'};
+  const L={semua:'Semua',elektronik:'Elektronik',fashion:'Fashion',kecantikan:'Kecantikan',makanan:'Makanan',olahraga:'Olahraga','gratis-ongkir':'Gratis Ongkir',promo:'Promo',official:'Official Store',buku:'Buku',gaming:'Gaming',rumah:'Rumah','barang-bekas':'Barang Bekas'};
   document.getElementById('catLabel').textContent=L[c]||c;
   renderProducts();
 };
@@ -9127,7 +9132,7 @@ window.renderSimilarRecom = function(currentAd) {
   const topRecom = pool.slice(0, 6);
 
   // Update label kategori
-  const catMap = {elektronik:'Elektronik',fashion:'Fashion',kecantikan:'Kecantikan',makanan:'Makanan',olahraga:'Olahraga',buku:'Buku',gaming:'Gaming',rumah:'Rumah',promo:'Promo'};
+  const catMap = {elektronik:'Elektronik',fashion:'Fashion',kecantikan:'Kecantikan',makanan:'Makanan',olahraga:'Olahraga',buku:'Buku',gaming:'Gaming',rumah:'Rumah',promo:'Promo','barang-bekas':'Barang Bekas'};
   if(catLabel) catLabel.textContent = (cat && catMap[cat]) ? catMap[cat] : 'Serupa';
 
   if(!topRecom.length) {
@@ -14375,6 +14380,7 @@ window.removeVerification = async function() {
           <option value="buku">Buku</option>
           <option value="gaming">Gaming</option>
           <option value="rumah">Rumah</option>
+          <option value="barang-bekas">Barang Bekas</option>
           <option value="promo">Promo</option>
         </select>
       </div>
