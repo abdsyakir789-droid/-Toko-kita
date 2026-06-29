@@ -3363,6 +3363,11 @@ h3.text-sm.font-bold.text-gray-800 {
         </div>
       </div>
     </div>
+
+    <!-- Alamat Toko (tampil hanya jika data tersedia) -->
+    <p id="etalaseAlamatRow" style="display:none;font-size:12px;font-weight:500;color:#4b5563;text-align:center;margin:10px 14px 0;line-height:1.4;">
+      <i class="fa-solid fa-location-dot" style="font-size:10px;color:#9ca3af;margin-right:4px"></i>Alamat: <span id="etalaseAlamatVal"></span>
+    </p>
   </div>
 
   <!-- ── Seller Products: Header + Dynamic Category Tabs ── -->
@@ -10203,6 +10208,22 @@ window.viewSellerStore = async function(sellerUid) {
     window._etalaseCoverUnsub = () => window.supabase.removeChannel(_coverCh);
   } catch(e) {
     console.warn('[EtalaseCover] Listener gagal dipasang:', e.message);
+  }
+
+  // ── Load alamat toko (read-only, UI display) ──────────────────
+  try {
+    const _alamatRow = document.getElementById('etalaseAlamatRow');
+    const _alamatVal = document.getElementById('etalaseAlamatVal');
+    const _shopRes = await window._supaFetch('/rest/v1/shops?user_id=eq.' + sellerUid + '&select=alamat&limit=1');
+    const _shopRows = _shopRes.ok ? await _shopRes.json() : [];
+    const _alamat = (_shopRows[0]?.alamat || '').trim();
+    if(_alamatRow && _alamatVal) {
+      if(_alamat) { _alamatVal.textContent = _alamat; _alamatRow.style.display = 'block'; }
+      else { _alamatRow.style.display = 'none'; }
+    }
+  } catch(e) {
+    const _alamatRow = document.getElementById('etalaseAlamatRow');
+    if(_alamatRow) _alamatRow.style.display = 'none';
   }
 
   // ── Cek status toko seller ────────────────────────────────────
@@ -19215,7 +19236,17 @@ window.clearRecentlyViewed = async function() {
   border-radius: 20px;
   padding: 24px 20px;
   text-align: center;
+  position: relative;
 }
+.dt-edit-pencil-btn {
+  position: absolute; top: 14px; right: 14px;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(255,255,255,.7);
+  border: 1px solid rgba(16,185,129,.25);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background .15s;
+}
+.dt-edit-pencil-btn:active { background: rgba(255,255,255,1); }
 .dt-active-card .dt-check-circle {
   width: 56px; height: 56px;
   background: #10B981; border-radius: 50%;
@@ -19246,7 +19277,7 @@ window.clearRecentlyViewed = async function() {
 
       <!-- Header fullscreen navbar -->
       <div class="dt-header">
-        <button class="dt-close-btn" onclick="closeDaftarToko()" style="background:rgba(255,255,255,0.15);margin-right:4px;">
+        <button class="dt-close-btn" onclick="(function(){var e=document.getElementById('dtEditFormContainer');if(e)e.style.display='none';})();closeDaftarToko()" style="background:rgba(255,255,255,0.15);margin-right:4px;">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <div class="dt-header-left" style="flex:1;">
@@ -19284,6 +19315,9 @@ window.clearRecentlyViewed = async function() {
         <!-- Banner sudah punya toko -->
         <div id="dtSudahPunyaToko" style="display:none;">
           <div class="dt-active-card">
+            <button class="dt-edit-pencil-btn" onclick="openEditDataToko()" type="button" aria-label="Edit alamat toko">
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#065f46" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 18.5 2 20l1.5-5.5Z"/></svg>
+            </button>
             <div class="dt-check-circle">
               <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
@@ -19294,6 +19328,69 @@ window.clearRecentlyViewed = async function() {
               Pasang Iklan Sekarang
             </button>
           </div>
+        </div>
+
+        <!-- Form Edit Data Toko (hanya Alamat yang bisa diubah) -->
+        <div id="dtEditFormContainer" style="display:none;">
+          <div style="background:#fff;border-radius:18px;padding:20px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:12px;">
+
+            <!-- Nama Toko (read-only display) -->
+            <div class="dt-field">
+              <div class="dt-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/></svg>
+                Nama Toko <span class="opt">tidak bisa diubah</span>
+              </div>
+              <div class="dt-readonly-row">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/></svg>
+                <div>
+                  <div class="dt-readonly-val" id="dtEditNamaTokoVal">—</div>
+                  <div class="dt-readonly-tag">Nama toko terdaftar</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Kewarganegaraan (read-only display) -->
+            <div class="dt-field">
+              <div class="dt-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                Kewarganegaraan <span class="opt">tidak bisa diubah</span>
+              </div>
+              <div class="dt-readonly-row">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                <div>
+                  <div class="dt-readonly-val" id="dtEditNasionalitasVal">—</div>
+                  <div class="dt-readonly-tag">Kewarganegaraan terdaftar</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <div style="display:flex;align-items:center;gap:10px;margin:4px 0 16px;">
+              <div style="flex:1;height:1px;background:#f3f4f6;"></div>
+              <span style="font-size:11px;color:#c0c8d4;font-weight:500;">Bisa diubah</span>
+              <div style="flex:1;height:1px;background:#f3f4f6;"></div>
+            </div>
+
+            <!-- Alamat (editable) -->
+            <div class="dt-field">
+              <div class="dt-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                Alamat di Mesir <span class="req">*</span>
+              </div>
+              <p style="font-size:10.5px;color:#9ca3af;font-weight:500;margin:-3px 0 7px;line-height:1.4;">Informasi ini akan ditampilkan di halaman profil Anda dan dapat dilihat oleh semua orang.</p>
+              <input id="dtEditAlamat" class="dt-input" type="text" placeholder="Contoh: Hay Asyir, Nasr City, Cairo"
+                onfocus="this.style.borderColor='#10B981';this.style.boxShadow='0 0 0 3px rgba(16,185,129,.12)'"
+                onblur="this.style.borderColor='#e5e7eb';this.style.boxShadow='none'"/>
+            </div>
+
+          </div>
+          <button id="dtEditCancelBtn" onclick="closeEditDataToko()" type="button" style="width:100%;background:#fff;color:#6b7280;border:1.5px solid #e5e7eb;border-radius:14px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans', sans-serif;margin-bottom:8px;">
+            Batal
+          </button>
+          <button id="dtUpdateBtn" class="dt-submit-btn" onclick="updateDataToko()" type="button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Perbarui Alamat
+          </button>
         </div>
 
         <!-- Form -->
@@ -19317,6 +19414,7 @@ window.clearRecentlyViewed = async function() {
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
               Alamat di Mesir <span class="req">*</span>
             </div>
+            <p style="font-size:10.5px;color:#9ca3af;font-weight:500;margin:-3px 0 7px;line-height:1.4;">Informasi ini akan ditampilkan di halaman profil Anda dan dapat dilihat oleh semua orang.</p>
             <input id="dtAlamat" class="dt-input" type="text" placeholder="Contoh: Hay Asyir, Nasr City, Cairo"
               onfocus="this.style.borderColor='#10B981';this.style.boxShadow='0 0 0 3px rgba(16,185,129,.12)'"
               onblur="this.style.borderColor='#e5e7eb';this.style.boxShadow='none'"/>
@@ -19443,6 +19541,83 @@ function _dtShowSudahPunya(shop) {
   document.getElementById('dtFormContainer').style.display  = 'none';
   document.getElementById('dtNamaTokoBanner').textContent   = shop.nama_toko || shop.shop_name || '';
 }
+
+// ── Edit Data Toko (HANYA field Alamat yang bisa diubah) ───────
+// Fungsi-fungsi ini terpisah total dari submitDaftarToko()/openDaftarToko().
+// Tidak menyentuh proses pendaftaran toko baru sama sekali.
+window.openEditDataToko = async function() {
+  let shop = window._shopCache;
+
+  // _shopCache bisa terisi parsial (mis. dari checkShopStatus yang hanya
+  // select id,nama_toko,is_active). Pastikan kita punya field alamat &
+  // nasionalitas yang lengkap sebelum menampilkan form edit.
+  if (!shop || shop.alamat === undefined || shop.nasionalitas === undefined) {
+    const u = window._S && window._S.user;
+    if (!u) { showToast('Login dulu', 'red'); return; }
+    try {
+      const res = await window._supaFetch('/rest/v1/shops?user_id=eq.' + u.uid + '&select=*&limit=1');
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows && rows.length > 0) {
+          shop = rows[0];
+          window._shopCache = shop;
+        }
+      }
+    } catch(e) { console.warn('[editDataToko] gagal ambil data shop:', e); }
+  }
+
+  if (!shop) { showToast('Data toko tidak ditemukan', 'red'); return; }
+
+  document.getElementById('dtEditNamaTokoVal').textContent     = shop.nama_toko || '—';
+  document.getElementById('dtEditNasionalitasVal').textContent = shop.nasionalitas || '—';
+  document.getElementById('dtEditAlamat').value                = shop.alamat || '';
+
+  document.getElementById('dtSudahPunyaToko').style.display    = 'none';
+  document.getElementById('dtEditFormContainer').style.display = 'block';
+};
+
+window.closeEditDataToko = function() {
+  document.getElementById('dtEditFormContainer').style.display = 'none';
+  document.getElementById('dtSudahPunyaToko').style.display     = 'block';
+};
+
+window.updateDataToko = async function() {
+  const shop = window._shopCache;
+  if (!shop || !shop.id) { showToast('Data toko tidak ditemukan', 'red'); return; }
+
+  const alamatBaru = document.getElementById('dtEditAlamat').value.trim();
+  if (!alamatBaru) { showToast('Alamat toko wajib diisi', 'red'); return; }
+
+  const btn = document.getElementById('dtUpdateBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="dt-spinning" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Memperbarui...';
+
+  try {
+    // Hanya kolom 'alamat' yang dikirim — kolom lain (nama_toko, nasionalitas,
+    // email, wa_number, is_active) tidak pernah disentuh oleh fungsi ini.
+    const res = await window._supaFetch('/rest/v1/shops?id=eq.' + shop.id, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: JSON.stringify({ alamat: alamatBaru })
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err);
+    }
+
+    // Sinkronkan cache di memory supaya tidak ada data basi di sesi ini
+    window._shopCache.alamat = alamatBaru;
+
+    showToast('✅ Alamat toko berhasil diperbarui!', 'green');
+    closeEditDataToko();
+  } catch(e) {
+    showToast('Gagal memperbarui alamat: ' + (e.message || e), 'red');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Perbarui Alamat';
+  }
+};
 
 window.closeDaftarToko = function() {
   const ov = document.getElementById('daftarTokoOverlay');
