@@ -12049,7 +12049,7 @@ window.sendLoginOtpWa = async function() {
     } catch(rlErr) {
       if (rlErr.message.includes('OTP') || rlErr.message.includes('menit')) throw rlErr;
     }
-    var res = await fetch('/api/send-wa-otp', {
+    var res = await fetch('https://app.yallamart.my.id/api/send-wa-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'send', phone: phone })
@@ -12406,7 +12406,7 @@ window.sendRegOtpWa = async function() {
     } catch(rlErr) {
       if (rlErr.message.includes('OTP') || rlErr.message.includes('menit')) throw rlErr;
     }
-    const res = await fetch('/api/send-wa-otp', {
+    const res = await fetch('https://app.yallamart.my.id/api/send-wa-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'send', phone })
@@ -12468,7 +12468,7 @@ window.doRegister=async()=>{
     // Verifikasi OTP — WA atau Email
     if (otpWa && window._regOtpViaWa && window._regOtpPhone) {
       // Verifikasi via Fonnte WA
-      const waRes = await fetch('/api/send-wa-otp', {
+      const waRes = await fetch('https://app.yallamart.my.id/api/send-wa-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'verify', phone: window._regOtpPhone, code: otpWa })
