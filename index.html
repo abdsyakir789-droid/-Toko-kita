@@ -12026,6 +12026,13 @@ window.switchTab=t=>{
   if(title) title.textContent=t==='login'?'Selamat Datang Kembali':'Daftar Akun Baru';
   if(sub) sub.textContent=t==='login'?'Silakan masuk ke akun Anda untuk melanjutkan':'Silakan lengkapi data diri Anda untuk memulai';
 };
+// ── Normalisasi nomor WA ke format internasional Mesir (20xxxxxxxxxx) sebelum kirim ke Fonnte ──
+window._toFonntePhone = function(raw) {
+  var d = String(raw||'').replace(/\D/g, '');
+  if (d.startsWith('20')) return d;
+  if (d.startsWith('0')) return '20' + d.slice(1);
+  return d;
+};
 // ── Kirim OTP WA untuk Login ──
 window._loginOtpPhone = null;
 window.sendLoginOtpWa = async function() {
@@ -12049,14 +12056,15 @@ window.sendLoginOtpWa = async function() {
     } catch(rlErr) {
       if (rlErr.message.includes('OTP') || rlErr.message.includes('menit')) throw rlErr;
     }
+    var phoneIntl = window._toFonntePhone(phone);
     var res = await fetch('https://app.yallamart.my.id/api/send-wa-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'send', phone: phone })
+      body: JSON.stringify({ action: 'send', phone: phoneIntl })
     });
     var json = await res.json();
     if (!res.ok || json.error) throw new Error(json.error || 'Gagal kirim OTP WA');
-    window._loginOtpPhone = phone;
+    window._loginOtpPhone = phoneIntl;
     var hint = document.getElementById('loginWaHint');
     if (hint) hint.style.display = 'flex';
     showToast('OTP dikirim ke WhatsApp ' + phone, 'green');
@@ -12406,14 +12414,15 @@ window.sendRegOtpWa = async function() {
     } catch(rlErr) {
       if (rlErr.message.includes('OTP') || rlErr.message.includes('menit')) throw rlErr;
     }
+    const phoneIntl = window._toFonntePhone(phone);
     const res = await fetch('https://app.yallamart.my.id/api/send-wa-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'send', phone })
+      body: JSON.stringify({ action: 'send', phone: phoneIntl })
     });
     const json = await res.json();
     if (!res.ok || json.error) throw new Error(json.error || 'Gagal kirim OTP WA');
-    window._regOtpPhone = phone;
+    window._regOtpPhone = phoneIntl;
     window._regOtpViaWa = true;
     const hint = document.getElementById('regOtpWaHint');
     if (hint) hint.classList.remove('hidden');
@@ -18043,10 +18052,10 @@ window.checkoutToChat = async function(){
           }).join('\n');
           var buyerName = window._S.user.name || window._S.user.email || 'Pembeli';
           var waMsg = `🛒 *Pesanan Baru - Yalla Mart*\n\nPembeli: *${buyerName}*\n\n📦 *Detail Pesanan:*\n${itemLines}\n\n💰 *Total: ${orderPayload.totalStr}*\n\nSegera konfirmasi pesanan di Yalla Mart!`;
-          await fetch('/api/send-wa-notif', {
+          await fetch('https://app.yallamart.my.id/api/send-wa-notif', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: sellerPhone, message: waMsg })
+            body: JSON.stringify({ phone: window._toFonntePhone(sellerPhone), message: waMsg })
           });
         }
       } catch(e) {
