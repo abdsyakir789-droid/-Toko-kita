@@ -5936,6 +5936,54 @@ window._FB = {
   }
 };
 
+// ══════════════════════════════════════════════════════════════
+// 🔒 MIDDLEWARE: Validasi Kuota Posting Iklan (maks 5 per akun)
+// ══════════════════════════════════════════════════════════════
+// Modul validator TERPISAH — tidak mengubah satu baris pun di dalam
+// window._FB.postAd (di atas) ataupun window.submitAd. Cara kerja: bungkus
+// (wrap) referensi _FB.postAd dengan pengecekan kuota SEBELUM fungsi upload
+// asli dijalankan.
+//
+// Enforcement SESUNGGUHNYA ada di Postgres (trigger trg_ad_quota_check pada
+// tabel ads, lihat migrasi "ad_post_quota_limit_5_with_whitelist") — jadi
+// tidak bisa dimanipulasi dari sisi client. Blok ini murni lapisan UX agar
+// user langsung dapat toast yang jelas tanpa menunggu round-trip upload foto,
+// dan sebagai jaring pengaman kedua jika trigger DB yang menolak (race
+// condition antar tab/device).
+(function() {
+  const _AD_QUOTA_LIMIT = 5;
+  const _AD_QUOTA_WHITELIST_EMAILS = ['abdsyakir160@gmail.com', 'abdsyakir164@gmail.com'];
+  const _AD_QUOTA_TOAST = 'Maaf, Anda sudah mencapai batas maksimal posting iklan';
+
+  async function _isAdQuotaExceeded(email, uid) {
+    const lowerEmail = (email || '').toLowerCase();
+    if (_AD_QUOTA_WHITELIST_EMAILS.includes(lowerEmail)) return false;
+    try {
+      const r = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(uid) + '&select=ads_posted_total&limit=1');
+      if (!r.ok) return false; // fail-open di client — trigger DB tetap jadi penjaga akhir
+      const rows = await r.json();
+      const total = (rows[0] && rows[0].ads_posted_total) || 0;
+      return total >= _AD_QUOTA_LIMIT;
+    } catch(e) { return false; }
+  }
+
+  const _origPostAd = window._FB.postAd.bind(window._FB);
+  window._FB.postAd = async function(...args) {
+    const user = window._S && window._S.user;
+    if (user) {
+      const exceeded = await _isAdQuotaExceeded(user.email, user.uid);
+      if (exceeded) { showToast(_AD_QUOTA_TOAST, 'red'); return; }
+    }
+    try {
+      return await _origPostAd(...args);
+    } catch(e) {
+      // Jaring pengaman: trigger DB yang menolak (mis. race condition)
+      if ((e.message||'').includes('AD_QUOTA_EXCEEDED')) { showToast(_AD_QUOTA_TOAST, 'red'); return; }
+      throw e;
+    }
+  };
+})();
+
 
 window.loadAds     = () => _FB.loadAds();
 window.loadComments = id => _FB.loadComments(id);
@@ -9701,6 +9749,53 @@ window.sendChatPhoto = async function(input) {
     else { showToast('Gagal kirim foto: '+(e.message||'Error'),'red'); }
   }
 };
+
+// ══════════════════════════════════════════════════════════════
+// 🔒 MIDDLEWARE: Validasi Kuota Foto Manual di Chat (maks 5/percakapan)
+// ══════════════════════════════════════════════════════════════
+// Modul validator TERPISAH — tidak mengubah satu baris pun di dalam
+// window.sendChatPhoto (di atas) ataupun alur kirim pesan (_FB.sendChatMessage).
+// Cara kerja: bungkus referensi sendChatPhoto dengan pengecekan kuota SEBELUM
+// fungsi upload foto asli dijalankan.
+//
+// Enforcement SESUNGGUHNYA ada di Postgres (trigger trg_check_chat_photo_quota
+// pada chat_messages, migrasi "chat_photo_quota_max_5_per_conversation") —
+// hanya berlaku untuk type='image' (foto manual), TIDAK menyentuh pesan
+// teks/order/ad_card. Live count dari baris yang masih ada, jadi otomatis
+// lega lagi kalau foto dihapus lewat fitur Hapus Pesan.
+(function() {
+  const _CHAT_PHOTO_LIMIT = 5;
+  const _CHAT_PHOTO_TOAST = 'Anda hanya bisa ngirim maksimal 5 foto dipesan chat';
+
+  async function _isChatPhotoQuotaExceeded(chatId, uid) {
+    try {
+      const r = await window._supaFetch(
+        '/rest/v1/chat_messages?chat_id=eq.' + encodeURIComponent(chatId) +
+        '&sender_id=eq.' + encodeURIComponent(uid) +
+        '&type=eq.image&select=id&limit=' + _CHAT_PHOTO_LIMIT
+      );
+      if (!r.ok) return false; // fail-open di client — trigger DB tetap jadi penjaga akhir
+      const rows = await r.json();
+      return (rows||[]).length >= _CHAT_PHOTO_LIMIT;
+    } catch(e) { return false; }
+  }
+
+  const _origSendChatPhoto = window.sendChatPhoto;
+  window.sendChatPhoto = async function(input) {
+    const chatId = window._S && window._S.activeChatId;
+    const uid = window._S && window._S.user && window._S.user.uid;
+    if (chatId && uid) {
+      const exceeded = await _isChatPhotoQuotaExceeded(chatId, uid);
+      if (exceeded) {
+        if(input) input.value = '';
+        showToast(_CHAT_PHOTO_TOAST, 'red');
+        return;
+      }
+    }
+    return _origSendChatPhoto(input);
+  };
+})();
+
 // ── Lihat & Save foto chat ────────────────────────────────────
 // ── Chat image error handler ─────────────────────────────────
 window.chatImgError = function(img, side) {
