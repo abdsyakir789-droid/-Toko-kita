@@ -6664,6 +6664,16 @@ window._updateDescCounter = function(inputId, counterId){
   counterEl.style.color = len >= 800 ? '#EF4444' : '#9ca3af';
 };
 
+// ── Counter karakter untuk input Alamat Toko (daftar baru & edit) — maks 80 karakter ──
+window._updateAlamatCounter = function(inputId, counterId){
+  const el = document.getElementById(inputId);
+  const counterEl = document.getElementById(counterId);
+  if(!el || !counterEl) return;
+  const len = el.value.length;
+  counterEl.textContent = len + '/80';
+  counterEl.style.color = len >= 80 ? '#EF4444' : '#9ca3af';
+};
+
 // ── Expandable Deskripsi Produk (Baca selengkapnya / Sembunyikan) ──
 window.setupDetailDescToggle = function(){
   const _dd = document.getElementById('detailDesc');
@@ -19474,9 +19484,11 @@ window.clearRecentlyViewed = async function() {
                 Alamat di Mesir <span class="req">*</span>
               </div>
               <p style="font-size:10.5px;color:#9ca3af;font-weight:500;margin:-3px 0 7px;line-height:1.4;">Informasi ini akan ditampilkan di halaman profil Anda dan dapat dilihat oleh semua orang.</p>
-              <input id="dtEditAlamat" class="dt-input" type="text" placeholder="Contoh: Hay Asyir, Nasr City, Cairo"
+              <input id="dtEditAlamat" class="dt-input" type="text" maxlength="80" placeholder="Contoh: Hay Asyir, Nasr City, Cairo"
+                oninput="window._updateAlamatCounter('dtEditAlamat','dtEditAlamatCounter')"
                 onfocus="this.style.borderColor='#10B981';this.style.boxShadow='0 0 0 3px rgba(16,185,129,.12)'"
                 onblur="this.style.borderColor='#e5e7eb';this.style.boxShadow='none'"/>
+              <div style="text-align:right;margin-top:4px;"><span id="dtEditAlamatCounter" style="font-size:10.5px;color:#9ca3af;font-weight:600;">0/80</span></div>
             </div>
 
           </div>
@@ -19516,9 +19528,11 @@ window.clearRecentlyViewed = async function() {
               Alamat di Mesir <span class="req">*</span>
             </div>
             <p style="font-size:10.5px;color:#9ca3af;font-weight:500;margin:-3px 0 7px;line-height:1.4;">Informasi ini akan ditampilkan di halaman profil Anda dan dapat dilihat oleh semua orang.</p>
-            <input id="dtAlamat" class="dt-input" type="text" placeholder="Contoh: Hay Asyir, Nasr City, Cairo"
+            <input id="dtAlamat" class="dt-input" type="text" maxlength="80" placeholder="Contoh: Hay Asyir, Nasr City, Cairo"
+              oninput="window._updateAlamatCounter('dtAlamat','dtAlamatCounter')"
               onfocus="this.style.borderColor='#10B981';this.style.boxShadow='0 0 0 3px rgba(16,185,129,.12)'"
               onblur="this.style.borderColor='#e5e7eb';this.style.boxShadow='none'"/>
+            <div style="text-align:right;margin-top:4px;"><span id="dtAlamatCounter" style="font-size:10.5px;color:#9ca3af;font-weight:600;">0/80</span></div>
           </div>
 
           <!-- Kewarganegaraan -->
@@ -19671,6 +19685,37 @@ window.openEditDataToko = async function() {
   document.getElementById('dtEditNamaTokoVal').textContent     = shop.nama_toko || '—';
   document.getElementById('dtEditNasionalitasVal').textContent = shop.nasionalitas || '—';
   document.getElementById('dtEditAlamat').value                = shop.alamat || '';
+  window._updateAlamatCounter('dtEditAlamat','dtEditAlamatCounter');
+
+  // Cek cooldown 14 hari untuk tombol Perbarui Alamat
+  const _u2 = window._S && window._S.user;
+  const _isAdminUser2 = _u2 && isAdmin(_u2.email);
+  const _updateBtn = document.getElementById('dtUpdateBtn');
+  if (_updateBtn) {
+    if (!_isAdminUser2 && shop.alamat_updated_at) {
+      const _daysSince2 = (Date.now() - new Date(shop.alamat_updated_at).getTime()) / 86400000;
+      if (_daysSince2 < 14) {
+        const _sisaHari = Math.ceil(14 - _daysSince2);
+        _updateBtn.disabled = true;
+        _updateBtn.style.background = '#9ca3af';
+        _updateBtn.style.boxShadow = 'none';
+        _updateBtn.style.cursor = 'not-allowed';
+        _updateBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Bisa diubah lagi dalam ' + _sisaHari + ' hari';
+      } else {
+        _updateBtn.disabled = false;
+        _updateBtn.style.background = '';
+        _updateBtn.style.boxShadow = '';
+        _updateBtn.style.cursor = '';
+        _updateBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Perbarui Alamat';
+      }
+    } else {
+      _updateBtn.disabled = false;
+      _updateBtn.style.background = '';
+      _updateBtn.style.boxShadow = '';
+      _updateBtn.style.cursor = '';
+      _updateBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Perbarui Alamat';
+    }
+  }
 
   document.getElementById('dtSudahPunyaToko').style.display    = 'none';
   document.getElementById('dtEditFormContainer').style.display = 'block';
@@ -19685,6 +19730,17 @@ window.updateDataToko = async function() {
   const shop = window._shopCache;
   if (!shop || !shop.id) { showToast('Data toko tidak ditemukan', 'red'); return; }
 
+  // Guard cooldown 14 hari — pengecualian untuk admin (abdsyakir160)
+  const _u = window._S && window._S.user;
+  const _isAdminUser = _u && isAdmin(_u.email);
+  if (!_isAdminUser && shop.alamat_updated_at) {
+    const _daysSince = (Date.now() - new Date(shop.alamat_updated_at).getTime()) / 86400000;
+    if (_daysSince < 14) {
+      showToast('Alamat baru bisa diubah lagi dalam ' + Math.ceil(14 - _daysSince) + ' hari', 'red');
+      return;
+    }
+  }
+
   const alamatBaru = document.getElementById('dtEditAlamat').value.trim();
   if (!alamatBaru) { showToast('Alamat toko wajib diisi', 'red'); return; }
 
@@ -19693,12 +19749,13 @@ window.updateDataToko = async function() {
   btn.innerHTML = '<svg class="dt-spinning" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Memperbarui...';
 
   try {
-    // Hanya kolom 'alamat' yang dikirim — kolom lain (nama_toko, nasionalitas,
-    // email, wa_number, is_active) tidak pernah disentuh oleh fungsi ini.
+    // Hanya kolom 'alamat' & 'alamat_updated_at' yang dikirim — kolom lain
+    // (nama_toko, nasionalitas, email, wa_number, is_active) tidak disentuh.
+    const _nowIso = new Date().toISOString();
     const res = await window._supaFetch('/rest/v1/shops?id=eq.' + shop.id, {
       method: 'PATCH',
       prefer: 'return=minimal',
-      body: JSON.stringify({ alamat: alamatBaru })
+      body: JSON.stringify({ alamat: alamatBaru, alamat_updated_at: _isAdminUser ? null : _nowIso })
     });
 
     if (!res.ok) {
@@ -19708,6 +19765,7 @@ window.updateDataToko = async function() {
 
     // Sinkronkan cache di memory supaya tidak ada data basi di sesi ini
     window._shopCache.alamat = alamatBaru;
+    window._shopCache.alamat_updated_at = _isAdminUser ? null : _nowIso;
 
     showToast('✅ Alamat toko berhasil diperbarui!', 'green');
     closeEditDataToko();
