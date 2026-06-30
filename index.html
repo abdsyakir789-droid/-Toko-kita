@@ -5658,6 +5658,9 @@ window._FB = {
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `chat_id=eq.${chatId}`
       }, payload => { loadMsgs(); })
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public', table: 'chat_messages', filter: `chat_id=eq.${chatId}`
+      }, payload => { loadMsgs(); })
       .subscribe();
 
     return () => supabase.removeChannel(channel);
@@ -9405,13 +9408,15 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
         const _msgSender = m.sender_name||m.senderName||'';
         // Untuk swipe-to-reply: hanya pesan teks biasa yang bisa di-reply
         const _canReply = !isAdCard && !isOrder && !isImg;
+        // Untuk hapus pesan: hanya pengirim sendiri, bukan pesan order/ad_card (terkait checkout)
+        const _canDelete = me && !isAdCard && !isOrder;
 
         return `
         <div class="flex ${me?'justify-end':'justify-start'} chat-msg" style="position:relative;overflow:hidden">
           ${_canReply ? `<div class="chat-reply-icon" style="${me?'left:4px':'right:4px'}">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
           </div>` : ''}
-          <div class="flex flex-col ${me?'items-end':'items-start'} max-w-[75%] chat-msg-swipeable${_canReply?' reply-eligible':''}" data-msg-id="${_msgId}" data-msg-text="${_msgText.slice(0,80)}" data-msg-sender="${_msgSender}">
+          <div class="flex flex-col ${me?'items-end':'items-start'} max-w-[75%] chat-msg-swipeable${_canReply?' reply-eligible':''}" data-msg-id="${_msgId}" data-msg-text="${_msgText.slice(0,80)}" data-msg-sender="${_msgSender}" data-can-delete="${_canDelete?'1':'0'}">
             ${isAdCard && adCardData ? `
             <div style="background:#fff;border-radius:14px;border:1.5px solid #e5e7eb;overflow:hidden;max-width:260px;box-shadow:0 2px 8px rgba(0,0,0,.07);cursor:pointer" onclick="openAdFromChat('${adCardData.adId||''}')" >
               <div style="display:flex;align-items:center;gap:0" onclick="openAdFromChat('${adCardData.adId||''}');event.stopPropagation()">
@@ -9509,6 +9514,8 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
     el.scrollTop=el.scrollHeight;
     // Pasang swipe-to-reply listener
     if(window._attachSwipeReply) window._attachSwipeReply();
+    // Pasang long-press untuk hapus pesan
+    if(window._attachLongPressDelete) window._attachLongPressDelete();
     // Mark as read setiap kali pesan baru masuk dan chat sedang terbuka
     if(window.markChatRead) markChatRead(chatId);
   });
@@ -9813,6 +9820,72 @@ window.setChatReply = function(msgId, msgText, msgSender) {
   // Fokus ke input
   const inp = document.getElementById('chatInput');
   if(inp) inp.focus();
+};
+
+// ── Hapus Pesan (Delete for Everyone) ───────────────────────────
+// Hanya pengirim sendiri yang bisa hapus, dan hanya pesan teks/foto
+// (bukan order/ad_card — tidak menyentuh alur checkout).
+// Penghapusan dilakukan permanen di database (chat_messages), lalu
+// realtime DELETE subscription (lihat _FB.listenChatMessages) akan
+// otomatis menyinkronkan tampilan di kedua sisi (pengirim & penerima).
+window.deleteChatMessage = async function(msgId) {
+  if(!msgId || !window._S.user) return;
+  if(!confirm('Hapus pesan ini untuk semua orang?\n\nPesan akan hilang permanen dan tidak bisa dikembalikan.')) return;
+  try {
+    const uid = window._S.user.uid;
+    const r = await window._supaFetch(
+      '/rest/v1/chat_messages?id=eq.' + encodeURIComponent(msgId) + '&sender_id=eq.' + encodeURIComponent(uid),
+      { method: 'DELETE', prefer: 'return=minimal' }
+    );
+    if(!r.ok) { showToast('Gagal menghapus pesan', 'red'); return; }
+    showToast('Pesan dihapus', 'green');
+  } catch(e) {
+    showToast('Gagal menghapus pesan: ' + e.message, 'red');
+  }
+};
+
+// Long-press (tahan) pada pesan sendiri untuk memicu hapus.
+// Dipasang terpisah dari swipe-to-reply agar tidak saling mengganggu —
+// timer dibatalkan begitu terdeteksi gerakan geser (swipe/scroll).
+window._attachLongPressDelete = function() {
+  const container = document.getElementById('chatMessages');
+  if(!container || container._longPressDeleteBound) return;
+  container._longPressDeleteBound = true;
+
+  let _lpTimer = null, _lpStartX = 0, _lpStartY = 0, _lpMsgId = null;
+
+  function _clearLP() {
+    if(_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
+    _lpMsgId = null;
+  }
+
+  container.addEventListener('touchstart', function(e) {
+    const el = e.target.closest('.chat-msg-swipeable[data-can-delete="1"]');
+    _clearLP();
+    if(!el) return;
+    const touch = e.touches[0];
+    _lpStartX = touch.clientX; _lpStartY = touch.clientY;
+    _lpMsgId = el.dataset.msgId;
+    _lpTimer = setTimeout(() => {
+      const targetId = _lpMsgId;
+      _clearLP();
+      if(targetId) {
+        if(navigator.vibrate) navigator.vibrate(40);
+        window.deleteChatMessage(targetId);
+      }
+    }, 500);
+  }, { passive: true });
+
+  container.addEventListener('touchmove', function(e) {
+    if(!_lpTimer) return;
+    const touch = e.touches[0];
+    const dx = Math.abs(touch.clientX - _lpStartX);
+    const dy = Math.abs(touch.clientY - _lpStartY);
+    if(dx > 10 || dy > 10) _clearLP();
+  }, { passive: true });
+
+  container.addEventListener('touchend', _clearLP, { passive: true });
+  container.addEventListener('touchcancel', _clearLP, { passive: true });
 };
 
 // Pasang swipe listener ke chatMessages setelah render
@@ -12486,29 +12559,53 @@ window.doRegister=async()=>{
   const pass=document.getElementById('regPwd').value;
   const terms=document.getElementById('regTerms').checked;
   if(!name||!email||!phone||!pass){showToast('Lengkapi semua kolom','red');return;}
-  if(!otpEmail&&!otpWa){showToast('Masukkan kode OTP Email atau WA','red');return;}
+  if(!otpEmail){showToast('Verifikasi OTP Email dulu','red');return;}
+  if(!otpWa){showToast('Verifikasi OTP WhatsApp dulu','red');return;}
   if(!terms){showToast('Setujui Syarat & Ketentuan dulu','red');return;}
   if(pass.length<6){showToast('Kata sandi min. 6 karakter','red');return;}
-  if(otpEmail && window._regOtpEmail !== email){showToast('Email berbeda dengan saat OTP dikirim. Kirim OTP ulang.','red');return;}
+  if(window._regOtpEmail !== email){showToast('Email berbeda dengan saat OTP dikirim. Kirim OTP ulang.','red');return;}
+  if(!window._regOtpViaWa || !window._regOtpPhone){showToast('Kirim OTP WhatsApp dulu','red');return;}
+  if(window._regOtpPhone !== window._toFonntePhone(phone)){showToast('Nomor WA berbeda dengan saat OTP dikirim. Kirim OTP ulang.','red');return;}
+
+  // ── Validasi Duplikasi Akun (email & nomor WA) ──────────────────
+  // Cek read-only ke tabel users SEBELUM proses pendaftaran dilanjutkan.
+  // Tidak mengubah cara akun dibuat/kredensial disimpan — murni gate awal.
+  try {
+    const _intlPhone = window._toFonntePhone(phone);
+    const _localPhone = _intlPhone.startsWith('20') ? '0' + _intlPhone.slice(2) : phone;
+    const _phoneVariants = [phone, _intlPhone, _localPhone];
+    const _orParts = _phoneVariants.map(p => 'phone.eq.' + encodeURIComponent(p));
+    _orParts.push('email.ilike.' + encodeURIComponent(email));
+    const _dupRes = await window._supaFetch(
+      '/rest/v1/users?or=(' + _orParts.join(',') + ')&select=email,phone&limit=10'
+    );
+    if (_dupRes.ok) {
+      const _dupRows = await _dupRes.json();
+      const _emailDup = (_dupRows||[]).some(u => (u.email||'').toLowerCase() === email.toLowerCase());
+      const _phoneDup = (_dupRows||[]).some(u => _phoneVariants.includes(u.phone));
+      if (_emailDup) { showToast('Email telah terdaftar', 'red'); return; }
+      if (_phoneDup) { showToast('Nomor WA telah terdaftar', 'red'); return; }
+    }
+  } catch(_dupErr) {
+    console.warn('[doRegister] cek duplikasi akun gagal:', _dupErr.message);
+    // Fail-open: jika cek gagal (mis. jaringan), jangan kunci pendaftaran —
+    // Supabase Auth signup di bawah tetap punya validasi duplikat email sendiri.
+  }
+
   const btn=document.querySelector('#regForm button[onclick="doRegister()"]');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i> Memverifikasi OTP...';}
   try{
-    // Verifikasi OTP — WA atau Email
-    if (otpWa && window._regOtpViaWa && window._regOtpPhone) {
-      // Verifikasi via Fonnte WA
-      const waRes = await fetch('https://app.yallamart.my.id/api/send-wa-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify', phone: window._regOtpPhone, code: otpWa })
-      });
-      const waJson = await waRes.json();
-      if (!waRes.ok || waJson.error) throw new Error(waJson.error || 'Kode OTP WA salah');
-    } else if (otpEmail) {
-      // Verifikasi via Email (Brevo)
-      await _verifyOtp(email, otpEmail, 'signup');
-    } else {
-      throw new Error('Kirim OTP terlebih dahulu');
-    }
+    // Verifikasi OTP — WAJIB Email DAN WA, berurutan (email dulu, baru WA)
+    // Verifikasi via Email (Brevo)
+    await _verifyOtp(email, otpEmail, 'signup');
+    // Verifikasi via Fonnte WA
+    const waRes = await fetch('https://app.yallamart.my.id/api/send-wa-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verify', phone: window._regOtpPhone, code: otpWa })
+    });
+    const waJson = await waRes.json();
+    if (!waRes.ok || waJson.error) throw new Error(waJson.error || 'Kode OTP WA salah');
     if(btn){btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i> Mendaftar...';}
     // Pakai fetch manual langsung ke Supabase REST — tidak bergantung pada module JS yang async
     const SUPA_URL = 'https://jgnjgfuypcelwjztebsy.supabase.co';
