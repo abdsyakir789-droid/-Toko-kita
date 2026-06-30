@@ -10228,16 +10228,35 @@ window.viewSellerStore = async function(sellerUid) {
   }
 
   // ── Load alamat toko (read-only, UI display) ──────────────────
+  // Hentikan listener alamat sebelumnya jika ada
+  if (window._etalaseAlamatUnsub) {
+    try { window._etalaseAlamatUnsub(); } catch(e) {}
+    window._etalaseAlamatUnsub = null;
+  }
   try {
     const _alamatRow = document.getElementById('etalaseAlamatRow');
     const _alamatVal = document.getElementById('etalaseAlamatVal');
-    const _shopRes = await window._supaFetch('/rest/v1/shops?user_id=eq.' + sellerUid + '&select=alamat&limit=1');
+    const _shopRes = await window._supaFetch('/rest/v1/shops?user_id=eq.' + sellerUid + '&select=alamat&limit=1', { cache: 'no-store' });
     const _shopRows = _shopRes.ok ? await _shopRes.json() : [];
     const _alamat = (_shopRows[0]?.alamat || '').trim();
     if(_alamatRow && _alamatVal) {
       if(_alamat) { _alamatVal.textContent = _alamat; _alamatRow.style.display = 'block'; }
       else { _alamatRow.style.display = 'none'; }
     }
+    // Realtime subscription — alamat toko langsung update tanpa reload
+    // (pola sama seperti listener cover photo di atas)
+    const _alamatCh = window.supabase.channel('etalase_alamat_' + sellerUid)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shops', filter: `user_id=eq.${sellerUid}` }, payload => {
+        const d = payload.new || {};
+        const _newAlamat = (d.alamat || '').trim();
+        const _row = document.getElementById('etalaseAlamatRow');
+        const _val = document.getElementById('etalaseAlamatVal');
+        if(_row && _val) {
+          if(_newAlamat) { _val.textContent = _newAlamat; _row.style.display = 'block'; }
+          else { _row.style.display = 'none'; }
+        }
+      }).subscribe();
+    window._etalaseAlamatUnsub = () => window.supabase.removeChannel(_alamatCh);
   } catch(e) {
     const _alamatRow = document.getElementById('etalaseAlamatRow');
     if(_alamatRow) _alamatRow.style.display = 'none';
