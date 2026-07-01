@@ -10461,14 +10461,46 @@ window.viewSellerStore = async function(sellerUid) {
   }
   // Close chat room first
   closeChatRoom();
-  // Get seller info from their ads
+
+  // ── Guard: tandai request etalase paling baru — kalau user cepat pindah
+  // buka toko lain sebelum fetch profil di bawah selesai, response yang
+  // telat tidak boleh menimpa data toko yang sedang ditampilkan sekarang.
+  const _etalaseReqId = (window._etalaseReqId = (window._etalaseReqId||0) + 1);
+
+  // ── Tampilkan skeleton loading dulu — JANGAN tampilkan 'Penjual' atau
+  // ikon kosong selagi profil toko masih diambil dari database.
+  const eav = document.getElementById('etalaseAvatar');
+  const enameEl = document.getElementById('etalaseName');
+  if (eav) eav.innerHTML = '<div class="skel" style="width:100%;height:100%;border-radius:50%"></div>';
+  if (enameEl) enameEl.innerHTML = '<span class="skel" style="display:inline-block;width:90px;height:14px;border-radius:6px;vertical-align:middle"></span>';
+
+  // Get seller info from their ads (dipakai sebagai fallback saja)
   const sellerAds = window._S.fbAds.filter(a => a.sellerUid === sellerUid);
-  const sellerName = sellerAds.length > 0 ? sellerAds[0].sellerName : 'Penjual';
-  const sellerPhoto = sellerAds.length > 0 ? (sellerAds[0].sellerPhoto||'') : '';
-  const sellerEmail = sellerAds.length > 0 ? (sellerAds[0].sellerEmail||'') : '';
+
+  // ── Ambil profil toko ASLI langsung dari tabel users (sumber utama) ──
+  // Sebelumnya nama/foto toko murni diambil dari sellerAds[0] (data iklan),
+  // jadi kalau seller belum/jarang posting iklan, sellerAds kosong dan nama
+  // otomatis jadi 'Penjual' + foto kosong — padahal profil aslinya ADA di
+  // tabel users. Sekarang tabel users jadi sumber utama; data iklan cuma
+  // fallback kalau fetch users gagal (mis. jaringan).
+  let userRow = null;
+  try {
+    const _uRes = await window._supaFetch('/rest/v1/users?uid=eq.' + sellerUid + '&select=name,photo_url,email&limit=1');
+    const _uRows = _uRes.ok ? await _uRes.json() : [];
+    userRow = _uRows[0] || null;
+  } catch(e) {
+    console.warn('[viewSellerStore] fetch profil toko gagal:', e.message);
+  }
+
+  // Kalau selagi nunggu fetch di atas user sudah pindah buka toko lain,
+  // batalkan penerapan hasil fetch yang telat ini ke UI.
+  if (_etalaseReqId !== window._etalaseReqId) return;
+
+  const sellerName  = userRow?.name      || (sellerAds[0]?.sellerName)  || 'Penjual';
+  const sellerPhoto = userRow?.photo_url || (sellerAds[0]?.sellerPhoto) || '';
+  const sellerEmail = userRow?.email     || (sellerAds[0]?.sellerEmail) || '';
   const adminSeller = isAdmin(sellerEmail);
   // Set etalase header
-  const eav = document.getElementById('etalaseAvatar');
   if(sellerPhoto) eav.innerHTML = `<img src="${sellerPhoto}" class="w-full h-full object-cover"/>`;
   else eav.innerHTML = (sellerName||'P').charAt(0).toUpperCase();
   document.getElementById('etalaseName').textContent = sellerName;
@@ -13111,16 +13143,26 @@ window.doRegister=async()=>{
     if(!uid) throw new Error('Gagal mendapatkan ID user. Coba lagi.');
 
     // 2. Simpan profil ke tabel users via REST
-    await fetch(SUPA_URL+'/rest/v1/users',{
+    // PENTING: RLS policy INSERT di tabel users mewajibkan uid = auth.uid() dari token
+    // yang dipakai request. Kalau pakai anon key (SUPA_KEY) di sini, RLS akan menolak
+    // insert-nya secara diam-diam (fetch tidak throw untuk status 4xx/5xx), sehingga
+    // akun kebuat di Supabase Auth tapi row di tabel users tidak pernah ada.
+    // Fix: pakai access_token user yang baru saja didapat dari signup di atas.
+    const _regUserToken = json.access_token || SUPA_KEY;
+    const _insUserRes = await fetch(SUPA_URL+'/rest/v1/users',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
         'apikey':SUPA_KEY,
-        'Authorization':'Bearer '+SUPA_KEY,
+        'Authorization':'Bearer '+_regUserToken,
         'Prefer':'resolution=merge-duplicates'
       },
       body:JSON.stringify({uid, name, phone, email, photo_url:'', created_at:new Date().toISOString()})
-    }).catch(()=>{});
+    }).catch(e => { console.warn('[doRegister] insert users network error:', e.message); return null; });
+    if (_insUserRes && !_insUserRes.ok) {
+      const _insErrJson = await _insUserRes.json().catch(()=>({}));
+      console.warn('[doRegister] insert users gagal:', _insUserRes.status, _insErrJson);
+    }
 
     // 3. Cek apakah langsung dapat session (email confirm dimatikan)
     if(json.access_token){
