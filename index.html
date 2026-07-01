@@ -708,6 +708,27 @@ button, .btn {
 .sad-card-detail-wrap.sad-open{max-height:420px}
 .sad-card-detail-inner{background:#FAFAFA;border-radius:14px;padding:14px;margin-top:10px;display:flex;flex-direction:column;gap:10px}
 
+/* ── DAFTAR USER (ADMIN ONLY) — modul berdiri sendiri, tidak share class dengan modul lain ── */
+#usersAdminOverlay{
+  position:fixed;inset:0;z-index:850;
+  background:#fff;
+  display:none;align-items:stretch;justify-content:stretch;
+  opacity:0;transition:opacity .2s;
+  padding:0;
+}
+#usersAdminSheet{
+  background:#fff;border-radius:0;
+  width:100%;max-width:none;height:100vh;max-height:100vh;
+  display:flex;flex-direction:column;
+  box-shadow:none;
+}
+.uad-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:9999px;border:none;cursor:pointer;font-family:inherit}
+.uad-badge-active{background:#D1FAE5;color:#047857}
+.uad-badge-inactive{background:#FEE2E2;color:#B91C1C}
+#usersAdminTable th{font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.03em;padding:10px 16px;text-align:left;background:#F0FDF4;white-space:nowrap}
+#usersAdminTable{width:100%;border-collapse:collapse}
+#usersAdminTable td{vertical-align:top}
+
 /* ── Sponsor 3D Floating Icons ─────────────────────────── */
 @keyframes float3d1 {
   0%,100%{transform:translateY(0px) rotate(-5deg);}
@@ -3256,6 +3277,14 @@ h3.text-sm.font-bold.text-gray-800 {
           <i class="fa-solid fa-store text-emerald-600"></i>
         </div>
         <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Dashboard Toko Baru</p>
+      </div>
+
+      <!-- 6. Daftar User (Admin Only) -->
+      <div onclick="openUsersAdminDashboard()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 flex-1 transition-all hover:shadow-md hover:-translate-y-0.5 text-center cursor-pointer group">
+        <div class="w-10 h-10 rounded-xl bg-indigo-50 group-hover:bg-indigo-100 flex items-center justify-center flex-shrink-0 transition-colors">
+          <i class="fa-solid fa-users text-indigo-600"></i>
+        </div>
+        <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Daftar User</p>
       </div>
 
     </div>
@@ -9962,11 +9991,34 @@ window.deleteChatMessage = async function(msgId) {
   if(!confirm('Hapus pesan ini untuk semua orang?\n\nPesan akan hilang permanen dan tidak bisa dikembalikan.')) return;
   try {
     const uid = window._S.user.uid;
+    // Ambil dulu type & text (URL foto) SEBELUM dihapus dari DB, supaya
+    // kalau ini pesan foto manual, filenya bisa ikut dibersihkan dari R2.
+    // Tidak berlaku untuk order/ad_card (foto pesanan/produk tetap utuh).
+    let _msgType = '', _msgUrl = '';
+    try {
+      const _peek = await window._supaFetch(
+        '/rest/v1/chat_messages?id=eq.' + encodeURIComponent(msgId) +
+        '&sender_id=eq.' + encodeURIComponent(uid) + '&select=type,text&limit=1'
+      );
+      if(_peek.ok){
+        const _rows = await _peek.json();
+        if(_rows[0]){ _msgType = _rows[0].type || ''; _msgUrl = _rows[0].text || ''; }
+      }
+    } catch(_peekErr) { /* fail-open: lanjut hapus DB walau peek gagal */ }
+
     const r = await window._supaFetch(
       '/rest/v1/chat_messages?id=eq.' + encodeURIComponent(msgId) + '&sender_id=eq.' + encodeURIComponent(uid),
       { method: 'DELETE', prefer: 'return=minimal' }
     );
     if(!r.ok) { showToast('Gagal menghapus pesan', 'red'); return; }
+
+    // Bersihkan file di R2 kalau ini pesan foto manual (bukan __PHOTO__ legacy prefix,
+    // deleteFromR2 sudah otomatis filter hanya URL dari R2 worker milik YallaMart).
+    if(_msgType === 'image' && _msgUrl){
+      const _cleanUrl = _msgUrl.replace('__PHOTO__','');
+      deleteFromR2(_cleanUrl);
+    }
+
     showToast('Pesan dihapus', 'green');
   } catch(e) {
     showToast('Gagal menghapus pesan: ' + e.message, 'red');
@@ -13080,7 +13132,7 @@ window.uploadBillboard=async()=>{
   if(!file){showToast('Pilih gambar terlebih dahulu','red');return;}
   showToast('Mengupload gambar billboard...','green');
   try{
-    // Ambil URL billboard lama sebelum diganti (untuk auto-delete Cloudinary)
+    // Ambil URL billboard lama sebelum diganti (untuk auto-delete R2)
     let oldBillboardUrl = '';
     try {
       const _oldRes = await window._supaFetch('/rest/v1/billboards?slot_key=eq.slot_'+idx+'&select=img_url&limit=1');
@@ -13088,8 +13140,8 @@ window.uploadBillboard=async()=>{
       oldBillboardUrl = (_oldRows[0] && _oldRows[0].img_url) || '';
     } catch(e) { /* non-critical */ }
 
-    const res = await uploadToCloudinary(file, null);
-    const imgUrl = res?.secure_url || res;
+    const result = await uploadToR2(file, null, 'billboards');
+    const imgUrl = (result && typeof result === 'object') ? result.secure_url : result;
     if(!imgUrl || !imgUrl.startsWith('http')) throw new Error('URL gambar tidak valid');
     // Cek apakah slot sudah ada
     const chkRes = await window._supaFetch('/rest/v1/billboards?slot_key=eq.slot_'+idx+'&select=id&limit=1');
@@ -13112,14 +13164,11 @@ window.uploadBillboard=async()=>{
     showToast('Billboard slide '+(idx+1)+' berhasil! ✅','green');
     closeBillModal();
 
-    // Auto-delete foto billboard LAMA dari Cloudinary (non-blocking)
+    // Auto-delete foto billboard LAMA dari R2 (non-blocking)
     if (oldBillboardUrl && oldBillboardUrl !== imgUrl) {
-      const oldPublicId = extractCloudinaryPublicId(oldBillboardUrl);
-      if (oldPublicId) {
-        deleteFromCloudinary(oldPublicId, 'BillboardPhoto').catch(e => {
-          console.warn('[uploadBillboard] Auto-delete foto lama gagal (tidak kritis):', e.message);
-        });
-      }
+      deleteFromR2(oldBillboardUrl).catch(e => {
+        console.warn('[uploadBillboard] Auto-delete foto lama gagal (tidak kritis):', e.message);
+      });
     }
   } catch(e){
     showToast('Gagal: '+(e.message||e),'red');
@@ -13951,6 +14000,48 @@ if ('serviceWorker' in navigator) {
   </div>
 </div><!-- /shopsAdminOverlay -->
 
+<!-- ══ DAFTAR USER (ADMIN ONLY) — modul berdiri sendiri ══ -->
+<div id="usersAdminOverlay" onclick="if(event.target===this)closeUsersAdminDashboard()">
+  <div id="usersAdminSheet" onclick="event.stopPropagation()">
+    <!-- Header -->
+    <div class="flex-shrink-0 bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-4 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
+        <i class="fa-solid fa-users text-white text-sm"></i>
+      </div>
+      <div class="flex-1">
+        <h2 class="text-white font-black text-base">Daftar User</h2>
+        <p class="text-indigo-100 text-[10px]" id="usersAdminCount">Memuat...</p>
+      </div>
+      <span id="usersAdminTotalCounter" class="inline-flex items-center bg-white/95 text-indigo-700 text-[11px] font-black px-3 py-1.5 rounded-full shadow-sm flex-shrink-0 whitespace-nowrap">Total User: —</span>
+      <button onclick="closeUsersAdminDashboard()" class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30 transition-colors flex-shrink-0">
+        <i class="fa-solid fa-xmark text-sm"></i>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="overflow-y-auto flex-1 p-4 md:p-5">
+
+      <!-- Desktop: tabel lebar -->
+      <div class="hidden md:block rounded-2xl border border-gray-100 overflow-hidden">
+        <table id="usersAdminTable">
+          <thead>
+            <tr>
+              <th>Nama User</th>
+              <th>Email</th>
+              <th>Alamat</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="usersAdminTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Mobile: card list -->
+      <div id="usersAdminCardList" class="md:hidden"></div>
+    </div>
+  </div>
+</div><!-- /usersAdminOverlay -->
+
 <!-- Script: Semua logika baru (Ads Access, Badge, Official Filter, Admin Panel) -->
 <script>
 // ═══════════════════════════════════════════════════════════════
@@ -14377,6 +14468,146 @@ window.toggleShopBlock = async function(shopId, currentlyActive) {
     showToast('Gagal update status: ' + (e.message||e), 'red');
   }
 };
+
+// ═══════════════════════════════════════════════════════════════
+// 👤 DAFTAR USER (ADMIN ONLY) — modul berdiri sendiri
+// Sumber data: tabel `users` (Supabase), sinkron realtime via
+// postgres_changes. Tombol Status hanya placeholder UI, logika
+// aktif/nonaktif BELUM diimplementasikan (sesuai instruksi).
+// ═══════════════════════════════════════════════════════════════
+window._usersAdminData = [];
+window._usersAdminChannel = null;
+window._usersAdminStatusOverride = {}; // { uid: 'active'|'inactive' } — placeholder lokal saja, tidak disimpan ke DB
+
+function _uadEscHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function _uadStatusBadge(uid) {
+  const status = window._usersAdminStatusOverride[uid] || 'active';
+  return status === 'active'
+    ? `<button type="button" class="uad-badge uad-badge-active" onclick="toggleUserStatusPlaceholder('${uid}')"><i class="fa-solid fa-circle-check"></i> Aktif</button>`
+    : `<button type="button" class="uad-badge uad-badge-inactive" onclick="toggleUserStatusPlaceholder('${uid}')"><i class="fa-solid fa-circle-xmark"></i> Non-Aktif</button>`;
+}
+
+window.openUsersAdminDashboard = async function() {
+  const u = window._S?.user;
+  if (!u || !isAdmin(u.email)) { showToast('Akses ditolak', 'red'); return; }
+  const ov = document.getElementById('usersAdminOverlay');
+  ov.style.display = 'flex';
+  requestAnimationFrame(() => { ov.style.opacity = '1'; });
+  document.body.style.overflow = 'hidden';
+  await loadUsersAdminData();
+  _subscribeUsersAdminRealtime();
+};
+
+window.closeUsersAdminDashboard = function() {
+  const ov = document.getElementById('usersAdminOverlay');
+  ov.style.opacity = '0';
+  document.body.style.overflow = '';
+  setTimeout(() => { ov.style.display = 'none'; }, 200);
+  if (window._usersAdminChannel) {
+    try { supabase.removeChannel(window._usersAdminChannel); } catch(e) {}
+    window._usersAdminChannel = null;
+  }
+};
+
+function _subscribeUsersAdminRealtime() {
+  if (window._usersAdminChannel) {
+    try { supabase.removeChannel(window._usersAdminChannel); } catch(e) {}
+    window._usersAdminChannel = null;
+  }
+  window._usersAdminChannel = supabase.channel('users_admin_realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+      loadUsersAdminData();
+    })
+    .subscribe();
+}
+
+async function loadUsersAdminData() {
+  const tableBody = document.getElementById('usersAdminTableBody');
+  const cardList  = document.getElementById('usersAdminCardList');
+  const countEl   = document.getElementById('usersAdminCount');
+  const loadingRow  = '<tr><td colspan="4" class="text-center text-xs text-gray-400 py-10"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Memuat data user...</td></tr>';
+  const loadingCard = '<div class="text-center text-xs text-gray-400 py-10"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Memuat data user...</div>';
+  if (tableBody) tableBody.innerHTML = loadingRow;
+  if (cardList) cardList.innerHTML = loadingCard;
+  if (countEl) countEl.textContent = 'Memuat...';
+
+  try {
+    const res = await window._supaFetch('/rest/v1/users?select=uid,name,email,address,created_at&order=created_at.desc');
+    if (!res.ok) throw new Error(await res.text());
+    const users = await res.json();
+    window._usersAdminData = users;
+    renderUsersAdminList();
+  } catch(e) {
+    const errMsg = '<div class="text-center text-xs text-red-400 py-10">Gagal memuat data: ' + _uadEscHtml(e.message || e) + '</div>';
+    if (tableBody) tableBody.innerHTML = '<tr><td colspan="4">' + errMsg + '</td></tr>';
+    if (cardList) cardList.innerHTML = errMsg;
+    if (countEl) countEl.textContent = 'Gagal memuat';
+  }
+}
+
+window.renderUsersAdminList = function() {
+  const data = window._usersAdminData || [];
+  const tableBody = document.getElementById('usersAdminTableBody');
+  const cardList  = document.getElementById('usersAdminCardList');
+  const countEl   = document.getElementById('usersAdminCount');
+  if (countEl) countEl.textContent = data.length + ' user terdaftar';
+
+  if (!data.length) {
+    if (tableBody) tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-xs text-gray-400 py-10">Belum ada user terdaftar</td></tr>';
+    if (cardList) cardList.innerHTML = '<div class="text-center text-xs text-gray-400 py-10">Belum ada user terdaftar</div>';
+    return;
+  }
+
+  if (tableBody) tableBody.innerHTML = data.map(u => `
+    <tr class="border-b border-gray-100 hover:bg-indigo-50/40 transition-colors" id="uadRow-${u.uid}">
+      <td class="px-4 py-3 text-sm font-bold text-gray-800">${_uadEscHtml(u.name || '—')}</td>
+      <td class="px-4 py-3 text-sm text-gray-600">${_uadEscHtml(u.email || '—')}</td>
+      <td class="px-4 py-3 text-xs text-gray-500" style="max-width:260px">${_uadEscHtml(u.address || '—')}</td>
+      <td class="px-4 py-3" id="uadStatusCell-${u.uid}">${_uadStatusBadge(u.uid)}</td>
+    </tr>
+  `).join('');
+
+  if (cardList) cardList.innerHTML = data.map(u => `
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="min-w-0">
+          <p class="text-sm font-bold text-gray-800 truncate">${_uadEscHtml(u.name || '—')}</p>
+          <p class="text-xs text-gray-500 mt-0.5 truncate">${_uadEscHtml(u.email || '—')}</p>
+        </div>
+        <div class="flex-shrink-0" id="uadStatusCardCell-${u.uid}">${_uadStatusBadge(u.uid)}</div>
+      </div>
+      <p class="text-[11px] text-gray-400"><i class="fa-solid fa-location-dot mr-1"></i> ${_uadEscHtml(u.address || '—')}</p>
+    </div>
+  `).join('');
+};
+
+// Placeholder UI saja — belum ada logika aktif/nonaktif sesungguhnya (belum disimpan ke Supabase)
+window.toggleUserStatusPlaceholder = function(uid) {
+  const current = window._usersAdminStatusOverride[uid] || 'active';
+  window._usersAdminStatusOverride[uid] = current === 'active' ? 'inactive' : 'active';
+  const cell = document.getElementById('uadStatusCell-' + uid);
+  const cardCell = document.getElementById('uadStatusCardCell-' + uid);
+  if (cell) cell.innerHTML = _uadStatusBadge(uid);
+  if (cardCell) cardCell.innerHTML = _uadStatusBadge(uid);
+};
+
+// ── TOTAL USER COUNTER (pojok kanan atas halaman Daftar User) ──
+// Tidak menambah query Supabase baru — angka dihitung dari data yang
+// SUDAH di-fetch oleh loadUsersAdminData() (efficient, zero extra request).
+// Wrapper eksternal: tidak mengubah satu baris pun di renderUsersAdminList asli.
+(function() {
+  const _origRenderUsersAdminList = window.renderUsersAdminList;
+  window.renderUsersAdminList = function() {
+    _origRenderUsersAdminList.apply(this, arguments);
+    const total = (window._usersAdminData || []).length;
+    const el = document.getElementById('usersAdminTotalCounter');
+    if (el) el.textContent = 'Total User: ' + total.toLocaleString('id-ID');
+  };
+})();
 
 window.cleanupOrphanAds = async function() {
   const statusEl = document.getElementById('cleanupStatus');
