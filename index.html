@@ -3626,8 +3626,8 @@ h3.text-sm.font-bold.text-gray-800 {
       <img id="storyViewerImg" src="" style="max-width:100%;max-height:100%;object-fit:contain" onclick="event.stopPropagation()">
     </div>
 
-    <!-- Grup bawah: caption di atas, view count tepat di bawah caption -->
-    <div style="position:absolute;bottom:28px;left:0;right:0;z-index:2;padding:0 16px;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px">
+    <!-- Grup bawah: caption di atas, view count tepat di bawah caption. bottom di-toggle via JS: naik hanya saat storyReplyBar tampil (lihat story orang lain) -->
+    <div id="storyBottomGroup" style="position:absolute;bottom:28px;left:0;right:0;z-index:2;padding:0 16px;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px">
       <!-- Caption — tampil lebih dulu dari atas -->
       <div id="storyViewerCaption" style="display:none;width:100%">
         <p style="color:#fff;font-size:14px;font-weight:500;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,0.8);line-height:1.5;margin:0;background:rgba(0,0,0,0.3);border-radius:12px;padding:8px 14px;backdrop-filter:blur(4px)" id="storyViewerCaptionText"></p>
@@ -11025,6 +11025,10 @@ function _renderStoryFrame() {
   const replyInput = document.getElementById('storyReplyInput');
   if(replyInput) replyInput.value = '';
   if(replyBar) replyBar.style.display = isMe ? 'none' : 'flex';
+
+  // Caption + view count — naik hanya saat replyBar tampil (story orang lain), tetap di posisi asli untuk story sendiri
+  const bottomGroup = document.getElementById('storyBottomGroup');
+  if(bottomGroup) bottomGroup.style.bottom = isMe ? '28px' : 'calc(74px + env(safe-area-inset-bottom))';
 
   if(isMe) {
     // Pemilik lihat story sendiri — tampilkan jumlah view
