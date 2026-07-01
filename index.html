@@ -10910,7 +10910,7 @@ window.openStoryViewer = async function(uid, name, photoUrl) {
     const res = await window._supaFetch(
       '/rest/v1/user_stories?user_id=eq.' + uid +
       '&expires_at=gt.' + new Date().toISOString() +
-      '&order=created_at.desc&select=*'
+      '&order=created_at.asc&select=*'
     );
     stories = res.ok ? await res.json() : [];
   } catch(e) { console.warn('[storyViewer fetch]', e.message); }
@@ -11166,7 +11166,7 @@ window.openStoryUpload = async function() {
   const storyPromise = window._supaFetch(
     '/rest/v1/user_stories?user_id=eq.' + uid +
     '&expires_at=gt.' + new Date().toISOString() +
-    '&order=created_at.desc&select=*'
+    '&order=created_at.asc&select=*'
   ).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; });
 
   let myStories = [];
