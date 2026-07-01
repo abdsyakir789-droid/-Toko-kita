@@ -3647,6 +3647,18 @@ h3.text-sm.font-bold.text-gray-800 {
       <div style="flex:1" onclick="event.stopPropagation();prevStory()"></div>
       <div style="flex:1" onclick="event.stopPropagation();nextStory()"></div>
     </div>
+
+    <!-- Balas Status — hanya tampil saat melihat story orang lain (bukan story sendiri) -->
+    <div id="storyReplyBar" style="display:none;position:absolute;bottom:0;left:0;right:0;z-index:3;padding:10px 12px calc(10px + env(safe-area-inset-bottom));align-items:center;gap:8px;background:linear-gradient(to top, rgba(0,0,0,0.55), transparent)">
+      <input id="storyReplyInput" type="text" placeholder="Balas story..." maxlength="300"
+        onclick="event.stopPropagation()"
+        onfocus="event.stopPropagation();if(_storyViewerData.timer){clearTimeout(_storyViewerData.timer);_storyViewerData.timer=null;}"
+        onkeydown="event.stopPropagation();if(event.key==='Enter'){event.preventDefault();sendStoryReply();}"
+        style="flex:1;min-width:0;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.4);border-radius:999px;padding:10px 16px;color:#fff;font-size:13px;outline:none;backdrop-filter:blur(6px)">
+      <button id="storyReplySendBtn" onclick="event.stopPropagation();sendStoryReply()" style="width:38px;height:38px;border-radius:50%;background:#10B981;border:none;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i class="fa-solid fa-paper-plane"></i>
+      </button>
+    </div>
   </div>
 
   <!-- ── Story Viewers List Modal (daftar yang melihat status) ── -->
@@ -9531,17 +9543,20 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
         const isImg = m.type==='image' || (m.text||'').startsWith('__PHOTO__');
         const isOrder = m.type==='order';
         const isAdCard = m.type==='ad_card';
+        const isStoryReply = m.type==='story_reply';
         let orderData = null;
         if(isOrder){ try{ orderData=JSON.parse(m.text||'{}'); }catch(e){} }
         let adCardData = null;
         if(isAdCard){ try{ adCardData=JSON.parse(m.text||'{}'); }catch(e){} }
+        let storyReplyData = null;
+        if(isStoryReply){ try{ storyReplyData=JSON.parse(m.text||'{}'); }catch(e){} }
         const imgUrl = isImg ? (m.text||'').replace('__PHOTO__','') : '';
 
         const _msgId = m.id || '';
         const _msgText = (m.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         const _msgSender = m.sender_name||m.senderName||'';
         // Untuk swipe-to-reply: hanya pesan teks biasa yang bisa di-reply
-        const _canReply = !isAdCard && !isOrder && !isImg;
+        const _canReply = !isAdCard && !isOrder && !isImg && !isStoryReply;
         // Untuk hapus pesan: hanya pengirim sendiri, bukan pesan order/ad_card (terkait checkout)
         const _canDelete = me && !isAdCard && !isOrder;
 
@@ -9620,6 +9635,21 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
                 </button>
               </div>
               ` : '')}
+            </div>
+            ` : isStoryReply && storyReplyData ? `
+            <div style="display:flex;flex-direction:column;gap:4px;max-width:220px">
+              ${!me?`<p class="text-[10px] font-bold opacity-70 px-1">${m.sender_name||m.senderName||''}</p>`:''}
+              <div style="background:rgba(0,0,0,0.04);border-radius:14px;overflow:hidden;border:1.5px solid #e5e7eb">
+                <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #e5e7eb">
+                  <i class="fa-solid fa-reply" style="font-size:9px;color:#9ca3af"></i>
+                  <span style="font-size:9px;font-weight:700;color:#9ca3af">Membalas story</span>
+                </div>
+                <img src="${storyReplyData.storyImg||''}" style="width:100%;height:130px;object-fit:cover;background:#f3f4f6"
+                  onerror="this.style.display='none'"/>
+              </div>
+              <div class="${me?'chat-bubble-me':'chat-bubble-other'} px-3.5 pt-2 pb-1.5 text-xs leading-relaxed w-full break-words overflow-wrap-anywhere" style="word-break:break-word;overflow-wrap:anywhere">
+                <span>${(storyReplyData.replyText||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+              </div>
             </div>
             ` : isImg ? `
             <div class="relative rounded-2xl overflow-hidden shadow-sm">
@@ -10990,6 +11020,12 @@ function _renderStoryFrame() {
     optionsBtn.style.display = canDeleteStory ? 'flex' : 'none';
   }
 
+  // Bar Balas Status — hanya untuk story orang lain, bukan story sendiri
+  const replyBar = document.getElementById('storyReplyBar');
+  const replyInput = document.getElementById('storyReplyInput');
+  if(replyInput) replyInput.value = '';
+  if(replyBar) replyBar.style.display = isMe ? 'none' : 'flex';
+
   if(isMe) {
     // Pemilik lihat story sendiri — tampilkan jumlah view
     if(viewCountEl) viewCountEl.style.display = 'flex';
@@ -11144,6 +11180,102 @@ window.deleteCurrentStory = async function() {
     }
   } catch(e) {
     showToast('Gagal menghapus status', 'red');
+  }
+};
+
+// ── Balas Status (kirim ke chat) ──────────────────────────────────
+// Modul berdiri sendiri: TIDAK memanggil/mengubah startChat(), openChatRoom(),
+// atau window._FB.sendChatMessage() — insert pesan dilakukan manual supaya
+// preview last_message/push notif tidak menampilkan payload JSON mentah.
+window.sendStoryReply = async function() {
+  const input = document.getElementById('storyReplyInput');
+  if(!input) return;
+  const txt = input.value.trim();
+  if(!txt) return;
+
+  if(!window._S.user) { showToast('Login dulu untuk membalas story', 'red'); openAuth('login'); return; }
+
+  const { stories, idx } = _storyViewerData;
+  const story = stories[idx];
+  if(!story) return;
+  const ownerUid = story.user_id;
+  if(!ownerUid || ownerUid === window._S.user.uid) return;
+
+  // Cek kata terlarang sebelum kirim (pola sama seperti window.sendChatMsg)
+  const _blWords = await _loadBlacklistWords();
+  if(_matchBlacklist(txt, _blWords)) {
+    showToast('Pesan mengandung kata yang tidak diperbolehkan', 'red');
+    return;
+  }
+
+  if(window._sendStoryReplyInProgress) return;
+  window._sendStoryReplyInProgress = true;
+  const sendBtn = document.getElementById('storyReplySendBtn');
+  if(sendBtn) { sendBtn.disabled = true; sendBtn.style.opacity = '0.5'; }
+
+  try {
+    let _w = 0;
+    while(!window._FB && _w < 25) { await new Promise(r=>setTimeout(r,200)); _w++; }
+    if(!window._FB) { showToast('Koneksi belum siap, coba lagi', 'red'); return; }
+
+    const chatId = await window._FB.initChat(null, ownerUid, _storyViewerData.name || 'Penjual', _storyViewerData.photoUrl || '', '', '', null);
+    if(!chatId) return;
+
+    const senderUid = window._S.user.uid;
+    const senderName = window._S.user.name || 'Seseorang';
+    const payload = JSON.stringify({ storyImg: story.img_url || '', replyText: txt });
+
+    const _msgRes = await window._supaFetch('/rest/v1/chat_messages', {
+      method: 'POST',
+      prefer: 'return=minimal',
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: payload,
+        type: 'story_reply',
+        sender_id: senderUid,
+        sender_name: senderName,
+        created_at: new Date().toISOString(),
+        is_read: false
+      })
+    });
+    if(!_msgRes.ok) {
+      let _errDetail = '';
+      try { const _errJson = await _msgRes.json(); _errDetail = _errJson.message || _errJson.error || JSON.stringify(_errJson); } catch(e) {}
+      throw new Error(_errDetail || ('HTTP ' + _msgRes.status));
+    }
+
+    // Update chats.last_message + unread_counts (preview teks asli, bukan JSON)
+    try {
+      const preview = '↩️ Membalas story: ' + (txt.length > 40 ? txt.slice(0,40)+'...' : txt);
+      const r = await window._supaFetch('/rest/v1/chats?chat_id=eq.' + chatId + '&select=unread_counts');
+      const rows = r.ok ? await r.json() : [];
+      const counts = rows[0]?.unread_counts || {};
+      const prevUnread = counts[ownerUid] || 0;
+      await window._supaFetch('/rest/v1/chats?chat_id=eq.' + chatId, {
+        method: 'PATCH', prefer: 'return=minimal',
+        body: JSON.stringify({
+          last_message: preview,
+          last_at: new Date().toISOString(),
+          unread_counts: { ...counts, [ownerUid]: prevUnread + 1, [senderUid]: 0 }
+        })
+      });
+      trackEvent('send_message', { chat_id: chatId, message_type: 'story_reply' });
+      window.sendPushToUser(ownerUid, senderName, '💬 ' + preview, '/?chatId=' + chatId);
+    } catch(e) {}
+
+    input.value = '';
+    showToast('Balasan terkirim ke chat', 'green');
+  } catch(e) {
+    if((e.message||'').includes('Toko sedang tutup')) {
+      showToast('Toko sedang tutup, pesan tidak bisa dikirim sekarang', 'red');
+    } else if((e.message||'').includes('BLACKLISTED_CONTENT')) {
+      showToast('Pesan mengandung kata yang tidak diperbolehkan', 'red');
+    } else {
+      showToast('Gagal kirim balasan: ' + (e.message||'Error'), 'red');
+    }
+  } finally {
+    window._sendStoryReplyInProgress = false;
+    if(sendBtn) { sendBtn.disabled = false; sendBtn.style.opacity = ''; }
   }
 };
 
