@@ -6620,12 +6620,18 @@ window.startNotifListener = function() {
     const _toaOv = document.getElementById('toaPanelOverlay');
     if(_toaOv && _toaOv.classList.contains('open')) {
       renderToaPanel(all);
-      // Restore state expanded setelah re-render
+      // Restore state expanded setelah re-render — kembalikan HTML versi lengkap
+      // dari map yang baru dibuat renderToaPanel (bukan cuma ubah CSS display),
+      // supaya baris baru (<br>) tidak hilang saat realtime update masuk.
       Object.entries(window._bcExpandedToa||{}).forEach(([docId, isExp]) => {
         if(!isExp) return;
         const msgEl = document.getElementById('toa-bc-msg-' + docId);
         const btn = document.getElementById('toa-bc-btn-' + docId);
-        if(msgEl) msgEl.style.cssText = 'display:block;overflow:visible';
+        if(msgEl) {
+          const _bcData = (window._S._toaBcMsgMap || {})[docId];
+          if(_bcData) msgEl.innerHTML = _bcData.full;
+          msgEl.style.cssText = 'word-break:break-word;display:block;overflow:visible';
+        }
         if(btn) btn.innerHTML = 'Tutup <i class="fa-solid fa-chevron-up text-[8px]"></i>';
       });
     }
@@ -7948,6 +7954,22 @@ window.updateToaBadge = function(count) {
   });
 };
 
+// Format waktu relatif untuk Pesan Siaran (hanya tampilan, tidak ubah data)
+function _bcRelativeTime(seconds) {
+  if(!seconds) return '';
+  const diffSec = Math.max(0, Math.floor(Date.now()/1000 - seconds));
+  if(diffSec < 60) return 'Baru saja';
+  const diffMin = Math.floor(diffSec/60);
+  if(diffMin < 60) return diffMin + ' menit yang lalu';
+  const diffHour = Math.floor(diffMin/60);
+  if(diffHour < 24) return diffHour + ' jam yang lalu';
+  const diffDay = Math.floor(diffHour/24);
+  if(diffDay < 30) return diffDay + ' hari yang lalu';
+  const diffMonth = Math.floor(diffDay/30);
+  if(diffMonth < 12) return diffMonth + ' bulan yang lalu';
+  return Math.floor(diffMonth/12) + ' tahun yang lalu';
+}
+
 // Render isi panel Toa dari data notifs
 window.renderToaPanel = function(notifs) {
   const body = document.getElementById('toaPanelBody');
@@ -7964,14 +7986,21 @@ window.renderToaPanel = function(notifs) {
     return;
   }
   window._S._toaBcNotifs = broadcasts;
+  window._S._toaBcMsgMap = {};
   const isAdminToa = window._S.user && isAdmin(window._S.user.email);
   body.innerHTML = broadcasts.map((n, idx) => {
     const ts = n.createdAt?.seconds || n.timestamp?.seconds;
-    const timeStr = ts ? new Date(ts*1000).toLocaleString('id-ID',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    const timeStr = _bcRelativeTime(ts);
     const title = n.title || 'Pesan Siaran';
     const msg = n.message || '';
     const rawDocId = (n.id||'').startsWith('sub_') ? n.id.slice(4) : n.id;
     const bcId = n.broadcastId || '';
+    const isLong = msg.length > 120;
+    // Dikonversi SEKALI di sini (bukan saat klik) — baris baru asli pakai <br> nyata,
+    // bukan CSS white-space, supaya tidak ada layout-shift/hilang newline saat toggle.
+    const msgFullHtml = msg.replace(/\n/g, '<br>');
+    const msgPreviewHtml = msg.replace(/\s*\n\s*/g, ' ').trim();
+    window._S._toaBcMsgMap[rawDocId] = { full: msgFullHtml, preview: msgPreviewHtml };
     return `<div class="flex items-start gap-3 px-4 py-4 bg-white border-b border-gray-100 last:border-b-0" id="toa-bc-card-${rawDocId}">
       <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center" id="toa-bc-icon-${idx}">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 19-9-9 19-2-8-8-2z"/></svg>
@@ -7981,8 +8010,8 @@ window.renderToaPanel = function(notifs) {
           <p class="text-sm font-semibold text-gray-900 leading-snug">${title}</p>
           ${isAdminToa ? `<button onclick="event.stopPropagation();event.preventDefault();deleteBroadcastMessage('${rawDocId}','${encodeURIComponent(title)}')" class="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 hover:bg-red-100 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash-can text-red-400" style="font-size:9px"></i></button>` : ''}
         </div>
-        <p class="text-sm text-gray-500 mt-0.5 leading-relaxed" id="toa-bc-msg-${rawDocId}" style="${msg.length>120?'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden':'display:block'}">${msg}</p>
-        ${msg.length>120?`<button onclick="event.stopPropagation();event.preventDefault();toggleToaBcExpand('${rawDocId}')" id="toa-bc-btn-${rawDocId}" class="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">Baca selengkapnya <i class="fa-solid fa-chevron-down text-[8px]"></i></button>`:''}
+        <p class="text-sm text-gray-800 mt-0.5 leading-relaxed" id="toa-bc-msg-${rawDocId}" style="word-break:break-word;${isLong?'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden':'display:block'}">${isLong ? msgPreviewHtml : msgFullHtml}</p>
+        ${isLong?`<button onclick="event.stopPropagation();event.preventDefault();toggleToaBcExpand('${rawDocId}')" id="toa-bc-btn-${rawDocId}" class="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">Baca selengkapnya <i class="fa-solid fa-chevron-down text-[8px]"></i></button>`:''}
         ${timeStr ? `<p class="text-xs text-gray-400 mt-1.5">${timeStr}</p>` : ''}
       </div>
     </div>`;
@@ -8042,14 +8071,19 @@ window.toggleToaBcExpand = function(docId) {
   const msgEl = document.getElementById('toa-bc-msg-' + docId);
   const btn = document.getElementById('toa-bc-btn-' + docId);
   if(!msgEl) return;
+  const data = (window._S._toaBcMsgMap || {})[docId];
   const isExpanded = window._bcExpandedToa[docId];
   window._bcExpandedToa[docId] = !isExpanded;
   markNotifRead(docId, true);
   if(isExpanded) {
-    msgEl.style.cssText = 'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden';
+    // Kembali ke preview terpotong (HTML sudah disiapkan saat render, bukan diproses ulang)
+    if(data) msgEl.innerHTML = data.preview;
+    msgEl.style.cssText = 'word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden';
     if(btn) btn.innerHTML = 'Baca selengkapnya <i class="fa-solid fa-chevron-down text-[8px]"></i>';
   } else {
-    msgEl.style.cssText = 'display:block;overflow:visible';
+    // Tampilkan teks penuh dengan baris baru asli (<br> nyata, sudah disiapkan saat render)
+    if(data) msgEl.innerHTML = data.full;
+    msgEl.style.cssText = 'word-break:break-word;display:block;overflow:visible';
     if(btn) btn.innerHTML = 'Tutup <i class="fa-solid fa-chevron-up text-[8px]"></i>';
   }
 };
