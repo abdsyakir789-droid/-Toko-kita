@@ -12200,6 +12200,17 @@ window.openFollowingStores = async function() {
       }
     };
 
+    // ── Sorting tampilan: toko yang punya foto iklan aktif tampil di atas,
+    //    yang belum ada iklan di bawah. Stable sort (urutan dalam grup tetap sama).
+    //    Ini murni pengurutan render, tidak mengubah data/fetch/cache.
+    const _postCountByUid = {};
+    (allPosts||[]).forEach(p => { if(p.seller_uid) _postCountByUid[p.seller_uid] = (_postCountByUid[p.seller_uid]||0) + 1; });
+    users = users.slice().sort((a, b) => {
+      const aHasAds = (_postCountByUid[a.uid] || 0) > 0 ? 0 : 1;
+      const bHasAds = (_postCountByUid[b.uid] || 0) > 0 ? 0 : 1;
+      return aHasAds - bHasAds;
+    });
+
     // ── Render: satu card per toko, 4 foto horizontal ────────────
     users.forEach(seller => {
       const followerCount = allFollows.filter(f => f.seller_uid === seller.uid).length;
