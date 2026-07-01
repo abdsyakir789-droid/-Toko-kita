@@ -11027,8 +11027,16 @@ function _renderStoryFrame() {
   if(replyBar) replyBar.style.display = isMe ? 'none' : 'flex';
 
   // Caption + view count — naik hanya saat replyBar tampil (story orang lain), tetap di posisi asli untuk story sendiri
+  // Pakai offsetHeight asli replyBar (bukan angka hardcode) biar akurat di semua device/browser
   const bottomGroup = document.getElementById('storyBottomGroup');
-  if(bottomGroup) bottomGroup.style.bottom = isMe ? '28px' : 'calc(74px + env(safe-area-inset-bottom))';
+  if(bottomGroup) {
+    if(isMe) {
+      bottomGroup.style.bottom = '28px';
+    } else {
+      const replyBarH = replyBar ? replyBar.offsetHeight : 74;
+      bottomGroup.style.bottom = (replyBarH + 16) + 'px';
+    }
+  }
 
   if(isMe) {
     // Pemilik lihat story sendiri — tampilkan jumlah view
