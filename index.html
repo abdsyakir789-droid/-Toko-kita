@@ -10483,13 +10483,23 @@ window.viewSellerStore = async function(sellerUid) {
   // otomatis jadi 'Penjual' + foto kosong — padahal profil aslinya ADA di
   // tabel users. Sekarang tabel users jadi sumber utama; data iklan cuma
   // fallback kalau fetch users gagal (mis. jaringan).
+  // ── Retry hingga 4x kalau fetch gagal (network blip / token expired) ──
+  // Tanpa retry, satu kegagalan fetch langsung jatuh ke fallback 'Penjual',
+  // dan untuk toko jarang berinteraksi (sellerAds kosong) tidak ada fallback
+  // sama sekali sehingga nama toko asli hilang dari tampilan.
   let userRow = null;
-  try {
-    const _uRes = await window._supaFetch('/rest/v1/users?uid=eq.' + sellerUid + '&select=name,photo_url,email&limit=1');
-    const _uRows = _uRes.ok ? await _uRes.json() : [];
-    userRow = _uRows[0] || null;
-  } catch(e) {
-    console.warn('[viewSellerStore] fetch profil toko gagal:', e.message);
+  const _profileMaxAttempts = 4;
+  for (let _attempt = 1; _attempt <= _profileMaxAttempts; _attempt++) {
+    try {
+      const _uRes = await window._supaFetch('/rest/v1/users?uid=eq.' + sellerUid + '&select=name,photo_url,email&limit=1');
+      const _uRows = _uRes.ok ? await _uRes.json() : [];
+      userRow = _uRows[0] || null;
+    } catch(e) {
+      console.warn('[viewSellerStore] fetch profil toko gagal (percobaan ' + _attempt + '/' + _profileMaxAttempts + '):', e.message);
+    }
+    if (_etalaseReqId !== window._etalaseReqId) return;
+    if (userRow) break;
+    if (_attempt < _profileMaxAttempts) await new Promise(r => setTimeout(r, 350 * _attempt));
   }
 
   // Kalau selagi nunggu fetch di atas user sudah pindah buka toko lain,
