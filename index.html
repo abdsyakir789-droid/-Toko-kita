@@ -5210,14 +5210,18 @@ supabase.auth.onAuthStateChange(async (event, session) => {
           }).then(function(r){ console.log('[push sync]', r.status); });
         }
         // Cek existing subscription dulu (tidak butuh user gesture)
-        swReg.pushManager.getSubscription().then(function(existing) {
-          if (existing) {
-            saveSub(existing);
-          } else {
-            swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(VPUB) })
-              .then(function(sub) { saveSub(sub); })
-              .catch(function(e){ console.warn('[push new subscribe err]', e.message); });
-          }
+        // Diserialize lewat _pushSubQueue supaya tidak race dengan blok subscribe lain
+        // yang jalan bersamaan (mencegah endpoint dobel → notif dobel)
+        window._pushSubQueue = (window._pushSubQueue || Promise.resolve()).then(function() {
+          return swReg.pushManager.getSubscription().then(function(existing) {
+            if (existing) {
+              saveSub(existing);
+            } else {
+              return swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(VPUB) })
+                .then(function(sub) { saveSub(sub); })
+                .catch(function(e){ console.warn('[push new subscribe err]', e.message); });
+            }
+          });
         });
       });
     }, 3000);
@@ -5256,7 +5260,10 @@ supabase.auth.onAuthStateChange(async (event, session) => {
         // Bug 1 fix: izin sudah ada tapi subscription mungkin mati (swipe close / expired)
         // Re-subscribe otomatis tanpa minta izin lagi
         navigator.serviceWorker.ready.then(function(swReg) {
-          swReg.pushManager.getSubscription().then(function(existingSub) {
+          // Diserialize lewat _pushSubQueue supaya tidak race dengan blok subscribe lain
+          // yang jalan bersamaan (mencegah endpoint dobel → notif dobel)
+          window._pushSubQueue = (window._pushSubQueue || Promise.resolve()).then(function() {
+            return swReg.pushManager.getSubscription().then(function(existingSub) {
             if(!existingSub) {
               // Subscription mati — buat ulang
               var VAPID_PUBLIC_KEY = 'BP6twOL2T7JcnN-99X13ZBNQVq14vHKTpajimdAoJpfAOlQRSLnsp5wSVoWT-jv17pb4BelRTUtL98mt160e2AI';
@@ -5269,7 +5276,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
                 for(var i=0;i<raw.length;i++) arr[i] = raw.charCodeAt(i);
                 return arr;
               }
-              swReg.pushManager.subscribe({
+              return swReg.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
               }).then(function(sub) {
@@ -5294,6 +5301,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
                 }
               }).catch(()=>{});
             }
+            }).catch(()=>{});
           }).catch(()=>{});
         }).catch(()=>{});
       }
@@ -19321,16 +19329,20 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
   }
 
   navigator.serviceWorker.ready.then(function(swReg) {
-    swReg.pushManager.getSubscription().then(function(existing) {
-      var auth = getUidFromToken();
-      if (!auth) return;
-      if (existing) {
-        saveSub(existing, auth.uid, auth.token);
-      } else {
-        swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(VPUB) })
-          .then(function(sub) { saveSub(sub, auth.uid, auth.token); })
-          .catch(function(e){ console.warn('[push boot subscribe err]', e.message); });
-      }
+    // Diserialize lewat _pushSubQueue supaya tidak race dengan blok subscribe lain
+    // yang jalan bersamaan (mencegah endpoint dobel → notif dobel)
+    window._pushSubQueue = (window._pushSubQueue || Promise.resolve()).then(function() {
+      return swReg.pushManager.getSubscription().then(function(existing) {
+        var auth = getUidFromToken();
+        if (!auth) return;
+        if (existing) {
+          saveSub(existing, auth.uid, auth.token);
+        } else {
+          return swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(VPUB) })
+            .then(function(sub) { saveSub(sub, auth.uid, auth.token); })
+            .catch(function(e){ console.warn('[push boot subscribe err]', e.message); });
+        }
+      });
     });
   });
 })();
