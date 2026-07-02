@@ -13199,15 +13199,12 @@ window.doRegister=async()=>{
   const terms=document.getElementById('regTerms').checked;
   if(!name||!email||!phone||!pass){showToast('Lengkapi semua kolom','red');return;}
   if(!otpEmail){showToast('Verifikasi OTP Email dulu','red');return;}
-  // OTP WhatsApp TIDAK lagi wajib — cukup verifikasi Email. Nomor WA tetap wajib diisi
-  // & divalidasi format Mesir, lalu disimpan ke profil (tanpa verifikasi OTP WA).
-  const _regCleanPhone = phone.replace(/\D/g, '');
-  const _regIsEgypt = _regCleanPhone.startsWith('20') || _regCleanPhone.startsWith('010') || _regCleanPhone.startsWith('011') || _regCleanPhone.startsWith('012') || _regCleanPhone.startsWith('015');
-  if(!_regIsEgypt){showToast('Nomor WhatsApp harus nomor Mesir 🇪🇬 (+20 / 20)','red');return;}
+  if(!otpWa){showToast('Verifikasi OTP WhatsApp dulu','red');return;}
   if(!terms){showToast('Setujui Syarat & Ketentuan dulu','red');return;}
   if(pass.length<6){showToast('Kata sandi min. 6 karakter','red');return;}
   if(window._regOtpEmail !== email){showToast('Email berbeda dengan saat OTP dikirim. Kirim OTP ulang.','red');return;}
-  // (OTP WhatsApp tidak wajib — pengecekan _regOtpViaWa/_regOtpPhone dilewati)
+  if(!window._regOtpViaWa || !window._regOtpPhone){showToast('Kirim OTP WhatsApp dulu','red');return;}
+  if(window._regOtpPhone !== window._toFonntePhone(phone)){showToast('Nomor WA berbeda dengan saat OTP dikirim. Kirim OTP ulang.','red');return;}
 
   // ── Validasi Duplikasi Akun (email & nomor WA) ──────────────────
   // Cek read-only ke tabel users SEBELUM proses pendaftaran dilanjutkan.
@@ -13237,8 +13234,17 @@ window.doRegister=async()=>{
   const btn=document.querySelector('#regForm button[onclick="doRegister()"]');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i> Memverifikasi OTP...';}
   try{
-    // Verifikasi OTP — cukup Email (OTP WhatsApp tidak lagi wajib).
+    // Verifikasi OTP — WAJIB Email DAN WA, berurutan (email dulu, baru WA)
+    // Verifikasi via Email (Brevo)
     await _verifyOtp(email, otpEmail, 'signup');
+    // Verifikasi via Fonnte WA
+    const waRes = await fetch('https://app.yallamart.my.id/api/send-wa-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verify', phone: window._regOtpPhone, code: otpWa })
+    });
+    const waJson = await waRes.json();
+    if (!waRes.ok || waJson.error) throw new Error(waJson.error || 'Kode OTP WA salah');
     if(btn){btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i> Mendaftar...';}
     // Pakai fetch manual langsung ke Supabase REST — tidak bergantung pada module JS yang async
     const SUPA_URL = 'https://jgnjgfuypcelwjztebsy.supabase.co';
