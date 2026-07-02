@@ -1412,7 +1412,7 @@ html,body{overscroll-behavior-y:contain}
 
 /* Store name & subtitle in overlay */
 .store-name-row{
-  display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;
+  display:flex;align-items:center;gap:2px;flex-wrap:wrap;margin-bottom:2px;
 }
 .store-name-text{
   font-size:15px;font-weight:800;color:#fff;letter-spacing:-.025em;line-height:1.2;
@@ -1531,7 +1531,7 @@ html,body{overscroll-behavior-y:contain}
   padding:14px 20px 20px;
 }
 
-.profile-name-row{display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap}
+.profile-name-row{display:flex;align-items:center;gap:2px;margin-bottom:2px;flex-wrap:wrap}
 .profile-name-text{font-size:15px;font-weight:800;color:#fff;letter-spacing:-.03em;text-shadow:0 1px 4px rgba(0,0,0,.4)}
 
 /* Profile stat strip */
@@ -4368,7 +4368,7 @@ h3.text-sm.font-bold.text-gray-800 {
         <!-- Nama + badge + link etalase -->
         <div class="flex-1 min-w-0">
           <button onclick="openDetailStore()" class="text-left hover:opacity-75 transition-opacity w-full">
-            <div class="flex items-center gap-1.5 flex-wrap">
+            <div class="flex items-center gap-0.5 flex-wrap">
               <p id="detailSeller" class="truncate" style="font-family:'Inter',sans-serif;font-size:15px;font-weight:700;color:#111827;letter-spacing:-.02em"></p>
               <span id="detailGoldBadge" style="display:none" class="vbadge-gold flex-shrink-0"></span>
             </div>
@@ -4581,7 +4581,7 @@ h3.text-sm.font-bold.text-gray-800 {
           <span id="chatOnlineDot" class="online-dot absolute -bottom-0.5 -right-0.5" style="display:none"></span>
         </div>
         <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-0.5">
             <p id="chatRoomName" class="font-black text-gray-900 text-sm truncate"></p>
             <span id="chatRoomGold" style="display:none" class="vbadge-gold flex-shrink-0"></span>
           </div>
@@ -7351,7 +7351,7 @@ const BADGE_CFG = {
   gold:   { g:["#FFDE7A","#F5B301","#B7770A"], shadow:"#B8860B", so:"0.6",  check:"#5c3a00" },
   silver: { g:["#E7ECF2","#9BA6B3","#59626F"], shadow:"#606060", so:"0.5",  check:"#fff" },
 };
-function _embossBadgeSVG(colorKey, size=18) {
+function _embossBadgeSVG(colorKey, size=16) {
   const id = ++_badgeSvgUid;
   const c = BADGE_CFG[colorKey] || BADGE_CFG.blue;
   return `<svg width="${size}" height="${size}" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible">
@@ -7373,7 +7373,7 @@ const goldBadgeHtml = `<span class="vbadge-gold" title="Verified Developer" styl
 // bintang dibulatkan (stroke-linejoin round) sehingga membentuk lobe
 // membulat seperti badge IG, dengan centang putih tebal & center.
 // Tidak menyentuh gold/silver (_embossBadgeSVG) sama sekali.
-function _verifiedBlueSVG(size=18) {
+function _verifiedBlueSVG(size=16) {
   const id = ++_badgeSvgUid;
   return `<svg width="${size}" height="${size}" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible">
     <defs>
@@ -14548,7 +14548,7 @@ async function getVerificationStatus(uid) {
 
 // Render badge HTML sesuai status
 function renderVerifyBadge(status) {
-  if (status === 'verified_blue')  return `<span class="vbadge-blue" title="Verified" style="margin-left:3px;vertical-align:middle">${_verifiedBlueSVG(18)}</span>`;
+  if (status === 'verified_blue')  return `<span class="vbadge-blue" title="Verified" style="margin-left:2px;vertical-align:middle">${_verifiedBlueSVG(16)}</span>`;
   if (status === 'verified_gold')  return `<span class="vbadge-gold"   title="Admin">${_embossBadgeSVG('gold')}</span>`;
   if (status === 'partner_silver') return `<span class="vbadge-silver" title="Official Partner">${_embossBadgeSVG('silver')}</span>`;
   return '';
