@@ -7348,30 +7348,45 @@ const BADGE_STAR = "M20,2 L22.9,5.5 L27.5,4.2 L28.5,9 L33.2,10.5 L32,15.2 L36,18
 const BADGE_HL  = "M20,2 L22.9,5.5 L27.5,4.2 L28.5,9 L33.2,10.5 L32,15.2 L36,18.5 L33.5,22.7";
 const BADGE_CFG = {
   blue:   { g:["#4DB8FF","#0095F6","#0060C0"], shadow:"#0060C0", so:"0.55", check:"#fff" },
-  gold:   { g:["#FFF0A0","#FFD700","#B8860B"], shadow:"#B8860B", so:"0.6",  check:"#7a4800" },
-  silver: { g:["#F0F0F0","#C0C0C0","#707070"], shadow:"#606060", so:"0.5",  check:"#fff" },
+  gold:   { g:["#FFDE7A","#F5B301","#B7770A"], shadow:"#B8860B", so:"0.6",  check:"#5c3a00" },
+  silver: { g:["#E7ECF2","#9BA6B3","#59626F"], shadow:"#606060", so:"0.5",  check:"#fff" },
 };
-function _embossBadgeSVG(colorKey, size=16) {
+function _embossBadgeSVG(colorKey, size=18) {
   const id = ++_badgeSvgUid;
   const c = BADGE_CFG[colorKey] || BADGE_CFG.blue;
-  return `<svg width="${size}" height="${size}" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  return `<svg width="${size}" height="${size}" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible">
     <defs>
-      <linearGradient id="eg${id}" x1="30%" y1="0%" x2="70%" y2="100%">
+      <linearGradient id="eg${id}" x1="25%" y1="0%" x2="75%" y2="100%">
         <stop offset="0%" stop-color="${c.g[0]}"/>
-        <stop offset="45%" stop-color="${c.g[1]}"/>
+        <stop offset="52%" stop-color="${c.g[1]}"/>
         <stop offset="100%" stop-color="${c.g[2]}"/>
       </linearGradient>
-      <filter id="ef${id}" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="${c.shadow}" flood-opacity="${c.so}"/>
-        <feDropShadow dx="0" dy="0.5" stdDeviation="0.5" flood-color="#000" flood-opacity="0.2"/>
-      </filter>
     </defs>
-    <g filter="url(#ef${id})"><path d="${BADGE_STAR}" fill="url(#eg${id})"/></g>
-    <path d="${BADGE_HL}" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.2" stroke-linecap="round"/>
-    <polyline points="12,21 18,27 28,14" stroke="${c.check}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="${BADGE_STAR}" fill="url(#eg${id})" stroke="url(#eg${id})" stroke-width="3.2" stroke-linejoin="round"/>
+    <polyline points="12.5,20.4 17.6,25.8 27.6,14.6" fill="none" stroke="${c.check}" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
 }
 const goldBadgeHtml = `<span class="vbadge-gold" title="Verified Developer" style="display:inline-flex;align-items:center;vertical-align:middle">${_embossBadgeSVG('gold')}</span>`;
+
+// ── Badge Centang Biru gaya Instagram ──────────────────────────
+// Khusus verified_blue. Memakai geometri seal yang sama, tapi ujung
+// bintang dibulatkan (stroke-linejoin round) sehingga membentuk lobe
+// membulat seperti badge IG, dengan centang putih tebal & center.
+// Tidak menyentuh gold/silver (_embossBadgeSVG) sama sekali.
+function _verifiedBlueSVG(size=18) {
+  const id = ++_badgeSvgUid;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible">
+    <defs>
+      <linearGradient id="vb${id}" x1="25%" y1="0%" x2="75%" y2="100%">
+        <stop offset="0%" stop-color="#4DB8FF"/>
+        <stop offset="52%" stop-color="#0095F6"/>
+        <stop offset="100%" stop-color="#0077E6"/>
+      </linearGradient>
+    </defs>
+    <path d="${BADGE_STAR}" fill="url(#vb${id})" stroke="url(#vb${id})" stroke-width="3.2" stroke-linejoin="round"/>
+    <polyline points="12.5,20.4 17.6,25.8 27.6,14.6" fill="none" stroke="#fff" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
 
 // ── Avatar helper ──────────────────────────────────────────────
 function avatarHtml(photoUrl, name, classes='w-8 h-8') {
@@ -14533,7 +14548,7 @@ async function getVerificationStatus(uid) {
 
 // Render badge HTML sesuai status
 function renderVerifyBadge(status) {
-  if (status === 'verified_blue')  return `<span class="vbadge-blue"   title="Verified">${_embossBadgeSVG('blue')}</span>`;
+  if (status === 'verified_blue')  return `<span class="vbadge-blue" title="Verified" style="margin-left:3px;vertical-align:middle">${_verifiedBlueSVG(18)}</span>`;
   if (status === 'verified_gold')  return `<span class="vbadge-gold"   title="Admin">${_embossBadgeSVG('gold')}</span>`;
   if (status === 'partner_silver') return `<span class="vbadge-silver" title="Official Partner">${_embossBadgeSVG('silver')}</span>`;
   return '';
@@ -15219,10 +15234,13 @@ window.applyVerification = async function() {
 
     const expiryMs = Date.now() + days * 24 * 60 * 60 * 1000;
     const expiryDate = new Date(expiryMs).toISOString();
-    await window.supabase.from('users').update({
-      verification_status: verifyType,
-      verification_expiry: expiryDate
-    }).eq('uid', userRow.uid);
+    // Tulis via RPC ketat (SECURITY DEFINER): hanya admin, hanya kolom verifikasi.
+    const { error: _vErr } = await window.supabase.rpc('admin_set_verification', {
+      target_uid: userRow.uid,
+      new_status: verifyType,
+      new_expiry: expiryDate
+    });
+    if (_vErr) throw _vErr;
 
     if(userRow.uid) delete window._verifyCache[userRow.uid];
 
@@ -15254,10 +15272,13 @@ window.removeVerification = async function() {
     const userRow = await _findUserByEmail(email);
     if (!userRow) { statusEl.textContent = '❌ User tidak ditemukan'; return; }
 
-    await window.supabase.from('users').update({
-      verification_status: null,
-      verification_expiry: null
-    }).eq('uid', userRow.uid);
+    // Hapus via RPC ketat (SECURITY DEFINER): hanya admin, hanya kolom verifikasi.
+    const { error: _vErr } = await window.supabase.rpc('admin_set_verification', {
+      target_uid: userRow.uid,
+      new_status: null,
+      new_expiry: null
+    });
+    if (_vErr) throw _vErr;
     if(userRow.uid) delete window._verifyCache[userRow.uid];
     statusEl.textContent = '✅ Verifikasi dihapus.';
     statusEl.style.color = '#6B7280';
