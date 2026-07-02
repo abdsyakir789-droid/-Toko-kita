@@ -10982,6 +10982,37 @@ window.renderProfileFollowCounts = async function() {
 // ── Halaman Toko yang Diikuti ─────────────────────────────────
 
 // Render Story Bar
+// ── Story seen-state (time-aware) ─────────────────────────────
+// Format: { uid: waktu_story_terbaru_yang_sudah_ditonton_ms }.
+// Kompatibel mundur: format lama (array uid) diperlakukan kosong — self-healing,
+// karena story kedaluwarsa 24 jam. Dipakai untuk sorting (#2/#3) & warna ring seen.
+window._storyGetSeenMap = function() {
+  try {
+    const myUid = (window._S && window._S.user) ? (window._S.user.uid || window._S.user.id) : 'guest';
+    const raw = JSON.parse(localStorage.getItem('ym_story_seen_' + myUid) || '{}');
+    if (Array.isArray(raw)) return {};
+    return (raw && typeof raw === 'object') ? raw : {};
+  } catch(e) { return {}; }
+};
+window._storyIsSeen = function(seenMap, uid, latestMs) {
+  const t = seenMap ? seenMap[uid] : null;
+  return t != null && Number(t) >= Number(latestMs || 0);
+};
+// Re-sort + render ulang story bar pakai data yang sudah dimuat (update real-time tanpa fetch).
+// Comparator tunggal — dipakai load awal maupun setelah menonton story.
+window._resortStoryBar = function() {
+  const cache = window._storyBarCache;
+  if (!cache || !Array.isArray(cache.sellers)) return;
+  const seenMap = window._storyGetSeenMap();
+  const sorted = cache.sellers.slice().sort((a, b) => {
+    const aSeen = window._storyIsSeen(seenMap, a.uid, a._latestStoryMs) ? 1 : 0;
+    const bSeen = window._storyIsSeen(seenMap, b.uid, b._latestStoryMs) ? 1 : 0;
+    if (aSeen !== bSeen) return aSeen - bSeen;   // belum ditonton di depan (#2/#3)
+    return b._latestStoryMs - a._latestStoryMs;   // terbaru paling depan (#1)
+  });
+  renderFollowingStoryBar(cache.user, sorted);
+};
+
 function renderFollowingStoryBar(currentUser, sellers) {
   const bar  = document.getElementById('followingStoryBar');
   const wrap = document.getElementById('followingStoryScroll');
@@ -10989,22 +11020,16 @@ function renderFollowingStoryBar(currentUser, sellers) {
 
   const igGrad = 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)';
 
-  // Baca uid yang sudah dilihat dari localStorage
-  let _seenSet = new Set();
-  try {
-    const myUid = currentUser ? (currentUser.uid || currentUser.id) : 'guest';
-    const seenKey = 'ym_story_seen_' + myUid;
-    const seen = JSON.parse(localStorage.getItem(seenKey) || '[]');
-    _seenSet = new Set(seen);
-  } catch(e) {}
+  // Baca map seen (time-aware) dari localStorage
+  const _seenMap = window._storyGetSeenMap();
 
-  function storyItem({ photoUrl, label, isMe, sellerUid, sellerName, sellerPhoto }) {
+  function storyItem({ photoUrl, label, isMe, sellerUid, sellerName, sellerPhoto, latestMs }) {
     const firstChar = (label||'?')[0].toUpperCase();
     const avatarInner = photoUrl
       ? `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none'">`
       : `<span style="color:#fff;font-size:18px;font-weight:900">${firstChar}</span>`;
 
-    const alreadySeen = !isMe && sellerUid && _seenSet.has(sellerUid);
+    const alreadySeen = !isMe && sellerUid && window._storyIsSeen(_seenMap, sellerUid, latestMs);
     const ringBg  = alreadySeen ? '#d1d5db' : igGrad;
     const seenAttr = !isMe && sellerUid ? `data-story-uid="${sellerUid}" data-story-seen="${alreadySeen ? 1 : 0}"` : '';
 
@@ -11047,7 +11072,8 @@ function renderFollowingStoryBar(currentUser, sellers) {
     isMe: false,
     sellerUid: s.uid,
     sellerName: s.name,
-    sellerPhoto: s.photo_url || ''
+    sellerPhoto: s.photo_url || '',
+    latestMs: s._latestStoryMs || 0
   })).join('');
 
   wrap.innerHTML = meHtml + friendsHtml;
@@ -11073,14 +11099,20 @@ window.openStoryViewer = async function(uid, name, photoUrl) {
 
   if(!stories.length) { showToast('Tidak ada story aktif dari toko ini', 'red'); return; }
 
-  // Tandai story seller ini sudah dilihat di localStorage
+  // Tandai story seller ini sudah dilihat — simpan WAKTU story terbaru yang ditonton
   try {
     const myUid = window._S.user ? (window._S.user.uid || window._S.user.id) : 'guest';
     const seenKey = 'ym_story_seen_' + myUid;
-    const seen = JSON.parse(localStorage.getItem(seenKey) || '[]');
-    if(!seen.includes(uid)) seen.push(uid);
-    if(seen.length > 200) seen.splice(0, seen.length - 200);
-    localStorage.setItem(seenKey, JSON.stringify(seen));
+    const _latestViewedMs = Math.max.apply(null, stories.map(s => new Date(s.created_at).getTime()).concat(0));
+    const seenMap = window._storyGetSeenMap();
+    seenMap[uid] = Math.max(Number(seenMap[uid] || 0), _latestViewedMs);
+    // Batasi ukuran: simpan 200 entri terbaru (buang yang waktunya paling lama)
+    const _keys = Object.keys(seenMap);
+    if(_keys.length > 200){
+      _keys.sort((x,y) => Number(seenMap[x]) - Number(seenMap[y]));
+      _keys.slice(0, _keys.length - 200).forEach(k => { delete seenMap[k]; });
+    }
+    localStorage.setItem(seenKey, JSON.stringify(seenMap));
     // Update ring avatar langsung tanpa re-render
     const el = document.querySelector('[data-story-uid="' + uid + '"]');
     if(el) {
@@ -11278,6 +11310,9 @@ window.closeStoryViewer = function() {
   if(window._storyAudio) { window._storyAudio.pause(); window._storyAudio = null; }
   const optionsMenu = document.getElementById('storyOptionsMenu');
   if(optionsMenu) optionsMenu.style.display = 'none';
+  // Update urutan story bar secara real-time: yang sudah ditonton pindah ke belakang,
+  // yang belum ditonton naik ke depan — tanpa perlu refresh/fetch ulang.
+  if (typeof window._resortStoryBar === 'function') window._resortStoryBar();
 };
 
 // ── Hapus Status (menu titik tiga) ────────────────────────────────
@@ -12265,9 +12300,12 @@ window.openFollowingStores = async function() {
     loadingEl.style.display = 'none';
 
     // Selalu render Story Bar dulu ("Cerita Anda" harus selalu tampil)
-    const sellersForStory = (users||[]).filter(s => sellersWithStory.has(s.uid))
-      .sort((a, b) => new Date(_latestStoryTime[a.uid] || 0) - new Date(_latestStoryTime[b.uid] || 0));
-    renderFollowingStoryBar(u, sellersForStory);
+    // Data dasar story bar (dengan waktu story terbaru), disimpan agar bisa di-sort ulang
+    // secara real-time tanpa fetch (dipakai saat story viewer ditutup).
+    const _storyBaseSellers = (users||[]).filter(s => sellersWithStory.has(s.uid))
+      .map(s => Object.assign({}, s, { _latestStoryMs: new Date(_latestStoryTime[s.uid] || 0).getTime() }));
+    window._storyBarCache = { user: u, sellers: _storyBaseSellers };
+    window._resortStoryBar();
 
     if(users.length === 0) {
       emptyEl.style.display = 'block';
