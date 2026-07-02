@@ -142,7 +142,31 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
 
-  // ── App shell: Cache First ──
+  // ── App shell HTML (navigasi, / dan /index.html): NETWORK FIRST ──
+  // Ambil versi terbaru dari server dulu supaya setiap deploy langsung kepakai
+  // (tidak lagi terjebak index.html lama dari cache). Kalau network gagal/offline
+  // (timeout 3 detik), fallback ke cache — aplikasi tetap bisa dibuka offline.
+  const isAppShell = req.mode === 'navigate'
+    || url.pathname === '/'
+    || url.pathname === '/index.html';
+  if (isAppShell) {
+    event.respondWith(
+      fetchWithTimeout(req, 3000)
+        .then(response => {
+          if (response && response.status === 200) {
+            const toCache = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(req, toCache));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(req).then(c => c || caches.match('/index.html')).then(c => c || caches.match('/'))
+        )
+    );
+    return;
+  }
+
+  // ── Aset same-origin lain: Cache First (tidak diubah) ──
   event.respondWith(
     caches.match(req).then(cached => {
       const networkFetch = fetchWithTimeout(req, 5000)
