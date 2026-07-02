@@ -6113,7 +6113,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('beforeunload', () => {
   if(window._FB && window._S?.user) window._FB.setPresence(false).catch(()=>{});
 });
-const _KV_ADS_TTL    = 5 * 60; // 5 menit (detik, untuk Worker expirationTtl)
+const _KV_ADS_TTL    = 15 * 60; // 15 menit (detik, untuk Worker expirationTtl) — dinaikkan dari 5 menit agar tidak expire sebelum siklus background sync IndexedDB (10 menit) berikutnya
 
 async function _kvGet(key) {
   try {
