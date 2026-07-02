@@ -6748,6 +6748,21 @@ window.stopNotifListener = function() {
 };
 
 // ── Helper: render satu item ulasan ──
+// ── Sisipkan badge verifikasi (Centang Biru/Silver) ke nama pengulas ──
+// Dipanggil setelah _renderReviewItem() di-render ke DOM. Hanya menambahkan
+// span badge, tidak mengubah struktur/logika ulasan.
+function injectReviewBadges(containerEl) {
+  if (!containerEl || typeof getVerificationStatus !== 'function') return;
+  containerEl.querySelectorAll('[data-buyer-uid]').forEach(async (el) => {
+    const uid = el.getAttribute('data-buyer-uid');
+    if (!uid || el.querySelector('.vbadge-blue,.vbadge-silver')) return;
+    try {
+      const status = await getVerificationStatus(uid);
+      if (status) el.insertAdjacentHTML('beforeend', renderVerifyBadge(status));
+    } catch(e) {}
+  });
+}
+
 function _renderReviewItem(r) {
   const stars = [1,2,3,4,5].map(i=>`<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="${i<=r.rating?'#f59e0b':'#e5e7eb'}" stroke="${i<=r.rating?'#f59e0b':'#e5e7eb'}" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`).join('');
   const date = r.created_at ? new Date(r.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '';
@@ -6759,7 +6774,7 @@ function _renderReviewItem(r) {
           ? `<img src="${r.buyer_photo}" loading="lazy" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">`
           : `<div style="width:32px;height:32px;border-radius:50%;background:#10B981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${initials}</div>`}
         <div style="flex:1;min-width:0">
-          <p style="font-size:12px;font-weight:600;color:#111827;margin:0">${r.buyer_name||'Pembeli'}</p>
+          <p data-buyer-uid="${r.buyer_uid||''}" style="font-size:12px;font-weight:600;color:#111827;margin:0">${r.buyer_name||'Pembeli'}</p>
           <div style="display:flex;align-items:center;gap:4px">
             <div style="display:flex;gap:1px">${stars}</div>
             <span style="font-size:10px;color:#9ca3af">${date}</span>
@@ -6879,8 +6894,7 @@ window.loadDetailReviews = async function(adId) {
       </div>`;
 
     el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = `<p style="font-size:12px;color:#ef4444;text-align:center;padding:12px 0">Gagal memuat ulasan</p>`;
+    injectReviewBadges(el);
   }
 };
 
@@ -6923,6 +6937,7 @@ window.openAllReviewsModal = async function(adId) {
     listEl.innerHTML = reviews.map((r,i) =>
       `<div style="border-bottom:${i<reviews.length-1?'1px solid #f1f5f9':'none'}">${_renderReviewItem(r)}</div>`
     ).join('');
+    injectReviewBadges(listEl);
   } catch(e) {
     listEl.innerHTML = `<p style="font-size:12px;color:#ef4444;text-align:center;padding:20px 0">Gagal memuat ulasan</p>`;
   }
@@ -8311,6 +8326,20 @@ function renderProfilePage() {
   const pgb = document.getElementById('profileGoldBadge');
   if(pgb) pgb.innerHTML = _embossBadgeSVG('gold');
   pgb.style.display = admin ? 'inline' : 'none';
+  // Badge verifikasi (Centang Biru/Silver) — tidak mengganggu gold badge admin
+  (async () => {
+    const pnEl = document.getElementById('profileName');
+    if (!pnEl || !u.uid || typeof getVerificationStatus !== 'function') return;
+    pnEl.parentElement.querySelectorAll('.vbadge-blue,.vbadge-silver').forEach(el=>el.remove());
+    try {
+      const status = await getVerificationStatus(u.uid);
+      if (status) {
+        const badge = document.createElement('span');
+        badge.innerHTML = renderVerifyBadge(status);
+        if (badge.firstElementChild) pnEl.parentElement.insertBefore(badge.firstElementChild, pnEl.nextSibling);
+      }
+    } catch(e) {}
+  })();
   // Email & phone
   document.querySelector('#profileEmail span').textContent = u.email||'';
   document.querySelector('#profilePhone span').textContent = u.phone||'Belum diisi';
@@ -9436,6 +9465,20 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
   document.getElementById('chatRoomName').textContent=sellerName;
   const cg=document.getElementById('chatRoomGold'); if(cg) cg.innerHTML=_embossBadgeSVG('gold');
   cg.style.display=isAdmin(window._S.activeAdData?.sellerEmail||'')?'inline':'none';
+  // Badge verifikasi (Centang Biru/Silver) di header chat — tampilan saja, tidak menyentuh logika chat
+  (async () => {
+    const crnEl = document.getElementById('chatRoomName');
+    if (!crnEl || !sellerId || sellerId==='static' || typeof getVerificationStatus !== 'function') return;
+    crnEl.parentElement.querySelectorAll('.vbadge-blue,.vbadge-silver').forEach(el=>el.remove());
+    try {
+      const status = await getVerificationStatus(sellerId);
+      if (status) {
+        const badge = document.createElement('span');
+        badge.innerHTML = renderVerifyBadge(status);
+        if (badge.firstElementChild) crnEl.parentElement.insertBefore(badge.firstElementChild, crnEl.nextSibling);
+      }
+    } catch(e) {}
+  })();
   // Product context — sembunyikan dulu, blok di bawah yang menentukan tampil/tidak
   const ctxBar = document.getElementById('chatProductContext');
   if(ctxBar) { ctxBar.style.display = 'none'; ctxBar.dataset.adId = ''; }
