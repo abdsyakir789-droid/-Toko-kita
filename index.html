@@ -12730,7 +12730,12 @@ function updateCart(){
       const ck=x.cartKey||x.id||'';
       const isChk = prevChecked[ck]!==undefined ? prevChecked[ck] : true;
       // Cari data produk asli untuk dapatkan sellerUid (tidak tersimpan di tabel carts)
-      const _origAd = getAllAds().find(a=>(a.id||'')===(x.id||''));
+      // ad_id di tabel carts bisa berformat "uuid__namaVarian" untuk produk
+      // bervarian (lihat vsBeliSekarang). Potong suffix varian dulu sebelum
+      // dicocokkan ke getAllAds(), supaya produk bervarian yang masih ada
+      // tidak salah kedeteksi sebagai orphan/tidak tersedia.
+      const _baseAdId = (x.id||'').split('__')[0];
+      const _origAd = getAllAds().find(a=>(a.id||'')===_baseAdId);
       const _sellerUid = _origAd?.sellerUid || '';
       const _sellerName = _origAd?.sellerName || x.sellerName || 'Toko';
       // Produk yang iklannya sudah dihapus seller (tidak ketemu di getAllAds()) —
