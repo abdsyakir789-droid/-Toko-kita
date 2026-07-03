@@ -2966,7 +2966,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <div class="flex items-center gap-2 flex-wrap">
         <h2 class="text-sm font-bold text-gray-900">Produk Pilihan</h2>
         <span id="catLabel" class="bg-pl text-primary text-[10px] font-semibold px-2.5 py-1 rounded-full">Semua</span>
-        <span id="prodCount" class="text-[10px] text-gray-400"></span>
+        <span id="prodCount" class="hidden"></span>
       </div>
     </div>
     <div id="productGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5"></div>
@@ -6509,28 +6509,68 @@ window.startUnreadListener = function() {
 
   const uid = window._S.user.uid;
   let _prevTotal = 0;
+  // ── Cache lokal chat_id -> unread count milik user ini. Diisi penuh
+  // sekali lewat calcUnread(), lalu di-update SEBAGIAN (tanpa fetch ulang
+  // ke server) tiap ada event realtime yang payload-nya sudah bawa data
+  // unread_counts terbaru. Ini murni optimasi di sisi client — subscription
+  // channel & data yang dikirim server sama sekali tidak diubah. ──
+  let _unreadCache = {};
+
+  const _applyTotal = (total) => {
+    if(total > _prevTotal) {
+      const chatRoomOpen = document.getElementById('chatRoomOverlay')?.style.display !== 'none';
+      if(!chatRoomOpen && window.playNotifSound) playNotifSound();
+    }
+    _prevTotal = total;
+    updateChatBadge(total);
+  };
 
   const calcUnread = async () => {
     try {
-      const res = await window._supaFetch('/rest/v1/chats?or=(buyer_id.eq.'+uid+',seller_id.eq.'+uid+')&select=unread_counts');
+      const res = await window._supaFetch('/rest/v1/chats?or=(buyer_id.eq.'+uid+',seller_id.eq.'+uid+')&select=chat_id,unread_counts');
       const data = res.ok ? await res.json() : [];
+      _unreadCache = {};
       let total = 0;
       (data||[]).forEach(d => {
         const v = (d.unread_counts || {})[uid];
-        if(typeof v === 'number' && v > 0) total += v;
+        const n = (typeof v === 'number' && v > 0) ? v : 0;
+        if(d.chat_id) _unreadCache[d.chat_id] = n;
+        total += n;
       });
-      if(total > _prevTotal) {
-        const chatRoomOpen = document.getElementById('chatRoomOverlay')?.style.display !== 'none';
-        if(!chatRoomOpen && window.playNotifSound) playNotifSound();
-      }
-      _prevTotal = total;
-      updateChatBadge(total);
+      _applyTotal(total);
     } catch(e) {}
   };
 
   calcUnread();
   _unreadChannel = supabase.channel('unread_' + uid)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, calcUnread)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, (payload) => {
+      try {
+        // ── Fast path DELETE: kalau chat dihapus, buang dari cache ──
+        if(payload?.eventType === 'DELETE') {
+          const oldRow = payload.old;
+          if(oldRow?.chat_id && _unreadCache.hasOwnProperty(oldRow.chat_id)) {
+            delete _unreadCache[oldRow.chat_id];
+            _applyTotal(Object.values(_unreadCache).reduce((a,b)=>a+b,0));
+            return;
+          }
+          calcUnread();
+          return;
+        }
+        // ── Fast path INSERT/UPDATE: kalau payload lengkap & memang chat
+        // milik user ini, update cache langsung tanpa fetch ulang ──
+        const row = payload?.new;
+        const involvesMe = row && (row.buyer_id === uid || row.seller_id === uid);
+        if(involvesMe && row.chat_id && row.unread_counts && typeof row.unread_counts === 'object') {
+          const v = row.unread_counts[uid];
+          _unreadCache[row.chat_id] = (typeof v === 'number' && v > 0) ? v : 0;
+          _applyTotal(Object.values(_unreadCache).reduce((a,b)=>a+b,0));
+          return;
+        }
+        // ── Fallback: payload tidak lengkap / bukan chat user ini / event
+        // tak terduga → fetch ulang seperti sebelumnya (tetap akurat) ──
+        calcUnread();
+      } catch(e) { calcUnread(); }
+    })
     .subscribe();
 };
 
@@ -9879,6 +9919,31 @@ async function sendPushToReceiver(receiverUid, senderName, msgText) {
   }
 }
 
+// ── Optimistic UI: bubble pending saat pesan sedang dikirim ────
+// Murni tampilan lokal — tidak menyentuh data/DB. Begitu pesan asli
+// datang dari realtime (listenChatMessages), innerHTML #chatMessages
+// di-replace penuh sehingga bubble pending ini otomatis tergantikan.
+window._appendPendingChatBubble = function(pendingId, text) {
+  const el = document.getElementById('chatMessages');
+  if(!el) return;
+  const _safeText = (text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const html = `
+  <div class="flex justify-end chat-msg" data-pending-id="${pendingId}" style="position:relative;overflow:hidden;opacity:0.6">
+    <div class="flex flex-col items-end max-w-[75%]">
+      <div class="chat-bubble-me px-3.5 pt-2 pb-1.5 text-xs leading-relaxed w-full break-words overflow-wrap-anywhere" style="word-break:break-word;overflow-wrap:anywhere">
+        <span>${_safeText}</span>
+        <span class="msg-time-inline"><i class="fa-solid fa-clock" style="font-size:8px;margin-right:2px"></i>Mengirim...</span>
+      </div>
+    </div>
+  </div>`;
+  el.insertAdjacentHTML('beforeend', html);
+  el.scrollTop = el.scrollHeight;
+};
+window._removePendingChatBubble = function(pendingId) {
+  const node = document.querySelector('[data-pending-id="'+pendingId+'"]');
+  if(node) node.remove();
+};
+
 window.sendChatMsg = async () => {
   const inp = document.getElementById('chatInput');
   const txt = inp.value.trim();
@@ -9892,23 +9957,41 @@ window.sendChatMsg = async () => {
   window._sendChatInProgress = true;
   var _sendBtn = document.getElementById('chatSendBtn');
   if (_sendBtn) { _sendBtn.disabled = true; _sendBtn.style.opacity = '0.5'; _sendBtn.style.pointerEvents = 'none'; }
+  // ── OPTIMISTIC UI: bersihkan input & tampilkan bubble pending SEKARANG,
+  // sebelum menunggu proses jaringan apapun (poll _FB, cek blacklist, dst).
+  // Ini murni tampilan lokal — kalau nanti gagal di salah satu tahap,
+  // bubble ini dihapus lagi & teks dikembalikan ke input (lihat tiap
+  // cabang gagal di bawah). Alur kirim asli (POST/PATCH/realtime) sama
+  // sekali tidak diubah. ──
+  const _pendingId = 'pend_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+  inp.value = '';
+  inp.style.height = 'auto';
+  if(window._appendPendingChatBubble) _appendPendingChatBubble(_pendingId, txt);
   try {
   // Poll _FB sampai ready
   let _w = 0;
   while(!window._FB && _w < 25) { await new Promise(r=>setTimeout(r,200)); _w++; }
-  if(!window._FB) { showToast('Koneksi belum siap, coba lagi','red'); return; }
+  if(!window._FB) {
+    showToast('Koneksi belum siap, coba lagi','red');
+    if(window._removePendingChatBubble) _removePendingChatBubble(_pendingId);
+    inp.value = txt;
+    return;
+  }
   // Kalau activeChatId belum ada, inisialisasi dulu
   if(!window._S.activeChatId) { 
-    showToast('Chat belum siap, tunggu sebentar','red'); return; 
+    showToast('Chat belum siap, tunggu sebentar','red');
+    if(window._removePendingChatBubble) _removePendingChatBubble(_pendingId);
+    inp.value = txt;
+    return; 
   }
   // ── Cek kata terlarang sebelum kirim (sama seperti pengecekan judul/deskripsi iklan) ──
   const _blWords = await _loadBlacklistWords();
   if(_matchBlacklist(txt, _blWords)) {
     showToast('Pesan mengandung kata yang tidak diperbolehkan','red');
+    if(window._removePendingChatBubble) _removePendingChatBubble(_pendingId);
+    inp.value = txt;
     return;
   }
-  inp.value = '';
-  inp.style.height = 'auto';
   try {
     // ── Cek preview card — kirim ad_card dulu jika ada ──────────
     const _ctxBar = document.getElementById('chatProductContext');
@@ -9988,6 +10071,7 @@ window.sendChatMsg = async () => {
     } else {
       showToast('Gagal kirim: '+(e.message||e.code),'red');
     }
+    if(window._removePendingChatBubble) _removePendingChatBubble(_pendingId);
     inp.value = txt;
   }
   } finally {
