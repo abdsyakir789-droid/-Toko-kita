@@ -553,7 +553,8 @@ button, .btn {
   white-space: nowrap;
   margin: 0 18px;
 }
-.marquee-item span { letter-spacing: -.01em; }
+.marquee-item span { letter-spacing: -.01em; line-height: 1; }
+.marquee-item img { display: block; vertical-align: middle; }
 .marquee-sep {
   font-size: 8px;
   color: #10B981;
@@ -2841,7 +2842,7 @@ h3.text-sm.font-bold.text-gray-800 {
 
   <!-- MARQUEE -->
   <div class="marquee-wrap" style="overflow:hidden;width:100%;padding:0;display:flex;align-items:center;position:relative">
-    <div class="marquee-track" style="display:flex;width:max-content;animation:marqueeScroll 28s linear infinite">
+    <div class="marquee-track" style="display:flex;align-items:center;width:max-content;animation:marqueeScroll 28s linear infinite">
       <!-- Set 1 -->
       <span class="marquee-item">
         <img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1781880188/_nMM0RvR-Xmi2ZqFJN-kbpw_JDFy525OSdWT8of79DsyZQ_cover_hd_vnmrod.png" width="32" height="32" style="flex-shrink:0;object-fit:contain"/>
