@@ -6037,6 +6037,85 @@ window._FB = {
 // user langsung dapat toast yang jelas tanpa menunggu round-trip upload foto,
 // dan sebagai jaring pengaman kedua jika trigger DB yang menolak (race
 // condition antar tab/device).
+//
+// ── Toast KHUSUS batas iklan (terisolasi) ─────────────────────────
+// Sengaja TIDAK memakai showToast() global (yang dipakai checkout/chat/dll)
+// agar perubahan visual & perilaku (sticky + tombol X) hanya berlaku di sini.
+// DOM & style inline sendiri; tidak menyentuh CSS global mana pun.
+window.showAdLimitToast = function() {
+  // ── Stylesheet ter-scope KHUSUS #adLimitToast (disuntik sekali) ──
+  // HP = base (mobile-first); Desktop = @media (min-width:768px) → lebih besar.
+  // Hanya menyasar #adLimitToast; tidak menyentuh CSS global mana pun.
+  if (!document.getElementById('adLimitToastStyle')) {
+    var st = document.createElement('style');
+    st.id = 'adLimitToastStyle';
+    st.textContent =
+      '#adLimitToast{position:fixed;top:50%;left:50%;z-index:999999;box-sizing:border-box;' +
+        'width:calc(100% - 32px);max-width:380px;background:#fff;' +
+        'border:1px solid #FCE1E1;border-left:4px solid #EF4444;border-radius:16px;' +
+        'box-shadow:0 14px 38px rgba(17,24,39,.16),0 3px 10px rgba(17,24,39,.06);' +
+        'padding:15px 14px 15px 16px;display:flex;align-items:flex-start;gap:12px;' +
+        'opacity:0;transition:opacity .25s ease,transform .25s ease;font-family:inherit}' +
+      '#adLimitToast .alt-ic{flex-shrink:0;width:38px;height:38px;border-radius:11px;background:#FEF2F2;display:flex;align-items:center;justify-content:center;margin-top:1px}' +
+      '#adLimitToast .alt-ic svg{width:22px;height:22px}' +
+      '#adLimitToast .alt-body{flex:1;min-width:0;padding-top:1px}' +
+      '#adLimitToast .alt-title{margin:0 0 3px;font-size:13.5px;font-weight:800;color:#111827;line-height:1.35;letter-spacing:-.01em}' +
+      '#adLimitToast .alt-text{margin:0;font-size:12.5px;font-weight:600;color:#111827;line-height:1.55}' +
+      '#adLimitToast .alt-x{flex-shrink:0;width:26px;height:26px;border:none;background:#F3F4F6;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#6B7280;padding:0;margin-top:1px}' +
+      '#adLimitToast .alt-x svg{width:14px;height:14px}' +
+      '#adLimitToast .alt-x:hover{background:#E5E7EB;color:#374151}' +
+      '@media (min-width:768px){' +
+        '#adLimitToast{max-width:480px;padding:24px 24px 24px 26px;border-radius:20px;gap:18px;border-left-width:5px;' +
+          'box-shadow:0 24px 56px rgba(17,24,39,.20),0 6px 18px rgba(17,24,39,.08)}' +
+        '#adLimitToast .alt-ic{width:52px;height:52px;border-radius:15px}' +
+        '#adLimitToast .alt-ic svg{width:30px;height:30px}' +
+        '#adLimitToast .alt-title{font-size:18px;margin:0 0 6px}' +
+        '#adLimitToast .alt-text{font-size:15px;line-height:1.6}' +
+        '#adLimitToast .alt-x{width:34px;height:34px;border-radius:10px}' +
+        '#adLimitToast .alt-x svg{width:17px;height:17px}' +
+      '}';
+    document.head.appendChild(st);
+  }
+
+  var old = document.getElementById('adLimitToast');
+  if (old) old.remove();
+  var el = document.createElement('div');
+  el.id = 'adLimitToast';
+  // Transform (centering + scale) & opacity dikontrol inline oleh JS untuk animasi.
+  el.style.opacity = '0';
+  el.style.transform = 'translate(-50%,-50%) scale(.94)';
+  el.innerHTML =
+    '<div class="alt-ic">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>' +
+        '<line x1="12" y1="9" x2="12" y2="13"></line>' +
+        '<line x1="12" y1="17" x2="12.01" y2="17"></line>' +
+      '</svg>' +
+    '</div>' +
+    '<div class="alt-body">' +
+      '<p class="alt-title">Batas Iklan Tercapai</p>' +
+      '<p class="alt-text">Mohon maaf, batas upload iklan telah tercapai. Akun Standar hanya dapat memasang maksimal 5 iklan. Upgrade ke Premium untuk memasang lebih banyak iklan.</p>' +
+    '</div>' +
+    '<button class="alt-x" id="adLimitToastClose" aria-label="Tutup">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+        '<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>' +
+      '</svg>' +
+    '</button>';
+  document.body.appendChild(el);
+  var closeToast = function() {
+    el.style.opacity = '0';
+    el.style.transform = 'translate(-50%,-50%) scale(.94)';
+    setTimeout(function() { if (el && el.parentNode) el.remove(); }, 250);
+  };
+  var btn = el.querySelector('#adLimitToastClose');
+  if (btn) btn.addEventListener('click', closeToast);
+  // Sticky: TIDAK auto-hilang. User menutup manual via tombol X.
+  requestAnimationFrame(function() {
+    el.style.opacity = '1';
+    el.style.transform = 'translate(-50%,-50%) scale(1)';
+  });
+};
+
 (function() {
   const _AD_QUOTA_LIMIT = 5;
   const _AD_QUOTA_WHITELIST_EMAILS = ['abdsyakir160@gmail.com', 'abdsyakir164@gmail.com'];
@@ -6059,13 +6138,13 @@ window._FB = {
     const user = window._S && window._S.user;
     if (user) {
       const exceeded = await _isAdQuotaExceeded(user.email, user.uid);
-      if (exceeded) { showToast(_AD_QUOTA_TOAST, 'red'); return; }
+      if (exceeded) { showAdLimitToast(); return; }
     }
     try {
       return await _origPostAd(...args);
     } catch(e) {
       // Jaring pengaman: trigger DB yang menolak (mis. race condition)
-      if ((e.message||'').includes('AD_QUOTA_EXCEEDED')) { showToast(_AD_QUOTA_TOAST, 'red'); return; }
+      if ((e.message||'').includes('AD_QUOTA_EXCEEDED')) { showAdLimitToast(); return; }
       throw e;
     }
   };
