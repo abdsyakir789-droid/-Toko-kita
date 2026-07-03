@@ -37,6 +37,25 @@ async function pushToOneUser(userId, title, body, url) {
   }
 }
 
+// ── Cek konten foto pakai Workers AI sebelum disimpan ke R2 ──
+async function _checkExplicitImage(env, inputBytes) {
+  if (!env.AI) return false;
+  try {
+    const res = await env.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
+      image: [...inputBytes],
+      prompt:
+        "Look at this image carefully. Does it show any of the following: nudity, partial nudity, exposed genitals, exposed breasts or nipples, exposed buttocks, underwear or lingerie as the main subject of the photo, sexual acts, or sexually suggestive content? If there is any doubt, answer YES. Reply with only one word: YES or NO.",
+      max_tokens: 12,
+    });
+    const verdict = String(res?.description || "").trim().toUpperCase();
+    const saidNo = /^NO\b/.test(verdict);
+    return !saidNo;
+  } catch (e) {
+    console.warn("[explicit image check]", e.message);
+    return false; // fail-open: error infra jangan blokir penjual
+  }
+}
+
 // Logic hapus key dari R2, dipakai bareng oleh DELETE (dari client) dan
 // POST /delete-batch (dipanggil dari Supabase cron job via pg_net).
 async function deleteKeysFromR2(env, body) {
@@ -160,7 +179,18 @@ export default {
         const key =
           folder + "/" + Date.now() + "-" + Math.random().toString(36).slice(2) + "." + ext;
 
-        await env.R2_BUCKET.put(key, file.stream(), {
+        const inputBytes = new Uint8Array(await file.arrayBuffer());
+
+        // ── Cek konten foto sebelum disimpan ──
+        const isExplicit = await _checkExplicitImage(env, inputBytes);
+        if (isExplicit) {
+          return new Response(
+            JSON.stringify({ error: "EXPLICIT_CONTENT: Foto melanggar pedoman komunitas" }),
+            { status: 422, headers: { ...cors, "Content-Type": "application/json" } }
+          );
+        }
+
+        await env.R2_BUCKET.put(key, inputBytes, {
           httpMetadata: { contentType: file.type || "image/jpeg" },
         });
 
