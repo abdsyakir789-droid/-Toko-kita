@@ -6402,7 +6402,7 @@ async function _writeAllCaches(ads) {
   } catch(e) {}
 }
 
-async function startAdsListener() {
+async function startAdsListener(force) {
   if(_adsChannel) { supabase.removeChannel(_adsChannel); _adsChannel = null; }
 
   const isOffline = !navigator.onLine;
@@ -6422,9 +6422,12 @@ async function startAdsListener() {
     if(window.loadSponsorRow) setTimeout(() => window.loadSponsorRow(), 300);
 
     // Background sync dari Supabase — SKIP kalau cache masih fresh (belum lewat TTL)
-    // Realtime listener di bawah sudah cukup nangkep perubahan data selama cache fresh
+    // Realtime listener di bawah sudah cukup nangkep perubahan data selama cache fresh.
+    // KECUALI force=true (mis. dari pull-to-refresh manual): user minta data terbaru
+    // SEKARANG, jadi paksa fetch walau cache masih fresh. Cache lama tetap tampil dulu
+    // (sudah di-_applyAds di atas), perubahan muncul setelah fetch selesai — no blank.
     const isFresh = await _isAdsCacheFresh();
-    if (!isFresh) {
+    if (force || !isFresh) {
       _loadAllAds().then(async ads => {
         await _writeAllCaches(ads);
         _applyAds(ads);
@@ -21569,7 +21572,7 @@ window.closeKelolaToko = function() {
       // itu sebabnya semua foto sempat blank total saat pull-to-refresh.
       try {
         if (typeof window.startAdsListener === 'function') {
-          window.startAdsListener().catch(e => console.warn('[PTR] startAdsListener error:', e && e.message || e));
+          window.startAdsListener(true).catch(e => console.warn('[PTR] startAdsListener error:', e && e.message || e));
         } else {
           location.reload();
           return;
