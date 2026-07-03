@@ -18081,30 +18081,10 @@ window.requirePin = function(callback) {
       if(!r.ok) return;
       const rows = await r.json();
       if(!Array.isArray(rows)) return;
-      let remote = rows.map(x => ({ id: x.ad_id, title: x.title||'', price: x.price||0, imgUrl: x.img_url||'' }));
-
-      // ── Validasi zombie: buang item yang iklannya sudah dihapus dari tabel ads ──
-      if(remote.length) {
-        try {
-          const ids = remote.map(x => x.id).filter(Boolean);
-          const ar = await window._supaFetch('/rest/v1/ads?id=in.(' + ids.join(',') + ')&select=id');
-          if(ar.ok) {
-            const validRows = await ar.json();
-            const validIds = new Set(Array.isArray(validRows) ? validRows.map(a => a.id) : []);
-            const zombies = remote.filter(x => !validIds.has(x.id));
-            if(zombies.length) {
-              remote = remote.filter(x => validIds.has(x.id));
-              // Bersihkan row zombie di Supabase juga (biar device lain ikut bersih)
-              zombies.forEach(z => {
-                window._supaFetch('/rest/v1/wishlists?user_uid=eq.' + window._S.user.uid + '&ad_id=eq.' + z.id, {
-                  method: 'DELETE', prefer: 'return=minimal'
-                }).catch(e => console.warn('[wishlist zombie cleanup]', e.message));
-              });
-            }
-          }
-        } catch(e) { console.warn('[wishlist validate]', e.message); }
-      }
-
+      const remote = rows.map(x => ({ id: x.ad_id, title: x.title||'', price: x.price||0, imgUrl: x.img_url||'' }));
+      // Catatan: validasi zombie tidak lagi dilakukan di sini — sudah ditangani
+      // oleh trigger DB (fn_cleanup_wishlist_on_ad_delete) yang otomatis hapus
+      // row wishlist & cart saat iklan dihapus dari tabel ads.
       // Di device baru: remote menang, hapus wishlist lama dari user lain
       await saveWishlist(remote);
     } catch(e) { console.warn('[wishlist load]', e.message); }
