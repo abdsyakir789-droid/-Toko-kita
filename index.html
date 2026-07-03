@@ -4471,7 +4471,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <span class="text-[9px] font-semibold mt-1">Keranjang</span>
     </button>
     <!-- Beli Sekarang -->
-    <button onclick="handleBeliSekarang()" class="flex-1 rounded-2xl bg-gradient-to-r from-primary to-pd hover:from-pd hover:to-pdd text-white font-black text-sm tracking-wide flex items-center justify-center gap-2 transition-all shadow-[0_4px_14px_rgba(16,185,129,.35)] pt-2.5 pb-2">
+    <button onclick="handleBeliSekarang(this)" class="flex-1 rounded-2xl bg-gradient-to-r from-primary to-pd hover:from-pd hover:to-pdd text-white font-black text-sm tracking-wide flex items-center justify-center gap-2 transition-all shadow-[0_4px_14px_rgba(16,185,129,.35)] pt-2.5 pb-2">
       <i class="fa-solid fa-bolt text-xs"></i> Beli Sekarang
     </button>
   </div>
@@ -18436,7 +18436,7 @@ window.requirePin = function(callback) {
     document.body.style.overflow = 'hidden';
   };
 
-  window.handleBeliSekarang = function(){
+  window.handleBeliSekarang = async function(btn){
     if(window._etalaseIsOpen === false){ showToast('Toko sedang tutup 🔴','red'); return; }
     const p = window._S.activeAdData;
     if(!p) return;
@@ -18444,7 +18444,26 @@ window.requirePin = function(callback) {
     const hasVarian = variants.some(v => v.img_url || v.name);
 
     if(!hasVarian){
-      addToCart(window._S.activeAdId);
+      // ── Loading state singkat pada tombol ──
+      const _bsBtn = btn || null;
+      let _bsPrev = null;
+      if(_bsBtn){
+        _bsPrev = _bsBtn.innerHTML;
+        _bsBtn.disabled = true;
+        _bsBtn.style.opacity = '0.75';
+        _bsBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> Memproses...';
+      }
+      try {
+        // Tunggu simpan ke keranjang (RAM + Supabase) 100% selesai dulu…
+        await addToCart(window._S.activeAdId);
+      } finally {
+        if(_bsBtn){
+          _bsBtn.disabled = false;
+          _bsBtn.style.opacity = '';
+          _bsBtn.innerHTML = _bsPrev;
+        }
+      }
+      // …baru buka keranjang. toggleCart() melakukan re-fetch (_loadCart) yang kini pasti fresh.
       closeDetailDirect();
       toggleCart();
       return;
