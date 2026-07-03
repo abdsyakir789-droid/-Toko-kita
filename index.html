@@ -2900,6 +2900,7 @@ h3.text-sm.font-bold.text-gray-800 {
 
   <!-- SPONSOR ROW -->
   <section class="mt-3">
+    <h2 id="sponsorSectionTitle" class="text-sm font-bold text-gray-900 text-left mb-2">Produk Unggulan</h2>
     <div class="bg-white rounded-2xl p-3.5 border border-amber-100/60" style="border-color:rgba(251,191,36,.18)">
       <div id="sponsorGrid" class="grid grid-cols-2 md:grid-cols-4 gap-2">
         <p class="text-xs text-gray-400 col-span-4 text-center py-2">Memuat sponsor...</p>
@@ -8863,6 +8864,8 @@ window.pcDeleteProduct = async function(pid, encodedName) {
 window.loadSponsorRow = async function() {
   const container = document.getElementById('sponsorGrid');
   if(!container) return;
+  if(window.loadSponsorSectionTitle) loadSponsorSectionTitle();
+  if(window.startSponsorTitleListener) startSponsorTitleListener();
   try {
     const rows = (window._S.fbAds||[]).filter(a => a.is_sponsored).slice(0, 4);
     if(!rows.length) {
@@ -14408,6 +14411,7 @@ if ('serviceWorker' in navigator) {
         <button id="aptab-ads" onclick="switchApTab('ads')" class="ap-tab">Aktivasi Iklan</button>
         <button id="aptab-verify" onclick="switchApTab('verify')" class="ap-tab">Verifikasi User</button>
         <button id="aptab-cleanup" onclick="switchApTab('cleanup')" class="ap-tab">🗑️ Iklan Hantu</button>
+        <button id="aptab-title" onclick="switchApTab('title'); if(window.loadSponsorTitleAdminUI) loadSponsorTitleAdminUI();" class="ap-tab">📝 Judul Section</button>
       </div>
     </div>
 
@@ -14518,6 +14522,30 @@ if ('serviceWorker' in navigator) {
             <i class="fa-solid fa-trash-can"></i> Scan &amp; Hapus Sekarang
           </button>
           <div id="cleanupStatus" class="hidden mt-3 bg-white rounded-xl p-3 text-[11px] text-gray-600 border border-red-100 whitespace-pre-line leading-relaxed"></div>
+        </div>
+      </div>
+
+      <!-- ── Tab: Judul Section (Header Dinamis Produk Sponsor) ── -->
+      <div id="aptab-title-content" style="display:none">
+        <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mb-4">
+          <p class="text-sm font-black text-gray-800 mb-1">📝 Judul Section Produk Sponsor</p>
+          <p class="text-[11px] text-gray-500 mb-3">Judul ini tampil rata kiri di atas 4 kotak iklan (Produk Dipromosikan) di halaman Beranda. Tersimpan permanen &amp; langsung tampil ke semua user.</p>
+          <label class="text-[11px] font-bold text-gray-600 mb-1.5 block">Pilih Judul</label>
+          <select id="sponsorTitleSelect" onchange="onSponsorTitleSelectChange()" class="inp w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm bg-white mb-2">
+            <option value="Produk Unggulan">Produk Unggulan</option>
+            <option value="Lanjut Cek Ini Yuk">Lanjut Cek Ini Yuk</option>
+            <option value="Pilihan Special">Pilihan Special</option>
+            <option value="Barang yang Kamu Cari">Barang yang Kamu Cari</option>
+            <option value="Pilihan Terlaris">Pilihan Terlaris</option>
+            <option value="Penawaran Terpilih">Penawaran Terpilih</option>
+            <option value="__custom__">✏️ Tulis Manual...</option>
+          </select>
+          <div id="sponsorTitleCustomWrap" style="display:none">
+            <input id="sponsorTitleCustomInput" type="text" maxlength="40" placeholder="Judul custom..." class="inp w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm bg-gray-50 mb-2"/>
+          </div>
+          <button onclick="saveSponsorSectionTitle()" class="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold py-3 rounded-2xl text-sm hover:opacity-90 transition-opacity shadow-lg">
+            <i class="fa-solid fa-floppy-disk mr-1"></i> Simpan Judul
+          </button>
         </div>
       </div>
 
@@ -14806,7 +14834,7 @@ window.closeAdminPanel = function() {
 };
 
 window.switchApTab = function(tab) {
-  ['switch','ads','verify','cleanup'].forEach(t => {
+  ['switch','ads','verify','cleanup','title'].forEach(t => {
     const btn = document.getElementById('aptab-' + t);
     const content = document.getElementById('aptab-' + t + '-content');
     if(btn) btn.classList.toggle('active', t === tab);
@@ -15293,6 +15321,93 @@ window.toggleGlobalAds = async function() {
   } catch(e) {
     applyToggleUI(currentlyOn); // rollback
     showToast('Gagal ubah status: ' + (e.message||e), 'red');
+  }
+};
+
+// ── Dinamis Header: Judul Section Produk Sponsor (Admin Panel) ──
+// Tabel: settings (key-value, jsonb), key = 'sponsorSectionTitle'
+// Elemen terkait: h2#sponsorSectionTitle (di atas #sponsorGrid, tidak menyentuh #sponsorGrid)
+window._sponsorTitleOptions = ['Produk Unggulan','Lanjut Cek Ini Yuk','Pilihan Special','Barang yang Kamu Cari','Pilihan Terlaris','Penawaran Terpilih'];
+window._sponsorTitleChannelStarted = false;
+
+window.applySponsorSectionTitle = function(text) {
+  const el = document.getElementById('sponsorSectionTitle');
+  if(el && text) el.textContent = text;
+};
+
+// Load judul dari Supabase & terapkan ke h2 (dipanggil user biasa & admin)
+window.loadSponsorSectionTitle = async function() {
+  try {
+    const _res = await window._supaFetch('/rest/v1/settings?key=eq.sponsorSectionTitle&select=value&limit=1');
+    const _rows = _res.ok ? await _res.json() : [];
+    let raw = _rows[0]?.value;
+    if (typeof raw === 'string') {
+      try { raw = JSON.parse(raw); } catch(e) { /* biarkan raw apa adanya */ }
+    }
+    const title = (typeof raw === 'string' && raw.trim()) ? raw.trim() : window._sponsorTitleOptions[0];
+    if(window._S) window._S.sponsorSectionTitle = title;
+    applySponsorSectionTitle(title);
+  } catch(e) { console.warn('[loadSponsorSectionTitle]', e); }
+};
+
+// Realtime: dengar perubahan key sponsorSectionTitle → update h2 seketika untuk semua user yang online
+window.startSponsorTitleListener = function() {
+  if(window._sponsorTitleChannelStarted || !window.supabase) return;
+  window._sponsorTitleChannelStarted = true;
+  supabase.channel('sponsor_title_realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'settings', filter: 'key=eq.sponsorSectionTitle' }, () => {
+      loadSponsorSectionTitle();
+    })
+    .subscribe();
+};
+
+// ── Admin Panel: isi dropdown sesuai nilai tersimpan saat ini ──
+window.loadSponsorTitleAdminUI = async function() {
+  const sel = document.getElementById('sponsorTitleSelect');
+  if(!sel) return;
+  await loadSponsorSectionTitle();
+  const current = (window._S && window._S.sponsorSectionTitle) || window._sponsorTitleOptions[0];
+  const isPreset = window._sponsorTitleOptions.includes(current);
+  sel.value = isPreset ? current : '__custom__';
+  onSponsorTitleSelectChange();
+  const customInput = document.getElementById('sponsorTitleCustomInput');
+  if(customInput) customInput.value = isPreset ? '' : current;
+};
+
+window.onSponsorTitleSelectChange = function() {
+  const sel = document.getElementById('sponsorTitleSelect');
+  const wrap = document.getElementById('sponsorTitleCustomWrap');
+  if(wrap) wrap.style.display = (sel && sel.value === '__custom__') ? 'block' : 'none';
+};
+
+// Simpan judul baru ke Supabase (PATCH, fallback POST kalau row belum ada) — real-time & permanen
+window.saveSponsorSectionTitle = async function() {
+  const sel = document.getElementById('sponsorTitleSelect');
+  const customInput = document.getElementById('sponsorTitleCustomInput');
+  const title = (sel && sel.value === '__custom__')
+    ? (customInput?.value || '').trim()
+    : (sel?.value || '').trim();
+  if(!title) { showToast('Judul tidak boleh kosong', 'red'); return; }
+  try {
+    // Upsert: kalau row 'sponsorSectionTitle' belum ada -> insert baru,
+    // kalau sudah ada -> update. Satu request, tidak bergantung pada
+    // status PATCH (PATCH ke row yang belum ada tetap balas ok:true
+    // walau 0 baris ter-update, makanya sebelumnya row baru tidak pernah dibuat).
+    const _res = await window._supaFetch('/rest/v1/settings?on_conflict=key', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ key: 'sponsorSectionTitle', value: title })
+    });
+    if (!_res.ok) {
+      const txt = await _res.text();
+      showToast('Gagal simpan (' + _res.status + '): ' + txt, 'red');
+      return;
+    }
+    if(window._S) window._S.sponsorSectionTitle = title;
+    applySponsorSectionTitle(title); // terapkan langsung di device admin sendiri
+    showToast('✅ Judul section berhasil disimpan', 'green');
+  } catch(e) {
+    showToast('Gagal simpan: ' + (e.message||e), 'red');
   }
 };
 
