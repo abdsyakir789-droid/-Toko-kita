@@ -21646,17 +21646,33 @@ window.checkStoreStatus = async function(sellerUid) {
   }
 };
 
-// ── Helper: cek apakah toko buka sekarang ─────────────────────
+// ── Helper: waktu sekarang di-anchor ke jam Mesir (Africa/Cairo) ──
+// Dipakai supaya jam operasional TIDAK ikut jam device pembeli/penjual.
+window._nowInCairo = function() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Africa/Cairo',
+    weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(new Date());
+  const map = {};
+  parts.forEach(p => { map[p.type] = p.value; });
+  const _WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dayIdx = _WD.indexOf(map.weekday);
+  let hh = parseInt(map.hour, 10);
+  if (hh === 24) hh = 0; // guard: beberapa engine format tengah malam sebagai 24
+  const mm = parseInt(map.minute, 10);
+  return { dayIdx, hh, mm };
+};
+
 window.isStoreOpen = function(jamOps) {
   if (!jamOps || !jamOps.length) return true; // belum diatur = anggap buka
-  const now = new Date();
   const _HARI_IDX = ['Ahad','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-  const hariIni = _HARI_IDX[now.getDay()]; // getDay() 0=Minggu/Ahad
+  const _cairo = window._nowInCairo();
+  const hariIni = _HARI_IDX[_cairo.dayIdx]; // hari ini menurut jam Mesir, bukan device
   const jadwal = jamOps.find(j => j.hari === hariIni);
   if (!jadwal || !jadwal.aktif) return false;
   const [bukaH, bukaM] = (jadwal.buka || '00:00').split(':').map(Number);
   const [tutupH, tutupM] = (jadwal.tutup || '23:59').split(':').map(Number);
-  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const nowMin = _cairo.hh * 60 + _cairo.mm;
   const bukaMin = bukaH * 60 + bukaM;
   const tutupMin = tutupH * 60 + tutupM;
 
@@ -21676,7 +21692,7 @@ window.isStoreOpen = function(jamOps) {
 window._getNextOpenTime = function(jamOps) {
   if (!jamOps || !jamOps.length) return null;
   const _HARI_IDX = ['Ahad','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-  const todayIdx = new Date().getDay();
+  const todayIdx = window._nowInCairo().dayIdx; // hari ini menurut jam Mesir
   for (let d = 1; d <= 7; d++) {
     const nextIdx = (todayIdx + d) % 7;
     const jadwal = jamOps.find(j => j.hari === _HARI_IDX[nextIdx]);
