@@ -8041,39 +8041,39 @@ window.renderNotifFull = function(notifs) {
 // ── Event delegation tunggal untuk semua klik di dalam list notifikasi ──
 // Mencegah masalah klik nyasar/harus klik berkali-kali akibat banyak onclick + stopPropagation bertumpuk.
 // Satu listener ini menentukan urutan prioritas: action spesifik (profile/toggle/follow) dulu, baru default (markRead + redirect).
+// Logika aksi spesifik (profile/toggle-expand/follow-back) — dipakai bareng oleh click & touchend
+function _runNotifActionEl(actionEl) {
+  const action = actionEl.getAttribute('data-action');
+  if (action === 'profile') {
+    const uid = actionEl.getAttribute('data-uid');
+    if (uid) goToNotifSenderProfile(uid);
+  } else if (action === 'toggle-expand') {
+    const notifId = actionEl.getAttribute('data-notif-id');
+    if (notifId) toggleNotifExpand(notifId);
+  } else if (action === 'follow-back') {
+    const uid = actionEl.getAttribute('data-uid');
+    const notifId = actionEl.getAttribute('data-notif-id');
+    if (uid && notifId) notifFollowBack(uid, notifId);
+  }
+}
+
+// Logika klik default kartu (tandai dibaca + redirect ke iklan) — dipakai bareng oleh click & touchend
+function _runNotifCardDefault(card) {
+  const notifId = card.getAttribute('data-notif-id');
+  const adId = card.getAttribute('data-ad-id');
+  if (!notifId) return;
+  markNotifRead(notifId, false);
+  card.classList.remove('unread-act');
+  if (adId) {
+    closeNotifFullScreen();
+    setTimeout(() => openDetail(adId), 150);
+  }
+}
+
 function _bindNotifActivityDelegation() {
   const list = document.getElementById('notifActivityList');
   if (!list || list._delegationBound) return;
   list._delegationBound = true;
-
-  // Logika aksi spesifik (profile/toggle-expand/follow-back) — dipakai bareng oleh click & touchend
-  function _runNotifActionEl(actionEl) {
-    const action = actionEl.getAttribute('data-action');
-    if (action === 'profile') {
-      const uid = actionEl.getAttribute('data-uid');
-      if (uid) goToNotifSenderProfile(uid);
-    } else if (action === 'toggle-expand') {
-      const notifId = actionEl.getAttribute('data-notif-id');
-      if (notifId) toggleNotifExpand(notifId);
-    } else if (action === 'follow-back') {
-      const uid = actionEl.getAttribute('data-uid');
-      const notifId = actionEl.getAttribute('data-notif-id');
-      if (uid && notifId) notifFollowBack(uid, notifId);
-    }
-  }
-
-  // Logika klik default kartu (tandai dibaca + redirect ke iklan) — dipakai bareng oleh click & touchend
-  function _runNotifCardDefault(card) {
-    const notifId = card.getAttribute('data-notif-id');
-    const adId = card.getAttribute('data-ad-id');
-    if (!notifId) return;
-    markNotifRead(notifId, false);
-    card.classList.remove('unread-act');
-    if (adId) {
-      closeNotifFullScreen();
-      setTimeout(() => openDetail(adId), 150);
-    }
-  }
 
   list.addEventListener('click', function(e) {
     const actionEl = e.target.closest('[data-action]');
