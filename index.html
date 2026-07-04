@@ -8107,6 +8107,8 @@ function _bindNotifActivityDelegation() {
   list._delegationBound = true;
   list._lastTouchHandledAt = 0;
   const TOUCH_CLICK_GUARD_MS = 600; // jendela waktu abaikan ghost-click setelah touchend menangani aksi
+  const TOUCH_MOVE_THRESHOLD = 10;  // px — gerakan jari > nilai ini dianggap SCROLL (bukan tap), navigasi dibatalkan
+  list._touchStartX = 0; list._touchStartY = 0;
 
   list.addEventListener('click', function(e) {
     // Kalau baru saja ditangani oleh touchend (dalam jendela waktu ini), abaikan sepenuhnya.
@@ -8128,12 +8130,31 @@ function _bindNotifActivityDelegation() {
     _runNotifCardDefault(card);
   });
 
+  // Rekam titik awal sentuhan — dipakai untuk membedakan tap vs scroll (touch threshold).
+  list.addEventListener('touchstart', function(e) {
+    const t = e.touches && e.touches[0];
+    list._touchStartX = t ? t.clientX : 0;
+    list._touchStartY = t ? t.clientY : 0;
+  }, { passive: true });
+
   // Fallback khusus iOS Safari: touchend lebih reliable daripada synthetic click,
   // karena click sintetis pada <div>/<span> non-native sering butuh tap berkali-kali di iOS PWA.
   // Mencakup semua aksi (profile, follow-back, toggle-expand) + klik default kartu ke detail iklan.
   list.addEventListener('touchend', function(e) {
+    // Bedakan tap vs scroll: hitung jarak jari dari titik touchstart.
+    const _t = e.changedTouches && e.changedTouches[0];
+    const _movedFar = _t
+      ? (Math.hypot(_t.clientX - (list._touchStartX||0), _t.clientY - (list._touchStartY||0)) > TOUCH_MOVE_THRESHOLD)
+      : false;
+
     const actionEl = e.target.closest('[data-action]');
     if (actionEl) {
+      // Threshold HANYA untuk navigasi profil/nama — scroll tak boleh memicu pindah halaman.
+      // toggle-expand ("Lihat Selengkapnya") & follow-back sengaja TIDAK diubah perilakunya.
+      if (actionEl.getAttribute('data-action') === 'profile' && _movedFar) {
+        list._lastTouchHandledAt = Date.now(); // cegah ghost-click ikut memicu navigasi
+        return;
+      }
       e.preventDefault();
       list._lastTouchHandledAt = Date.now();
       _runNotifActionEl(actionEl);
@@ -8141,6 +8162,11 @@ function _bindNotifActivityDelegation() {
     }
     const card = e.target.closest('.notif-act-item');
     if (!card) return;
+    // Scroll yang berakhir di atas kartu → jangan buka detail iklan.
+    if (_movedFar) {
+      list._lastTouchHandledAt = Date.now(); // cegah ghost-click ikut memicu navigasi
+      return;
+    }
     e.preventDefault();
     list._lastTouchHandledAt = Date.now();
     _runNotifCardDefault(card);
