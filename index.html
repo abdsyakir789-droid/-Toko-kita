@@ -8044,31 +8044,24 @@ function _bindNotifActivityDelegation() {
   if (!list || list._delegationBound) return;
   list._delegationBound = true;
 
-  list.addEventListener('click', function(e) {
-    const actionEl = e.target.closest('[data-action]');
-    if (actionEl) {
-      // Hindari double-trigger jika sudah ditangani oleh fallback touchend (khusus iOS) di bawah
-      if (actionEl._handledByTouch) { actionEl._handledByTouch = false; return; }
-      e.preventDefault();
-      e.stopPropagation();
-      const action = actionEl.getAttribute('data-action');
-      if (action === 'profile') {
-        const uid = actionEl.getAttribute('data-uid');
-        if (uid) goToNotifSenderProfile(uid);
-      } else if (action === 'toggle-expand') {
-        const notifId = actionEl.getAttribute('data-notif-id');
-        if (notifId) toggleNotifExpand(notifId);
-      } else if (action === 'follow-back') {
-        const uid = actionEl.getAttribute('data-uid');
-        const notifId = actionEl.getAttribute('data-notif-id');
-        if (uid && notifId) notifFollowBack(uid, notifId);
-      }
-      return; // jangan jalankan default click card
+  // Logika aksi spesifik (profile/toggle-expand/follow-back) — dipakai bareng oleh click & touchend
+  function _runNotifActionEl(actionEl) {
+    const action = actionEl.getAttribute('data-action');
+    if (action === 'profile') {
+      const uid = actionEl.getAttribute('data-uid');
+      if (uid) goToNotifSenderProfile(uid);
+    } else if (action === 'toggle-expand') {
+      const notifId = actionEl.getAttribute('data-notif-id');
+      if (notifId) toggleNotifExpand(notifId);
+    } else if (action === 'follow-back') {
+      const uid = actionEl.getAttribute('data-uid');
+      const notifId = actionEl.getAttribute('data-notif-id');
+      if (uid && notifId) notifFollowBack(uid, notifId);
     }
+  }
 
-    // Default: klik di area kosong card → tandai dibaca + redirect ke produk jika ada
-    const card = e.target.closest('.notif-act-item');
-    if (!card) return;
+  // Logika klik default kartu (tandai dibaca + redirect ke iklan) — dipakai bareng oleh click & touchend
+  function _runNotifCardDefault(card) {
     const notifId = card.getAttribute('data-notif-id');
     const adId = card.getAttribute('data-ad-id');
     if (!notifId) return;
@@ -8078,17 +8071,42 @@ function _bindNotifActivityDelegation() {
       closeNotifFullScreen();
       setTimeout(() => openDetail(adId), 150);
     }
+  }
+
+  list.addEventListener('click', function(e) {
+    const actionEl = e.target.closest('[data-action]');
+    if (actionEl) {
+      // Hindari double-trigger jika sudah ditangani oleh fallback touchend (khusus iOS) di bawah
+      if (actionEl._handledByTouch) { actionEl._handledByTouch = false; return; }
+      e.preventDefault();
+      e.stopPropagation();
+      _runNotifActionEl(actionEl);
+      return; // jangan jalankan default click card
+    }
+
+    // Default: klik di area kosong card → tandai dibaca + redirect ke produk jika ada
+    const card = e.target.closest('.notif-act-item');
+    if (!card) return;
+    if (card._handledByTouch) { card._handledByTouch = false; return; }
+    _runNotifCardDefault(card);
   });
 
-  // Fallback khusus iOS Safari: touchend lebih reliable daripada synthetic click
-  // untuk elemen <span> di dalam teks panjang yang word-wrap. Hanya untuk "Lihat Selengkapnya"/"Sembunyikan".
+  // Fallback khusus iOS Safari: touchend lebih reliable daripada synthetic click,
+  // karena click sintetis pada <div>/<span> non-native sering butuh tap berkali-kali di iOS PWA.
+  // Mencakup semua aksi (profile, follow-back, toggle-expand) + klik default kartu ke detail iklan.
   list.addEventListener('touchend', function(e) {
-    const actionEl = e.target.closest('[data-action="toggle-expand"]');
-    if (!actionEl) return;
+    const actionEl = e.target.closest('[data-action]');
+    if (actionEl) {
+      e.preventDefault();
+      actionEl._handledByTouch = true;
+      _runNotifActionEl(actionEl);
+      return;
+    }
+    const card = e.target.closest('.notif-act-item');
+    if (!card) return;
     e.preventDefault();
-    actionEl._handledByTouch = true;
-    const notifId = actionEl.getAttribute('data-notif-id');
-    if (notifId) toggleNotifExpand(notifId);
+    card._handledByTouch = true;
+    _runNotifCardDefault(card);
   }, { passive: false });
 }
 if (document.readyState === 'loading') {
