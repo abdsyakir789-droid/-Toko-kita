@@ -1154,6 +1154,7 @@ html,body{overscroll-behavior-y:contain}
   display:flex;align-items:center;gap:12px;
   cursor:pointer;
   transition:background .12s;
+  touch-action:manipulation;
 }
 .notif-act-item:hover{
   background:#fafafa;
@@ -1172,6 +1173,7 @@ html,body{overscroll-behavior-y:contain}
   box-shadow:none;
   margin-top:0;
   overflow:hidden;
+  touch-action:manipulation;
 }
 
 /* ── Broadcast Modal (baca isi lengkap) ── */
@@ -7986,7 +7988,7 @@ window.renderNotifFull = function(notifs) {
 
       // Bangun teks: nama bold + pesan menyambung + waktu abu
       const senderNavAttr = n.senderUid
-        ? ` data-action="profile" data-uid="${n.senderUid}" style="font-weight:700;color:#111827;cursor:pointer"`
+        ? ` data-action="profile" data-uid="${n.senderUid}" style="font-weight:700;color:#111827;cursor:pointer;touch-action:manipulation"`
         : ` style="font-weight:700;color:#111827"`;
       const senderBold = n.senderName ? `<span${senderNavAttr}>${n.senderName}</span> ` : '';
       const msgText = (n.message||'').replace(n.senderName||'__NONE__','').trim();
@@ -7997,10 +7999,10 @@ window.renderNotifFull = function(notifs) {
       const isLongMsg = msgText.length > MAX_CHARS;
       const shortMsg = isLongMsg ? msgText.slice(0, MAX_CHARS).trim() + '…' : msgText;
       const expandToggleHtml = isLongMsg
-        ? ` <span data-action="toggle-expand" data-notif-id="${n.id}" role="button" style="color:#10B981;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block">Lihat Selengkapnya</span>`
+        ? ` <span data-action="toggle-expand" data-notif-id="${n.id}" role="button" style="color:#10B981;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block;touch-action:manipulation">Lihat Selengkapnya</span>`
         : '';
       const msgHtml = isLongMsg
-        ? `<span id="notifMsgShort-${n.id}">${shortMsg}${expandToggleHtml}</span><span id="notifMsgFull-${n.id}" style="display:none">${msgText} <span data-action="toggle-expand" data-notif-id="${n.id}" role="button" style="color:#10B981;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block">Sembunyikan</span></span>`
+        ? `<span id="notifMsgShort-${n.id}">${shortMsg}${expandToggleHtml}</span><span id="notifMsgFull-${n.id}" style="display:none">${msgText} <span data-action="toggle-expand" data-notif-id="${n.id}" role="button" style="color:#10B981;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block;touch-action:manipulation">Sembunyikan</span></span>`
         : msgText;
 
       // Tombol "Ikuti Balik" untuk notif tipe follow
@@ -8012,7 +8014,7 @@ window.renderNotifFull = function(notifs) {
               <button disabled style="background:transparent;color:#6b7280;border:1px solid #e5e7eb;font-size:12px;font-weight:600;padding:6px 14px;border-radius:10px;cursor:default;white-space:nowrap">Mengikuti</button>
             </div>`
           : `<div style="margin-top:6px;display:flex;justify-content:flex-end">
-              <button id="notifFollowBtn-${n.id}" data-action="follow-back" data-uid="${n.senderUid}" data-notif-id="${n.id}" style="background:#10B981;color:#fff;border:none;font-size:12px;font-weight:600;padding:6px 14px;border-radius:10px;cursor:pointer;white-space:nowrap">Ikuti Balik</button>
+              <button id="notifFollowBtn-${n.id}" data-action="follow-back" data-uid="${n.senderUid}" data-notif-id="${n.id}" style="background:#10B981;color:#fff;border:none;font-size:12px;font-weight:600;padding:6px 14px;border-radius:10px;cursor:pointer;white-space:nowrap;touch-action:manipulation">Ikuti Balik</button>
             </div>`;
       }
 
