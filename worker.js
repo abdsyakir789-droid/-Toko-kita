@@ -1,3 +1,4 @@
+// deploy: filter foto explicit aktif
 // worker.js
 // ── Berdasarkan source asli yallamart-upload (ditarik dari Cloudflare) ──
 // Perubahan 1: setelah upload foto folder "ads" sukses, kirim message ke
