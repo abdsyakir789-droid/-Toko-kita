@@ -7201,6 +7201,15 @@ window.openReviewWrite = function(adId, adTitle, adImg, sellerUid) {
   document.getElementById('reviewComment').value = '';
   setReviewRating(0);
 
+  // Pastikan tombol kirim selalu dalam keadaan normal saat form dibuka
+  const _btnReset = document.getElementById('btnSubmitReview');
+  if(_btnReset) {
+    _btnReset.disabled = false;
+    _btnReset.style.background = '#10B981';
+    _btnReset.style.cursor = 'pointer';
+    _btnReset.innerHTML = 'Kirim Ulasan';
+  }
+
   // Tampilkan info produk
   document.getElementById('reviewWriteProduct').innerHTML = `
     ${adImg ? `<img src="${adImg}" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0">` : ''}
@@ -7273,6 +7282,13 @@ window.submitReview = async function() {
     if(!_res.ok) throw new Error(await _res.text());
     showToast('Ulasan berhasil dikirim!','green');
     trackEvent('submit_review', { item_id: _reviewAdId, rating: _reviewRating });
+    // Kembalikan tombol ke keadaan normal setelah sukses (jangan stuck spinner)
+    if(btn) {
+      btn.disabled = false;
+      btn.style.background = '#10B981';
+      btn.style.cursor = 'pointer';
+      btn.innerHTML = 'Kirim Ulasan';
+    }
     closeReviewWrite();
     // Refresh section ulasan di halaman detail produk jika produk yang sama sedang dibuka
     const detailReviewsEl = document.getElementById('detailReviews');
