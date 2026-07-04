@@ -7098,7 +7098,6 @@ var _reviewAdId = '';
 var _reviewAdTitle = '';
 var _reviewAdImg = '';
 var _reviewSellerUid = '';
-var _reviewOrderId = null; // id pesanan spesifik yang sedang diulas — dipakai untuk mengunci ulasan per pesanan
 
 window.openReviewFullScreen = async function(adId, adTitle, adImg, sellerUid) {
   const fs = document.getElementById('reviewFullScreen');
@@ -7119,7 +7118,9 @@ window.openReviewFullScreen = async function(adId, adTitle, adImg, sellerUid) {
     // Ambil ulasan yang sudah ditulis
     const _rRes = await window._supaFetch('/rest/v1/reviews?buyer_uid=eq.'+uid+'&select=*&order=created_at.desc');
     const myReviews = _rRes.ok ? await _rRes.json() : [];
-    const reviewedAdIds = myReviews.map(r => r.ad_id);
+    // Peta ulasan per produk (satu baris per ad_id karena sistem overwrite)
+    const reviewMap = {};
+    myReviews.forEach(r => { if(!reviewMap[r.ad_id]) reviewMap[r.ad_id] = r; });
 
     if(!orders.length && !myReviews.length) {
       body.innerHTML = `<div style="text-align:center;padding:64px 16px">
@@ -7131,26 +7132,13 @@ window.openReviewFullScreen = async function(adId, adTitle, adImg, sellerUid) {
     }
 
     // Render: pesanan belum diulas dulu, lalu ulasan sudah ditulis
-    // Setiap ulasan terkunci ke satu order_id spesifik (kolom 'order_id' di tabel reviews).
-    // Tombol "Ulas" untuk suatu pesanan hanya muncul kalau pesanan itu BELUM PERNAH dipakai
-    // untuk ulasan produk tsb — begitu dipakai, langsung terkunci sampai ada pesanan baru lagi.
-    const reviewByAdId = {};
-    myReviews.forEach(r => { if(r.ad_id) reviewByAdId[r.ad_id] = r; });
-    const _seenReviewableAgain = new Set();
     const pendingOrders = orders.filter(o => {
       const _xid = o.ad_id||((o.items&&o.items[0]&&o.items[0].id)||'');
-      // ad_id tidak bisa dikenali dari order ini (biasanya order lama dari checkout keranjang
-      // yang tidak menyimpan ad_id/item id) → jangan tampilkan tombol Ulas, karena ulasan yang
-      // dikirim tidak akan bisa ditautkan ke produk manapun dan tidak akan pernah muncul di halaman detail
-      if(!_xid) return false;
-      const _existingReview = reviewByAdId[_xid];
-      if(!_existingReview) return true; // belum pernah ulas produk ini sama sekali → boleh ulas
-      // Sudah pernah ulas → pesanan ini boleh diulas HANYA kalau ulasan yang ada sekarang
-      // bukan untuk pesanan ini (berarti ini pesanan baru yang belum pernah dipakai untuk ulasan)
-      if(_existingReview.order_id === o.id) return false; // pesanan ini sudah dipakai untuk ulasan yang ada
-      if(_seenReviewableAgain.has(_xid)) return false; // cukup 1 kartu per produk
-      _seenReviewableAgain.add(_xid);
-      return true;
+      if(!_xid) return true;
+      const _rv = reviewMap[_xid];
+      if(!_rv) return true; // belum pernah diulas sama sekali
+      // Jika ada pembelian baru setelah ulasan terakhir dikirim, tombol Ulas muncul lagi (siklus pembelian)
+      return new Date(o.created_at).getTime() > new Date(_rv.created_at).getTime();
     });
     let html = '';
 
@@ -7167,7 +7155,7 @@ window.openReviewFullScreen = async function(adId, adTitle, adImg, sellerUid) {
             <p style="font-size:13px;font-weight:600;color:#111827;margin:0 0 4px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${title}</p>
             <p style="font-size:11px;color:#10B981;font-weight:600;margin:0">Pesanan Selesai</p>
           </div>
-          <button onclick="openReviewWrite('${_adId}','${(title||'').replace(/['"`]/g,"")}','${img}','${o.seller_id||''}',${o.id})" style="background:#10B981;color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:'Plus Jakarta Sans',sans-serif">Ulas</button>
+          <button onclick="openReviewWrite('${_adId}','${(title||'').replace(/['"`]/g,"")}','${img}','${o.seller_id||''}')" style="background:#10B981;color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:'Plus Jakarta Sans',sans-serif">Ulas</button>
         </div>`;
       }
     }
@@ -7202,12 +7190,11 @@ window.closeReviewFullScreen = function() {
   document.body.style.overflow = '';
 };
 
-window.openReviewWrite = function(adId, adTitle, adImg, sellerUid, orderId) {
+window.openReviewWrite = function(adId, adTitle, adImg, sellerUid) {
   _reviewAdId = adId;
   _reviewAdTitle = adTitle;
   _reviewAdImg = adImg;
   _reviewSellerUid = sellerUid;
-  _reviewOrderId = orderId || null;
   _reviewRating = 0;
 
   // Reset UI
@@ -7243,7 +7230,6 @@ window.submitReview = async function() {
   const uid = window._S.user?.uid;
   if(!uid) { showToast('Login dulu','red'); return; }
   if(!_reviewRating) { showToast('Pilih rating bintang dulu','red'); return; }
-  if(!_reviewAdId) { showToast('Produk tidak dikenali, tidak bisa mengirim ulasan','red'); return; }
 
   // Disable tombol + tampilkan spinner
   const btn = document.getElementById('btnSubmitReview');
@@ -7254,78 +7240,50 @@ window.submitReview = async function() {
     btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Mengirim...`;
   }
 
+  // Cek apakah sudah pernah ulas produk ini — kalau ada, timpa (overwrite) bukan blokir
+  const _chkRes = await window._supaFetch('/rest/v1/reviews?buyer_uid=eq.'+uid+'&ad_id=eq.'+_reviewAdId+'&select=id&limit=1');
+  const _chkData = _chkRes.ok ? await _chkRes.json() : [];
+  const _existingReviewId = _chkData.length ? _chkData[0].id : null;
+
   const comment = document.getElementById('reviewComment').value.trim();
-  // Timeout guard — koneksi gagal/lambat tidak boleh bikin tombol mentok selamanya
-  const _reviewTimeout = (ms) => new Promise((_, rej) => setTimeout(()=>rej(new Error('Koneksi timeout, coba lagi')), ms));
-
+  const _payload = {
+    ad_id: _reviewAdId,
+    ad_title: _reviewAdTitle,
+    ad_img: _reviewAdImg,
+    buyer_uid: uid,
+    buyer_name: window._S.user.name || '',
+    buyer_photo: window._S.user.photoUrl || '',
+    seller_uid: _reviewSellerUid,
+    rating: _reviewRating,
+    comment: comment || null,
+    created_at: new Date().toISOString()
+  };
   try {
-    // Cek diam-diam apakah sudah pernah ulas produk ini
-    const _chkRes = await Promise.race([
-      window._supaFetch('/rest/v1/reviews?buyer_uid=eq.'+uid+'&ad_id=eq.'+_reviewAdId+'&select=id&limit=1'),
-      _reviewTimeout(15000)
-    ]);
-    const _chkData = _chkRes.ok ? await _chkRes.json() : [];
-
-    if(_chkData.length) {
-      // Sudah pernah ulas → timpa ulasan lama (bukan bikin baris baru), timestamp diperbarui
-      const _res = await Promise.race([
-        window._supaFetch('/rest/v1/reviews?id=eq.'+_chkData[0].id, {
+    const _res = _existingReviewId
+      ? await window._supaFetch('/rest/v1/reviews?id=eq.'+_existingReviewId, {
           method: 'PATCH',
           headers: { 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            rating: _reviewRating,
-            comment: comment || null,
-            created_at: new Date().toISOString(),
-            order_id: _reviewOrderId
-          })
-        }),
-        _reviewTimeout(15000)
-      ]);
-      if(!_res.ok) throw new Error(await _res.text());
-    } else {
-      const _res = await Promise.race([
-        window._supaFetch('/rest/v1/reviews', {
+          body: JSON.stringify(_payload)
+        })
+      : await window._supaFetch('/rest/v1/reviews', {
           method: 'POST',
           headers: { 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            ad_id: _reviewAdId,
-            ad_title: _reviewAdTitle,
-            ad_img: _reviewAdImg,
-            buyer_uid: uid,
-            buyer_name: window._S.user.name || '',
-            buyer_photo: window._S.user.photoUrl || '',
-            seller_uid: _reviewSellerUid,
-            rating: _reviewRating,
-            comment: comment || null,
-            order_id: _reviewOrderId
-          })
-        }),
-        _reviewTimeout(15000)
-      ]);
-      if(!_res.ok) throw new Error(await _res.text());
-    }
-
+          body: JSON.stringify(_payload)
+        });
+    if(!_res.ok) throw new Error(await _res.text());
     showToast('Ulasan berhasil dikirim!','green');
     trackEvent('submit_review', { item_id: _reviewAdId, rating: _reviewRating });
-    // Kembalikan tombol ke kondisi normal — sebelumnya cuma direset di jalur gagal,
-    // sehingga setelah sukses kirim, tombol tetap "Mengirim..." sampai form dibuka ulang
-    if(btn) {
-      btn.disabled = false;
-      btn.style.background = '#10B981';
-      btn.style.cursor = 'pointer';
-      btn.innerHTML = 'Kirim Ulasan';
-    }
     closeReviewWrite();
     // Refresh section ulasan di halaman detail produk jika produk yang sama sedang dibuka
     const detailReviewsEl = document.getElementById('detailReviews');
     if(detailReviewsEl && _reviewAdId) {
       window.loadDetailReviews(_reviewAdId);
     }
-    // Refresh halaman ulasan
+    // Refresh halaman ulasan — tombol Ulas akan hilang lagi sampai ada pembelian baru
     openReviewFullScreen();
   } catch(e) {
     showToast('Gagal kirim ulasan: '+(e.message||e),'red');
-    // Kembalikan tombol ke semula jika gagal — tidak boleh mentok di "Mengirim..."
+    // Kembalikan tombol ke semula jika gagal
     if(btn) {
       btn.disabled = false;
       btn.style.background = '#10B981';
