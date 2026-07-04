@@ -7927,9 +7927,23 @@ window.renderNotifFull = function(notifs) {
           _photoCache[uid] = _rows[0]?.photo_url || '';
         } catch(e) { _photoCache[uid] = ''; }
       })).then(() => {
-        if(document.getElementById('notifFullScreen')?.classList.contains('active')) {
-          renderNotifFull(window._S.notifs || []);
-        }
+        if(!document.getElementById('notifFullScreen')?.classList.contains('active')) return;
+        // Update avatar IN-PLACE (tanpa rebuild seluruh list) supaya node yang sedang
+        // di-tap user tidak diganti mendadak → cegah "harus tap berkali-kali".
+        uidsToFetch.forEach(function(_u){
+          const _url = _photoCache[_u];
+          if(!_url) return;
+          document.querySelectorAll('.notif-act-icon[data-uid="'+_u+'"]').forEach(function(iconEl){
+            if(iconEl.querySelector('img')) return; // sudah ada foto
+            const _img = document.createElement('img');
+            _img.src = _url;
+            _img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+            _img.onerror = function(){ this.style.display='none'; if(this.nextSibling) this.nextSibling.style.display='flex'; };
+            const _fb = iconEl.querySelector('div');
+            if(_fb) _fb.style.display = 'none';
+            iconEl.insertBefore(_img, iconEl.firstChild);
+          });
+        });
       });
     }
 
@@ -7946,9 +7960,15 @@ window.renderNotifFull = function(notifs) {
           _followBackCache[senderUid] = !!_frRows[0];
         } catch(e) { _followBackCache[senderUid] = false; }
       })).then(() => {
-        if(document.getElementById('notifFullScreen')?.classList.contains('active')) {
-          renderNotifFull(window._S.notifs || []);
-        }
+        if(!document.getElementById('notifFullScreen')?.classList.contains('active')) return;
+        // Update tombol follow-back IN-PLACE (tanpa rebuild seluruh list) — sama alasannya:
+        // hindari node diganti mendadak saat user sedang tap. Meniru swap tombol di notifFollowBack().
+        followUidsToCheck.forEach(function(_su){
+          if(_followBackCache[_su] !== true) return;
+          document.querySelectorAll('button[data-action="follow-back"][data-uid="'+_su+'"]').forEach(function(btn){
+            btn.outerHTML = '<button disabled style="background:transparent;color:#6b7280;border:1px solid #e5e7eb;font-size:12px;font-weight:600;padding:6px 14px;border-radius:10px;cursor:default;white-space:nowrap">Mengikuti</button>';
+          });
+        });
       });
     }
 
@@ -8035,6 +8055,17 @@ window.renderNotifFull = function(notifs) {
         </div>
       </div>`;
     }).join('');
+
+    // Restore status "Lihat Selengkapnya" item aktivitas setelah innerHTML di-set ulang.
+    // Meniru pola broadcast (_bcExpandedFs): tanpa ini, backfill foto/follow-back atau
+    // realtime yang re-render akan meng-collapse teks → tampak "auto-close dalam sekejap".
+    const _actExp = window._notifActExpanded || {};
+    Object.keys(_actExp).forEach(function(nid){
+      if(!_actExp[nid]) return;
+      const _sEl = document.getElementById('notifMsgShort-' + nid);
+      const _fEl = document.getElementById('notifMsgFull-' + nid);
+      if(_sEl && _fEl){ _sEl.style.display = 'none'; _fEl.style.display = ''; }
+    });
   }
 };
 
@@ -8074,15 +8105,19 @@ function _bindNotifActivityDelegation() {
   const list = document.getElementById('notifActivityList');
   if (!list || list._delegationBound) return;
   list._delegationBound = true;
+  list._lastTouchHandledAt = 0;
+  const TOUCH_CLICK_GUARD_MS = 600; // jendela waktu abaikan ghost-click setelah touchend menangani aksi
 
   list.addEventListener('click', function(e) {
+    // Kalau baru saja ditangani oleh touchend (dalam jendela waktu ini), abaikan sepenuhnya.
+    // Time-lock di level list ini lebih aman daripada flag per-elemen, karena ghost-click iOS
+    // bisa mendarat di elemen LAIN kalau layout sempat bergeser (mis. teks notif expand/collapse).
+    if (Date.now() - list._lastTouchHandledAt < TOUCH_CLICK_GUARD_MS) return;
+
     const actionEl = e.target.closest('[data-action]');
     if (actionEl) {
-      // Hindari double-trigger jika sudah ditangani oleh fallback touchend (khusus iOS) di bawah
-      if (actionEl._handledByTouch) { actionEl._handledByTouch = false; if(window.showToast) showToast('[DEBUG] click diabaikan (sudah ditangani touchend): '+actionEl.getAttribute('data-action'),'red'); return; }
       e.preventDefault();
       e.stopPropagation();
-      if(window.showToast) showToast('[DEBUG] click jalan: '+actionEl.getAttribute('data-action'),'green');
       _runNotifActionEl(actionEl);
       return; // jangan jalankan default click card
     }
@@ -8090,8 +8125,6 @@ function _bindNotifActivityDelegation() {
     // Default: klik di area kosong card → tandai dibaca + redirect ke produk jika ada
     const card = e.target.closest('.notif-act-item');
     if (!card) return;
-    if (card._handledByTouch) { card._handledByTouch = false; if(window.showToast) showToast('[DEBUG] click card diabaikan (sudah ditangani touchend)','red'); return; }
-    if(window.showToast) showToast('[DEBUG] click card default jalan','green');
     _runNotifCardDefault(card);
   });
 
@@ -8102,16 +8135,14 @@ function _bindNotifActivityDelegation() {
     const actionEl = e.target.closest('[data-action]');
     if (actionEl) {
       e.preventDefault();
-      actionEl._handledByTouch = true;
-      if(window.showToast) showToast('[DEBUG] touchend jalan: '+actionEl.getAttribute('data-action'),'blue');
+      list._lastTouchHandledAt = Date.now();
       _runNotifActionEl(actionEl);
       return;
     }
     const card = e.target.closest('.notif-act-item');
     if (!card) return;
     e.preventDefault();
-    card._handledByTouch = true;
-    if(window.showToast) showToast('[DEBUG] touchend card default jalan','blue');
+    list._lastTouchHandledAt = Date.now();
     _runNotifCardDefault(card);
   }, { passive: false });
 }
@@ -8122,6 +8153,7 @@ if (document.readyState === 'loading') {
 }
 
 // Toggle "Lihat Selengkapnya" / "Sembunyikan" pada teks notifikasi panjang (tanpa re-render ulang list)
+window._notifActExpanded = window._notifActExpanded || {};
 window.toggleNotifExpand = function(notifId) {
   const shortEl = document.getElementById('notifMsgShort-' + notifId);
   const fullEl = document.getElementById('notifMsgFull-' + notifId);
@@ -8129,6 +8161,9 @@ window.toggleNotifExpand = function(notifId) {
   const isShortVisible = shortEl.style.display !== 'none';
   shortEl.style.display = isShortVisible ? 'none' : '';
   fullEl.style.display = isShortVisible ? '' : 'none';
+  // Simpan status supaya tahan saat list di-render ulang (backfill/realtime).
+  // isShortVisible==true → berarti barusan DIBUKA.
+  window._notifActExpanded[notifId] = isShortVisible;
 };
 
 // ── Follow balik dari halaman Notifikasi (tombol "Ikuti Balik") ──
