@@ -8079,9 +8079,10 @@ function _bindNotifActivityDelegation() {
     const actionEl = e.target.closest('[data-action]');
     if (actionEl) {
       // Hindari double-trigger jika sudah ditangani oleh fallback touchend (khusus iOS) di bawah
-      if (actionEl._handledByTouch) { actionEl._handledByTouch = false; return; }
+      if (actionEl._handledByTouch) { actionEl._handledByTouch = false; if(window.showToast) showToast('[DEBUG] click diabaikan (sudah ditangani touchend): '+actionEl.getAttribute('data-action'),'red'); return; }
       e.preventDefault();
       e.stopPropagation();
+      if(window.showToast) showToast('[DEBUG] click jalan: '+actionEl.getAttribute('data-action'),'green');
       _runNotifActionEl(actionEl);
       return; // jangan jalankan default click card
     }
@@ -8089,7 +8090,8 @@ function _bindNotifActivityDelegation() {
     // Default: klik di area kosong card → tandai dibaca + redirect ke produk jika ada
     const card = e.target.closest('.notif-act-item');
     if (!card) return;
-    if (card._handledByTouch) { card._handledByTouch = false; return; }
+    if (card._handledByTouch) { card._handledByTouch = false; if(window.showToast) showToast('[DEBUG] click card diabaikan (sudah ditangani touchend)','red'); return; }
+    if(window.showToast) showToast('[DEBUG] click card default jalan','green');
     _runNotifCardDefault(card);
   });
 
@@ -8101,6 +8103,7 @@ function _bindNotifActivityDelegation() {
     if (actionEl) {
       e.preventDefault();
       actionEl._handledByTouch = true;
+      if(window.showToast) showToast('[DEBUG] touchend jalan: '+actionEl.getAttribute('data-action'),'blue');
       _runNotifActionEl(actionEl);
       return;
     }
@@ -8108,6 +8111,7 @@ function _bindNotifActivityDelegation() {
     if (!card) return;
     e.preventDefault();
     card._handledByTouch = true;
+    if(window.showToast) showToast('[DEBUG] touchend card default jalan','blue');
     _runNotifCardDefault(card);
   }, { passive: false });
 }
