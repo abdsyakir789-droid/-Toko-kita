@@ -7305,6 +7305,14 @@ window.submitReview = async function() {
 
     showToast('Ulasan berhasil dikirim!','green');
     trackEvent('submit_review', { item_id: _reviewAdId, rating: _reviewRating });
+    // Kembalikan tombol ke kondisi normal — sebelumnya cuma direset di jalur gagal,
+    // sehingga setelah sukses kirim, tombol tetap "Mengirim..." sampai form dibuka ulang
+    if(btn) {
+      btn.disabled = false;
+      btn.style.background = '#10B981';
+      btn.style.cursor = 'pointer';
+      btn.innerHTML = 'Kirim Ulasan';
+    }
     closeReviewWrite();
     // Refresh section ulasan di halaman detail produk jika produk yang sama sedang dibuka
     const detailReviewsEl = document.getElementById('detailReviews');
