@@ -7140,7 +7140,10 @@ window.openReviewFullScreen = async function(adId, adTitle, adImg, sellerUid) {
     const _seenReviewableAgain = new Set();
     const pendingOrders = orders.filter(o => {
       const _xid = o.ad_id||((o.items&&o.items[0]&&o.items[0].id)||'');
-      if(!_xid) return true; // ad_id tidak dikenali, biarkan tampil seperti semula
+      // ad_id tidak bisa dikenali dari order ini (biasanya order lama dari checkout keranjang
+      // yang tidak menyimpan ad_id/item id) → jangan tampilkan tombol Ulas, karena ulasan yang
+      // dikirim tidak akan bisa ditautkan ke produk manapun dan tidak akan pernah muncul di halaman detail
+      if(!_xid) return false;
       if(!reviewedAdIds.includes(_xid)) return true; // belum pernah ulas sama sekali → boleh ulas (pertama kali)
       // Sudah pernah ulas produk ini → tombol "Ulas" hanya boleh muncul lagi
       // kalau produk ini sudah dibeli ≥2x, dan cukup satu kartu saja per produk
@@ -7240,6 +7243,7 @@ window.submitReview = async function() {
   const uid = window._S.user?.uid;
   if(!uid) { showToast('Login dulu','red'); return; }
   if(!_reviewRating) { showToast('Pilih rating bintang dulu','red'); return; }
+  if(!_reviewAdId) { showToast('Produk tidak dikenali, tidak bisa mengirim ulasan','red'); return; }
 
   // Disable tombol + tampilkan spinner
   const btn = document.getElementById('btnSubmitReview');
