@@ -4798,13 +4798,14 @@ window.auth = supabase.auth;
 async function compressImage(file, maxW=900, quality=0.78) {
   return new Promise((resolve, reject) => {
     let settled = false;
-    const done = (blob) => { if(settled) return; settled = true; clearTimeout(timer); resolve(blob); };
-    const fail = (err) => { if(settled) return; settled = true; clearTimeout(timer); reject(err instanceof Error ? err : new Error(err || 'Gagal memproses gambar')); };
+    let _objUrl = null;
+    const _cleanup = () => { if(_objUrl){ try { URL.revokeObjectURL(_objUrl); } catch(_e){} _objUrl = null; } };
+    const done = (blob) => { if(settled) return; settled = true; clearTimeout(timer); _cleanup(); resolve(blob); };
+    const fail = (err) => { if(settled) return; settled = true; clearTimeout(timer); _cleanup(); reject(err instanceof Error ? err : new Error(err || 'Gagal memproses gambar')); };
     // Jaring pengaman: kalau proses tak selesai dalam 15 detik, anggap gagal (cegah upload menggantung)
     const timer = setTimeout(() => fail(new Error('Proses foto terlalu lama. Coba pilih foto lain.')), 15000);
-    const reader = new FileReader();
-    reader.onerror = () => fail(new Error('Gagal membaca file foto.'));
-    reader.onload = e => {
+    // Proses gambar dari sebuah src (dataURL atau blob: URL) → kompres via canvas → Blob
+    const processFromSrc = (src) => {
       const img = new Image();
       img.onerror = () => fail(new Error('File foto rusak atau tidak didukung.'));
       img.onload = () => {
@@ -4818,9 +4819,26 @@ async function compressImage(file, maxW=900, quality=0.78) {
           c.toBlob(b => { if(b) done(b); else fail(new Error('Gagal mengompres foto.')); }, 'image/jpeg', quality);
         } catch(err) { fail(err); }
       };
-      img.src = e.target.result;
+      img.src = src;
     };
-    reader.readAsDataURL(file);
+    // Fallback tahan-banting: URL.createObjectURL tidak menyedot file ke memori sebagai base64,
+    // jadi lolos saat FileReader tak tersedia (in-app browser iOS) atau gagal baca (foto iCloud/placeholder/HEIC besar).
+    const useObjectUrl = () => {
+      try { _objUrl = URL.createObjectURL(file); processFromSrc(_objUrl); }
+      catch(err) { fail(new Error('Gagal membaca file foto.')); }
+    };
+    // Jalur utama: FileReader (perilaku lama — TIDAK berubah untuk browser normal).
+    // Kalau FileReader tak ada ATAU gagal baca → fallback ke createObjectURL.
+    if (typeof FileReader === 'undefined') {
+      useObjectUrl();
+    } else {
+      try {
+        const reader = new FileReader();
+        reader.onerror = () => useObjectUrl();
+        reader.onload = e => processFromSrc(e.target.result);
+        reader.readAsDataURL(file);
+      } catch(err) { useObjectUrl(); }
+    }
   });
 }
 
@@ -13733,8 +13751,16 @@ window.updateTaushilStyle = (cb) => {
 };
 window.previewPhoto=input=>{
   const f=input.files[0];if(!f)return;
-  const r=new FileReader();r.onload=e=>{document.getElementById('photoPreview').innerHTML=`<img src="${e.target.result}" class="w-full h-full object-cover rounded-2xl"/>`;};
-  r.readAsDataURL(f);
+  const _show=src=>{document.getElementById('photoPreview').innerHTML=`<img src="${src}" class="w-full h-full object-cover rounded-2xl"/>`;};
+  const _useObjUrl=()=>{ try{ _show(URL.createObjectURL(f)); }catch(_e){ if(window.showToast) showToast('Gagal menampilkan preview foto','red'); } };
+  // Fallback: FileReader tak ada (in-app browser iOS) atau gagal baca → pakai createObjectURL agar preview tetap muncul
+  if(typeof FileReader==='undefined'){ _useObjUrl(); return; }
+  try{
+    const r=new FileReader();
+    r.onerror=()=>_useObjUrl();
+    r.onload=e=>_show(e.target.result);
+    r.readAsDataURL(f);
+  }catch(_e){ _useObjUrl(); }
 };
 window.submitAd=async()=>{
   const title=document.getElementById('adTitle').value.trim();
@@ -18601,14 +18627,22 @@ window.requirePin = function(callback) {
     const file = input.files[0];
     if (!file) return;
     window._varianData[idx].imgFile = file;
-    const reader = new FileReader();
-    reader.onload = e => {
-      window._varianData[idx].imgPreview = e.target.result;
+    const _apply = src => {
+      window._varianData[idx].imgPreview = src;
       // Update preview langsung tanpa re-render semua
       const box = document.getElementById('varianImgBox_' + idx);
-      if (box) box.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"/>`;
+      if (box) box.innerHTML = `<img src="${src}" class="w-full h-full object-cover"/>`;
     };
-    reader.readAsDataURL(file);
+    // Fallback: FileReader tak ada / gagal baca → createObjectURL. Upload tetap pakai imgFile (di-set di atas),
+    // jadi src blob: ini hanya untuk tampilan & tak akan tersimpan (buildVarianPayload memprioritaskan imgFile).
+    const _useObjUrl = () => { try { _apply(URL.createObjectURL(file)); } catch(_e){ if(window.showToast) showToast('Gagal menampilkan preview foto varian','red'); } };
+    if (typeof FileReader === 'undefined') { _useObjUrl(); return; }
+    try {
+      const reader = new FileReader();
+      reader.onerror = () => _useObjUrl();
+      reader.onload = e => _apply(e.target.result);
+      reader.readAsDataURL(file);
+    } catch(_e) { _useObjUrl(); }
   };
 
   // Buka modal varian
