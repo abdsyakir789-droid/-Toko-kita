@@ -1,6 +1,17 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
+<!-- ================================================================
+     🟢 ENVIRONMENT CONFIG — ganti 3 baris ini saat pindah environment
+     (staging <-> production). Ini HARUS jadi script pertama di <head>
+     supaya semua script lain (module maupun non-module) bisa baca
+     window._SUPA_URL / window._SUPA_ANON / window._SUPA_REF sebelum jalan.
+     ================================================================ -->
+<script>
+  window._SUPA_URL  = 'https://ipbxwdqnwcshezzrtxzr.supabase.co';
+  window._SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwYnh3ZHFud2NzaGV6enJ0eHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MTM0NTksImV4cCI6MjA5NTQ4OTQ1OX0.UHaK9Tyd7c48j1q_kdX7C_gQCzojAcfIOQ2IZHEJENg';
+  window._SUPA_REF  = 'ipbxwdqnwcshezzrtxzr';
+</script>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-9VPFMLYW9G"></script>
 <script>
@@ -4763,8 +4774,8 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 // 🟢 SUPABASE CONFIG — Ganti dengan URL & anon key project kamu
 // Dapatkan dari: https://supabase.com/dashboard → Project Settings → API
 // ================================================================
-const SUPABASE_URL  = 'https://jgnjgfuypcelwjztebsy.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
+const SUPABASE_URL  = window._SUPA_URL;
+const SUPABASE_ANON = window._SUPA_ANON;
 window._supaKey = SUPABASE_ANON;
 
 // ================================================================
@@ -5220,7 +5231,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
           var uid = null;
           try { var t=window._S&&window._S._accessToken; if(t){var d=JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); uid=d.sub;} } catch(e){}
           if (!uid) return;
-          fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions?on_conflict=user_id,endpoint', {
+          fetch(`${window._SUPA_URL}/rest/v1/push_subscriptions?on_conflict=user_id,endpoint`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -5305,7 +5316,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
                 var subJson = sub.toJSON();
                 var uid = window._S.user?.uid || window._S.user?.id;
                 if(uid && subJson.endpoint) {
-                  fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions?on_conflict=user_id,endpoint', {
+                  fetch(`${window._SUPA_URL}/rest/v1/push_subscriptions?on_conflict=user_id,endpoint`, {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
@@ -5383,7 +5394,7 @@ function startProfileListener(uid) {
 // ── Helper: Supabase REST fetch langsung dengan token ─────────────
 // Dipakai untuk operasi yang butuh auth tapi Supabase client belum siap
 window._supaFetch = function _supaFetch(path, opts={}) {
-  const SUPA_URL = 'https://jgnjgfuypcelwjztebsy.supabase.co';
+  const SUPA_URL = window._SUPA_URL;
   const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
   const token = window._S?._accessToken || SUPA_KEY;
   const { prefer, headers: extraHeaders, ...restOpts } = opts;
@@ -5435,7 +5446,7 @@ window._FB = {
     let res, json;
     try {
       res = await fetch(
-        'https://jgnjgfuypcelwjztebsy.supabase.co/auth/v1/token?grant_type=password',
+        `${window._SUPA_URL}/auth/v1/token?grant_type=password`,
         {
           method: 'POST',
           headers: {
@@ -5476,7 +5487,7 @@ window._FB = {
   async logout() {
     try {
       // Clear token dari localStorage dulu agar tidak hang
-      const PROJECT_REF = 'jgnjgfuypcelwjztebsy';
+      const PROJECT_REF = window._SUPA_REF;
       const storageKey = 'sb-' + PROJECT_REF + '-auth-token';
       localStorage.removeItem(storageKey);
       // Beri timeout pada signOut agar tidak hang jika jaringan lambat
@@ -6147,11 +6158,12 @@ window.showAdLimitToast = function() {
     const lowerEmail = (email || '').toLowerCase();
     if (_AD_QUOTA_WHITELIST_EMAILS.includes(lowerEmail)) return false;
     try {
-      const r = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(uid) + '&select=ads_posted_total&limit=1');
+      // Hitung iklan yang SEKARANG aktif (bukan counter kumulatif ads_posted_total) →
+      // menghapus iklan otomatis membebaskan kuota. Cukup ambil sampai _AD_QUOTA_LIMIT id.
+      const r = await window._supaFetch('/rest/v1/ads?seller_uid=eq.' + encodeURIComponent(uid) + '&select=id&limit=' + _AD_QUOTA_LIMIT);
       if (!r.ok) return false; // fail-open di client — trigger DB tetap jadi penjaga akhir
       const rows = await r.json();
-      const total = (rows[0] && rows[0].ads_posted_total) || 0;
-      return total >= _AD_QUOTA_LIMIT;
+      return (Array.isArray(rows) ? rows.length : 0) >= _AD_QUOTA_LIMIT;
     } catch(e) { return false; }
   }
 
@@ -6719,7 +6731,7 @@ window.startChatListListener = function() {
       let token = window._S._accessToken;
       if (!token) {
         try {
-          const lsKey = 'sb-jgnjgfuypcelwjztebsy-auth-token';
+          const lsKey = `sb-${window._SUPA_REF}-auth-token`;
           const parsed = JSON.parse(localStorage.getItem(lsKey) || 'null');
           token = parsed?.access_token || null;
           if (token) window._S._accessToken = token;
@@ -6734,7 +6746,7 @@ window.startChatListListener = function() {
       _cdbg('Token OK, mulai query...');
       // Query langsung via REST API dengan token di header — tidak bergantung pada state Supabase client
       // Ini menghindari timeout akibat Supabase client belum fully authenticated saat cached login
-      const SUPA_URL = 'https://jgnjgfuypcelwjztebsy.supabase.co';
+      const SUPA_URL = window._SUPA_URL;
       const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
       const fetchRes = await withTimeout(
         fetch(SUPA_URL + '/rest/v1/chats?or=(buyer_id.eq.' + uid + ',seller_id.eq.' + uid + ')&select=*', {
@@ -8274,7 +8286,7 @@ window.deleteBroadcastMessage = async function(docId, encodedTitle) {
     let totalDel = 0;
     if(broadcastId) {
       // Pakai Edge Function (service_role, dilindungi X-Auth-Token) — bypass RLS untuk hapus dari semua user
-      const _efRes = await fetch('https://jgnjgfuypcelwjztebsy.supabase.co/functions/v1/delete-broadcast', {
+      const _efRes = await fetch(`${window._SUPA_URL}/functions/v1/delete-broadcast`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -9673,7 +9685,7 @@ window.openDetailStore = function() {
 // ── Push Notification Helper ─────────────────────────
 window.sendPushToUser = async function(userId, title, body, url) {
   try {
-    const r = await fetch('https://jgnjgfuypcelwjztebsy.supabase.co/functions/v1/quick-responder', {
+    const r = await fetch(`${window._SUPA_URL}/functions/v1/quick-responder`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -10036,7 +10048,7 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
 async function sendPushToReceiver(receiverUid, senderName, msgText) {
   if (!receiverUid) return;
   try {
-    const _r = await fetch('https://jgnjgfuypcelwjztebsy.supabase.co/functions/v1/quick-responder', {
+    const _r = await fetch(`${window._SUPA_URL}/functions/v1/quick-responder`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -13233,7 +13245,7 @@ window.doLogin=async()=>{
 
   try{
     _dbg('Mulai login: ' + email);
-    const SUPA_URL  = 'https://jgnjgfuypcelwjztebsy.supabase.co';
+    const SUPA_URL  = window._SUPA_URL;
     const SUPA_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
     const controller = new AbortController();
     const timer = setTimeout(()=>{
@@ -13267,7 +13279,7 @@ window.doLogin=async()=>{
     }
 
     _dbg('Token OK, simpan ke localStorage...');
-    const PROJECT_REF = 'jgnjgfuypcelwjztebsy';
+    const PROJECT_REF = window._SUPA_REF;
     const storageKey = 'sb-'+PROJECT_REF+'-auth-token';
     const sessionData = {
       access_token: json.access_token,
@@ -13291,7 +13303,7 @@ window.doLogin=async()=>{
       };
       try{
           _dbg('Load profile dari DB...');
-          const SUPA_URL2 = 'https://jgnjgfuypcelwjztebsy.supabase.co';
+          const SUPA_URL2 = window._SUPA_URL;
           const SUPA_KEY2 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
           const profileRes = await Promise.race([
             fetch(SUPA_URL2+'/rest/v1/users?uid=eq.'+u.id+'&limit=1&select=*',{
@@ -13364,7 +13376,7 @@ window.doLogin=async()=>{
 // ═══════════════════════════════════════════
 //  OTP HELPER — Brevo via Supabase Edge Function
 // ═══════════════════════════════════════════
-const _OTP_URL = 'https://jgnjgfuypcelwjztebsy.supabase.co/functions/v1';
+const _OTP_URL = `${window._SUPA_URL}/functions/v1`;
 const _OTP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
 
 // Countdown tombol OTP
@@ -13574,7 +13586,7 @@ window.doRegister=async()=>{
     await _verifyOtp(email, otpEmail, 'signup');
     if(btn){btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i> Mendaftar...';}
     // Pakai fetch manual langsung ke Supabase REST — tidak bergantung pada module JS yang async
-    const SUPA_URL = 'https://jgnjgfuypcelwjztebsy.supabase.co';
+    const SUPA_URL = window._SUPA_URL;
     const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
 
     // 1. Daftar ke Supabase Auth
@@ -13620,7 +13632,7 @@ window.doRegister=async()=>{
     // 3. Cek apakah langsung dapat session (email confirm dimatikan)
     if(json.access_token){
       // Simpan session ke localStorage agar Supabase client bisa baca
-      const storageKey = 'sb-jgnjgfuypcelwjztebsy-auth-token';
+      const storageKey = `sb-${window._SUPA_REF}-auth-token`;
       const sessionData = {
         access_token: json.access_token,
         refresh_token: json.refresh_token,
@@ -13679,12 +13691,12 @@ window.doLogout=async()=>{
   if(window.showPage) showPage('home');
   showToast('Berhasil keluar','green');
   // Hapus token dari localStorage
-  try{ localStorage.removeItem('sb-jgnjgfuypcelwjztebsy-auth-token'); }catch(e){}
+  try{ localStorage.removeItem(`sb-${window._SUPA_REF}-auth-token`); }catch(e){}
   // SignOut ke server di background
   try{
     if(window._FB && window._FB.logout) window._FB.logout().catch(()=>{});
     else if(window.supabase) window.supabase.auth.signOut().catch(()=>{});
-    else fetch('https://jgnjgfuypcelwjztebsy.supabase.co/auth/v1/logout',{
+    else fetch(`${window._SUPA_URL}/auth/v1/logout`,{
       method:'POST',
       headers:{'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c'}
     }).catch(()=>{});
@@ -16212,13 +16224,21 @@ function renderVarianListGeneric(){
 window.handleVarianPhotoEdit = function(input, idx){
   const file = input.files[0]; if(!file) return;
   window._activeVarianData[idx].imgFile = file;
-  const reader = new FileReader();
-  reader.onload = e => {
-    window._activeVarianData[idx].imgPreview = e.target.result;
+  const _apply = src => {
+    window._activeVarianData[idx].imgPreview = src;
     const box = document.getElementById('varianImgBoxEdit_'+idx);
-    if(box) box.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover"/>`;
+    if(box) box.innerHTML = `<img src="${src}" class="w-full h-full object-cover"/>`;
   };
-  reader.readAsDataURL(file);
+  // Fallback: FileReader tak ada / gagal baca → createObjectURL. Upload tetap pakai imgFile (di-set di atas),
+  // jadi src blob: ini hanya untuk tampilan & tak akan tersimpan (logika simpan memprioritaskan imgFile).
+  const _useObjUrl = () => { try { _apply(URL.createObjectURL(file)); } catch(_e){ if(window.showToast) showToast('Gagal menampilkan preview foto varian','red'); } };
+  if (typeof FileReader === 'undefined') { _useObjUrl(); return; }
+  try {
+    const reader = new FileReader();
+    reader.onerror = () => _useObjUrl();
+    reader.onload = e => _apply(e.target.result);
+    reader.readAsDataURL(file);
+  } catch(_e) { _useObjUrl(); }
 };
 
 // Override saveVarianAndClose agar support edit mode
@@ -16674,7 +16694,7 @@ window.ycSendChat = async function() {
 // ── Aktivasi Notifikasi via Webpushr ─────────────────────────
 
   function saveSubscription(subJson, userId) {
-    fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions?on_conflict=user_id,endpoint', {
+    fetch(`${window._SUPA_URL}/rest/v1/push_subscriptions?on_conflict=user_id,endpoint`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -16758,7 +16778,7 @@ window.activateWebpushrNotif = function() {
         } else {
           saveSubscription(subJson, _userId);
         }
-        fetch('https://jgnjgfuypcelwjztebsy.supabase.co/rest/v1/push_subscriptions?on_conflict=user_id,endpoint', {
+        fetch(`${window._SUPA_URL}/rest/v1/push_subscriptions?on_conflict=user_id,endpoint`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -17741,7 +17761,7 @@ window.saveSettingsName = async function() {
     }
 
     // Validasi password langsung ke Auth API tanpa ganggu session aktif
-    var verifyRes = await fetch('https://jgnjgfuypcelwjztebsy.supabase.co/auth/v1/token?grant_type=password', {
+    var verifyRes = await fetch(`${window._SUPA_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c' },
       body: JSON.stringify({ email: u.email, password: pw })
@@ -17789,7 +17809,7 @@ window.saveGantiEmail = async function() {
     await _verifyOtp(emailBaru, otpKode, 'change_email');
     btn.textContent='Memverifikasi password...';
     // Validasi password langsung ke Auth API tanpa ganggu session aktif
-    var verifyRes = await fetch('https://jgnjgfuypcelwjztebsy.supabase.co/auth/v1/token?grant_type=password', {
+    var verifyRes = await fetch(`${window._SUPA_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c' },
       body: JSON.stringify({ email: emailLama, password: pw })
@@ -17813,7 +17833,7 @@ window.saveGantiEmail = async function() {
     window._S.user.email = emailBaru;
     // Update Supabase Auth pakai token dari verifikasi password (tidak hang)
     var _authToken = _verifyData.access_token;
-    fetch('https://jgnjgfuypcelwjztebsy.supabase.co/auth/v1/user', {
+    fetch(`${window._SUPA_URL}/auth/v1/user`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c', 'Authorization': 'Bearer '+_authToken },
       body: JSON.stringify({ email: emailBaru })
@@ -19774,12 +19794,12 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
   }
 
   var VPUB = 'BP6twOL2T7JcnN-99X13ZBNQVq14vHKTpajimdAoJpfAOlQRSLnsp5wSVoWT-jv17pb4BelRTUtL98mt160e2AI';
-  var SUPA_URL = 'https://jgnjgfuypcelwjztebsy.supabase.co';
+  var SUPA_URL = window._SUPA_URL;
   var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
 
   function getUidFromToken() {
     try {
-      var stored = localStorage.getItem('sb-jgnjgfuypcelwjztebsy-auth-token');
+      var stored = localStorage.getItem(`sb-${window._SUPA_REF}-auth-token`);
       if (!stored) return null;
       var parsed = JSON.parse(stored);
       var token = parsed.access_token || (parsed[0] && parsed[0].access_token);
