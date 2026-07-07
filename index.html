@@ -11,6 +11,8 @@
   window._SUPA_URL  = 'https://ipbxwdqnwcshezzrtxzr.supabase.co';
   window._SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwYnh3ZHFud2NzaGV6enJ0eHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MTM0NTksImV4cCI6MjA5NTQ4OTQ1OX0.UHaK9Tyd7c48j1q_kdX7C_gQCzojAcfIOQ2IZHEJENg';
   window._SUPA_REF  = 'ipbxwdqnwcshezzrtxzr';
+  window._R2_URL    = 'https://yallamart-upload-staging.abdsyakir789.workers.dev';
+  window._R2_TOKEN  = 'yallamart-staging-2026';
 </script>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-9VPFMLYW9G"></script>
@@ -4934,8 +4936,8 @@ async function deleteCoverFromCloudinary(publicId) {
 window.uploadToCloudinary      = uploadToCloudinary;
 
 // ── Upload ke Cloudflare R2 (kompresi dulu via Cloudinary, simpan ke R2) ──
-const R2_WORKER_URL = 'https://yallamart-upload.abdsyakir789.workers.dev';
-const R2_AUTH_TOKEN = 'yallamart2024secret';
+const R2_WORKER_URL = window._R2_URL;
+const R2_AUTH_TOKEN = window._R2_TOKEN;
 
 async function uploadToR2(file, onProgress, folder) {
   // Kompresi dulu pakai fungsi yang sudah ada
@@ -4967,7 +4969,7 @@ window.uploadToR2 = uploadToR2;
 // Terima 1 url (string) atau array url. Aman dipanggil walau url kosong/bukan dari R2.
 async function deleteFromR2(urls) {
   try {
-    const list = (Array.isArray(urls) ? urls : [urls]).filter(u => u && typeof u === 'string' && u.includes('yallamart-upload.abdsyakir789.workers.dev'));
+    const list = (Array.isArray(urls) ? urls : [urls]).filter(u => u && typeof u === 'string' && u.includes(window._R2_URL.replace(/^https?:\/\//, '')));
     if(!list.length) return;
     await fetch(R2_WORKER_URL, {
       method: 'DELETE',
@@ -7382,7 +7384,7 @@ window.sendBroadcastPush = async function(msg) {
   for(let i = 0; i < userIds.length; i += CHUNK) chunks.push(userIds.slice(i, i + CHUNK));
 
   await Promise.allSettled(chunks.map(function(chunk){
-    return fetch('https://yallamart-upload.abdsyakir789.workers.dev/broadcast-enqueue', {
+    return fetch(`${window._R2_URL}/broadcast-enqueue`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Auth-Token': R2_AUTH_TOKEN },
       body: JSON.stringify({
@@ -14582,7 +14584,7 @@ window.sendBroadcastPushBatch = async function(userIds, title, body) {
   for(let i = 0; i < userIds.length; i += CHUNK) chunks.push(userIds.slice(i, i + CHUNK));
 
   await Promise.allSettled(chunks.map(function(chunk){
-    return fetch('https://yallamart-upload.abdsyakir789.workers.dev/broadcast-enqueue', {
+    return fetch(`${window._R2_URL}/broadcast-enqueue`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Auth-Token': _authToken },
       body: JSON.stringify({
