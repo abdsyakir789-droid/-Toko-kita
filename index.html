@@ -13,6 +13,7 @@
   window._SUPA_REF  = 'ipbxwdqnwcshezzrtxzr';
   window._R2_URL    = 'https://yallamart-upload-staging.abdsyakir789.workers.dev';
   window._R2_TOKEN  = 'yallamart-staging-2026';
+  window._KV_ENABLED = false;   // staging: KV cache dimatikan (production: true)
 </script>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-9VPFMLYW9G"></script>
@@ -6254,6 +6255,7 @@ window.addEventListener('beforeunload', () => {
 const _KV_ADS_TTL    = 15 * 60; // 15 menit (detik, untuk Worker expirationTtl) — dinaikkan dari 5 menit agar tidak expire sebelum siklus background sync IndexedDB (10 menit) berikutnya
 
 async function _kvGet(key) {
+  if (window._KV_ENABLED === false) return null; // env flag: KV off (staging)
   try {
     const res = await fetch(`${_KV_WORKER_URL}?key=${encodeURIComponent(key)}`, {
       signal: AbortSignal.timeout(3000) // timeout 3 detik agar tidak blocking
@@ -6268,6 +6270,7 @@ async function _kvGet(key) {
 }
 
 async function _kvSet(key, data, ttl = _KV_ADS_TTL) {
+  if (window._KV_ENABLED === false) return; // env flag: KV off (staging)
   try {
     fetch(_KV_WORKER_URL, {
       method: 'POST',
@@ -6281,6 +6284,7 @@ async function _kvSet(key, data, ttl = _KV_ADS_TTL) {
 }
 
 async function _kvDelete(key) {
+  if (window._KV_ENABLED === false) return; // env flag: KV off (staging)
   try {
     await fetch(`${_KV_WORKER_URL}?key=${encodeURIComponent(key)}`, {
       method: 'DELETE'
