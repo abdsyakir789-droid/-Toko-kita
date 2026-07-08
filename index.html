@@ -5398,7 +5398,7 @@ function startProfileListener(uid) {
 // Dipakai untuk operasi yang butuh auth tapi Supabase client belum siap
 window._supaFetch = function _supaFetch(path, opts={}) {
   const SUPA_URL = window._SUPA_URL;
-  const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
+  const SUPA_KEY = window._SUPA_ANON;
   const token = window._S?._accessToken || SUPA_KEY;
   const { prefer, headers: extraHeaders, ...restOpts } = opts;
   const mergedHeaders = {
@@ -5454,8 +5454,8 @@ window._FB = {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c'
+            'apikey': window._SUPA_ANON,
+            'Authorization': 'Bearer ' + window._SUPA_ANON
           },
           body: JSON.stringify({ email, password: pass }),
           signal: controller.signal
@@ -6753,7 +6753,7 @@ window.startChatListListener = function() {
       // Query langsung via REST API dengan token di header — tidak bergantung pada state Supabase client
       // Ini menghindari timeout akibat Supabase client belum fully authenticated saat cached login
       const SUPA_URL = window._SUPA_URL;
-      const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
+      const SUPA_KEY = window._SUPA_ANON;
       const fetchRes = await withTimeout(
         fetch(SUPA_URL + '/rest/v1/chats?or=(buyer_id.eq.' + uid + ',seller_id.eq.' + uid + ')&select=*', {
           headers: {
@@ -8296,7 +8296,7 @@ window.deleteBroadcastMessage = async function(docId, encodedTitle) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + (window._S?._accessToken || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c'),
+          'Authorization': 'Bearer ' + (window._S?._accessToken || window._SUPA_ANON),
           'X-Auth-Token': '558fc403b3e05fd533246dba620871bdd7ef5bea5c7627f6'
         },
         body: JSON.stringify({ broadcast_id: broadcastId })
@@ -9695,7 +9695,7 @@ window.sendPushToUser = async function(userId, title, body, url) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzMwNTQyOSwiZXhwIjoyMDkyODgxNDI5fQ.xRvytPczKgu_gC4_8V4RJnA0cqcuh38F7BSOc90wi60'
+        'Authorization': 'Bearer ' + window._SUPA_ANON
       },
       body: JSON.stringify({ user_id: userId, title, body, url: url || '/' })
     });
@@ -10058,7 +10058,7 @@ async function sendPushToReceiver(receiverUid, senderName, msgText) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzMwNTQyOSwiZXhwIjoyMDkyODgxNDI5fQ.xRvytPczKgu_gC4_8V4RJnA0cqcuh38F7BSOc90wi60'
+        'Authorization': 'Bearer ' + window._SUPA_ANON
       },
       body: JSON.stringify({
         user_id: receiverUid,
@@ -13126,7 +13126,8 @@ window.sendLoginOtpWa = async function() {
     // Rate limit check WA (max 5x / 30 menit per nomor)
     try {
       const cleanPhone = phone.replace(/\D/g, '');
-      const rl = await fetch('https://yallamart-kv-api.abdsyakir789.workers.dev/otp-wa', {
+      if (window._KV_ENABLED !== false) {
+      const rl = await fetch(`${_KV_WORKER_URL}/otp-wa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: cleanPhone })
@@ -13134,6 +13135,7 @@ window.sendLoginOtpWa = async function() {
       if (rl.status === 429) {
         const rlJson = await rl.json();
         throw new Error(rlJson.error || 'Terlalu banyak permintaan OTP WhatsApp. Coba lagi dalam 30 menit.');
+      }
       }
     } catch(rlErr) {
       if (rlErr.message.includes('OTP') || rlErr.message.includes('menit')) throw rlErr;
@@ -13232,9 +13234,9 @@ window.doLogin=async()=>{
 
   // ── Rate limit check via Worker (skip untuk admin) ────────
   const _isAdminLogin = email.toLowerCase() === (window.ADMIN_EMAIL||'abdsyakir160@gmail.com').toLowerCase();
-  if (!_isAdminLogin) {
+  if (!_isAdminLogin && window._KV_ENABLED !== false) {
     try {
-      const rlRes = await fetch('https://yallamart-kv-api.abdsyakir789.workers.dev/auth/v1/token', {
+      const rlRes = await fetch(`${_KV_WORKER_URL}/auth/v1/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ _ratecheck: true, email: email })
@@ -13252,7 +13254,7 @@ window.doLogin=async()=>{
   try{
     _dbg('Mulai login: ' + email);
     const SUPA_URL  = window._SUPA_URL;
-    const SUPA_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
+    const SUPA_KEY  = window._SUPA_ANON;
     const controller = new AbortController();
     const timer = setTimeout(()=>{
       _dbg('TIMEOUT 15 detik — abort!', '#f87171');
@@ -13310,7 +13312,7 @@ window.doLogin=async()=>{
       try{
           _dbg('Load profile dari DB...');
           const SUPA_URL2 = window._SUPA_URL;
-          const SUPA_KEY2 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
+          const SUPA_KEY2 = window._SUPA_ANON;
           const profileRes = await Promise.race([
             fetch(SUPA_URL2+'/rest/v1/users?uid=eq.'+u.id+'&limit=1&select=*',{
               headers:{'apikey': SUPA_KEY2,'Authorization': 'Bearer '+json.access_token}
@@ -13383,7 +13385,7 @@ window.doLogin=async()=>{
 //  OTP HELPER — Brevo via Supabase Edge Function
 // ═══════════════════════════════════════════
 const _OTP_URL = `${window._SUPA_URL}/functions/v1`;
-const _OTP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
+const _OTP_KEY = window._SUPA_ANON;
 
 // Countdown tombol OTP
 function _otpCountdown(btnId, seconds) {
@@ -13410,7 +13412,8 @@ function _otpCountdown(btnId, seconds) {
 async function _sendOtp(email, purpose) {
   // Rate limit check (max 3x / 30 menit per email)
   try {
-    const rl = await fetch('https://yallamart-kv-api.abdsyakir789.workers.dev/otp-email', {
+    if (window._KV_ENABLED !== false) {
+    const rl = await fetch(`${_KV_WORKER_URL}/otp-email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email })
@@ -13418,6 +13421,7 @@ async function _sendOtp(email, purpose) {
     if (rl.status === 429) {
       const rlJson = await rl.json();
       throw new Error(rlJson.error || 'Terlalu banyak permintaan OTP email. Coba lagi dalam 30 menit.');
+    }
     }
   } catch(e) {
     if (e.message.includes('OTP') || e.message.includes('menit')) throw e;
@@ -13484,7 +13488,8 @@ window.sendRegOtpWa = async function() {
   try {
     // Rate limit check WA (max 5x / 30 menit per nomor)
     try {
-      const rl = await fetch('https://yallamart-kv-api.abdsyakir789.workers.dev/otp-wa', {
+      if (window._KV_ENABLED !== false) {
+      const rl = await fetch(`${_KV_WORKER_URL}/otp-wa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: cleanPhone })
@@ -13492,6 +13497,7 @@ window.sendRegOtpWa = async function() {
       if (rl.status === 429) {
         const rlJson = await rl.json();
         throw new Error(rlJson.error || 'Terlalu banyak permintaan OTP WhatsApp. Coba lagi dalam 30 menit.');
+      }
       }
     } catch(rlErr) {
       if (rlErr.message.includes('OTP') || rlErr.message.includes('menit')) throw rlErr;
@@ -13593,7 +13599,7 @@ window.doRegister=async()=>{
     if(btn){btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i> Mendaftar...';}
     // Pakai fetch manual langsung ke Supabase REST — tidak bergantung pada module JS yang async
     const SUPA_URL = window._SUPA_URL;
-    const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
+    const SUPA_KEY = window._SUPA_ANON;
 
     // 1. Daftar ke Supabase Auth
     const res = await fetch(SUPA_URL+'/auth/v1/signup',{
@@ -13704,7 +13710,7 @@ window.doLogout=async()=>{
     else if(window.supabase) window.supabase.auth.signOut().catch(()=>{});
     else fetch(`${window._SUPA_URL}/auth/v1/logout`,{
       method:'POST',
-      headers:{'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c'}
+      headers:{'apikey':window._SUPA_ANON}
     }).catch(()=>{});
   }catch(e){}
 };
@@ -17769,7 +17775,7 @@ window.saveSettingsName = async function() {
     // Validasi password langsung ke Auth API tanpa ganggu session aktif
     var verifyRes = await fetch(`${window._SUPA_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c' },
+      headers: { 'Content-Type': 'application/json', 'apikey': window._SUPA_ANON },
       body: JSON.stringify({ email: u.email, password: pw })
     });
     if(!verifyRes.ok){
@@ -17817,7 +17823,7 @@ window.saveGantiEmail = async function() {
     // Validasi password langsung ke Auth API tanpa ganggu session aktif
     var verifyRes = await fetch(`${window._SUPA_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c' },
+      headers: { 'Content-Type': 'application/json', 'apikey': window._SUPA_ANON },
       body: JSON.stringify({ email: emailLama, password: pw })
     });
     var _verifyData = await verifyRes.json();
@@ -17841,7 +17847,7 @@ window.saveGantiEmail = async function() {
     var _authToken = _verifyData.access_token;
     fetch(`${window._SUPA_URL}/auth/v1/user`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c', 'Authorization': 'Bearer '+_authToken },
+      headers: { 'Content-Type': 'application/json', 'apikey': window._SUPA_ANON, 'Authorization': 'Bearer '+_authToken },
       body: JSON.stringify({ email: emailBaru })
     }).catch(function(){});
     showToast('✅ Email berhasil diubah!','green');
@@ -19801,7 +19807,7 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
 
   var VPUB = 'BP6twOL2T7JcnN-99X13ZBNQVq14vHKTpajimdAoJpfAOlQRSLnsp5wSVoWT-jv17pb4BelRTUtL98mt160e2AI';
   var SUPA_URL = window._SUPA_URL;
-  var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
+  var SUPA_KEY = window._SUPA_ANON;
 
   function getUidFromToken() {
     try {
