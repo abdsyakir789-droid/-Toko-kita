@@ -15,6 +15,7 @@
   window._R2_TOKEN  = 'yallamart-staging-2026';
   window._KV_ENABLED = false;   // staging: KV cache dimatikan (production: true)
   window._SKIP_REG_OTP = true;  // staging only: lewati verifikasi OTP saat daftar akun baru (production: false/hapus)
+  window._ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFkMDc5MzAxMjBhZTQ1ZTJiNDI1ZWFjN2I1MTVlYTllIiwiaCI6Im11cm11cjY0In0='; // OpenRouteService — hitung jarak jalan sungguhan untuk ongkir YallaFood
 </script>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-9VPFMLYW9G"></script>
@@ -3209,8 +3210,9 @@ h3.text-sm.font-bold.text-gray-800 {
   <!-- ══ KURIR YALLAFOOD — menu baru, murni tambahan, tidak mengubah row lain (MOBILE ONLY) ══ -->
   <div class="md:hidden mb-4">
     <button id="menuKurirBtnMob" onclick="openDaftarKurir()" class="w-full flex items-center gap-3 bg-white rounded-2xl py-4 px-4 transition-all text-left">
-      <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0">
+      <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0" style="position:relative">
         <span class="lucide-icon" id="menuKurirIconMob"></span>
+        <span id="yfChatBadgeKurirMob" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center">0</span>
       </div>
       <div class="flex-1">
         <p id="menuKurirLabelMob" style="font-size:13px;font-weight:700;color:#111827;margin:0">Daftar Kurir YallaFood</p>
@@ -3291,8 +3293,9 @@ h3.text-sm.font-bold.text-gray-800 {
   <!-- ══ KURIR YALLAFOOD — Desktop, menu baru murni tambahan ══ -->
   <div class="hidden md:block mb-4">
     <button id="menuKurirBtnDesktop" onclick="openDaftarKurir()" class="w-full flex items-center gap-3 bg-white rounded-2xl py-4 px-5 transition-all hover:shadow-md text-left">
-      <div class="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0">
+      <div class="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0" style="position:relative">
         <span class="lucide-icon" id="menuKurirIconDesktop"></span>
+        <span id="yfChatBadgeKurirDesktop" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center">0</span>
       </div>
       <div class="flex-1">
         <p id="menuKurirLabelDesktop" class="text-sm font-bold text-gray-900">Daftar Kurir YallaFood</p>
@@ -4804,8 +4807,11 @@ h3.text-sm.font-bold.text-gray-800 {
   </button>
 
   <!-- 2. YallaFood (direct-order makanan) -->
-  <button id="mnav-yallafood" onclick="openYallaFoodHome();setMobTab('yallafood')" class="mob-nav-btn">
-    <span class="lucide-icon" id="mnavYallaFoodIcon"></span>
+  <button id="mnav-yallafood" onclick="openYallaFoodHome();setMobTab('yallafood')" class="mob-nav-btn" style="position:relative">
+    <div style="position:relative;display:inline-block">
+      <span class="lucide-icon" id="mnavYallaFoodIcon"></span>
+      <span id="yfChatBadgeMob" style="display:none" class="mob-nav-badge">0</span>
+    </div>
     <span>YallaFood</span>
   </button>
 
@@ -22316,6 +22322,30 @@ function _yfHaversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Jarak jalan sungguhan via OpenRouteService (pihak ketiga, opsional).
+// SELALU fallback ke Haversine kalau API gagal/timeout/key belum ada —
+// alur pesan YallaFood tidak boleh macet gara-gara pihak ketiga down.
+async function _yfGetDistanceKm(buyerLat, buyerLng, shopLat, shopLng) {
+  const haversine = () => _yfHaversineKm(buyerLat, buyerLng, shopLat, shopLng);
+  if (!window._ORS_API_KEY) return haversine();
+  try {
+    const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${encodeURIComponent(window._ORS_API_KEY)}&start=${shopLng},${shopLat}&end=${buyerLng},${buyerLat}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    let res;
+    try { res = await fetch(url, { signal: controller.signal }); }
+    finally { clearTimeout(timer); }
+    if (!res.ok) throw new Error('ORS status ' + res.status);
+    const data = await res.json();
+    const meters = data?.features?.[0]?.properties?.summary?.distance;
+    if (typeof meters !== 'number') throw new Error('respons ORS tidak valid');
+    return meters / 1000;
+  } catch (e) {
+    console.warn('[YallaFood] ORS routing gagal, fallback ke Haversine:', e.message);
+    return haversine();
+  }
+}
+
 async function _yfGetOngkirConfig() {
   try {
     const r = await window._supaFetch('/rest/v1/settings?key=eq.yallafood_ongkir_config&select=value&limit=1');
@@ -22579,7 +22609,7 @@ async function _yfComputeAndShowSummary(ad, buyerLat, buyerLng) {
     showToast('Toko belum mengatur lokasi, belum bisa menerima pesanan YallaFood', 'red');
     return;
   }
-  const distanceKm = _yfHaversineKm(buyerLat, buyerLng, Number(shop.lat), Number(shop.lng));
+  const distanceKm = await _yfGetDistanceKm(buyerLat, buyerLng, Number(shop.lat), Number(shop.lng));
   const cfg = await _yfGetOngkirConfig();
   const ongkir = Math.round(cfg.base_fee + cfg.rate_per_km * distanceKm);
   const qty = window._yfState.qty || 1;
@@ -23191,6 +23221,9 @@ async function _yfChatLoadMessages() {
       </div>`;
     }).join('');
     box.scrollTop = box.scrollHeight;
+    // Selagi chat ini terbuka & dibaca, tandai sudah dibaca + refresh badge
+    _yfChatSetLastRead(window._yfChatState.roomId);
+    _yfChatRefreshUnreadBadge();
   } catch (e) {
     box.innerHTML = '<p class="text-center text-red-400 text-xs py-6">Gagal memuat pesan.</p>';
   }
@@ -23265,6 +23298,57 @@ async function _yfRefreshKurirMenuLabel() {
   if (deskLabel) deskLabel.textContent = label;
 }
 
+// ============================================================
+// 🔔 BADGE UNREAD CHAT YALLAFOOD — event-driven (Supabase Realtime),
+// BUKAN polling/interval. Last-read disimpan di localStorage per user
+// per room (pola sama seperti badge YallaCare yang sudah ada), tidak
+// perlu kolom/tabel tambahan lagi. Tidak menyentuh badge/notifikasi
+// sistem utama sama sekali (channel & badge elemen terpisah total).
+// ============================================================
+function _yfChatLastReadKey(uid, roomId) { return 'yf_chat_lastread_' + uid + '_' + roomId; }
+function _yfChatGetLastRead(roomId) {
+  const uid = window._S?.user?.uid; if (!uid) return 0;
+  try { return parseInt(localStorage.getItem(_yfChatLastReadKey(uid, roomId)) || '0'); } catch (e) { return 0; }
+}
+function _yfChatSetLastRead(roomId) {
+  const uid = window._S?.user?.uid; if (!uid || !roomId) return;
+  try { localStorage.setItem(_yfChatLastReadKey(uid, roomId), Date.now().toString()); } catch (e) {}
+}
+
+async function _yfChatRefreshUnreadBadge() {
+  const uid = window._S?.user?.uid;
+  const badgeIds = ['yfChatBadgeMob', 'yfChatBadgeKurirMob', 'yfChatBadgeKurirDesktop'];
+  const badges = badgeIds.map(id => document.getElementById(id)).filter(Boolean);
+  if (!badges.length) return;
+  if (!uid) { badges.forEach(b => { b.style.display = 'none'; }); return; }
+  try {
+    const rr = await window._supaFetch(`/rest/v1/food_chat_rooms?or=(participant_a_uid.eq.${encodeURIComponent(uid)},participant_b_uid.eq.${encodeURIComponent(uid)})&select=id`);
+    const rooms = rr.ok ? await rr.json() : [];
+    if (!rooms.length) { badges.forEach(b => { b.style.display = 'none'; }); return; }
+    const roomIds = rooms.map(x => x.id).join(',');
+    const mr = await window._supaFetch(`/rest/v1/food_chat_messages?room_id=in.(${roomIds})&sender_uid=neq.${encodeURIComponent(uid)}&select=room_id,created_at`);
+    const msgs = mr.ok ? await mr.json() : [];
+    let unread = 0;
+    msgs.forEach(m => { if (new Date(m.created_at).getTime() > _yfChatGetLastRead(m.room_id)) unread++; });
+    badges.forEach(b => {
+      b.textContent = unread > 9 ? '9+' : String(unread);
+      b.style.display = unread > 0 ? 'flex' : 'none';
+    });
+  } catch (e) { console.warn('[YallaFood Chat] gagal hitung badge unread:', e.message); }
+}
+
+// Listener realtime KHUSUS food_chat_messages untuk update badge —
+// channel & tabel terpisah total dari notifikasi/chat sistem utama.
+let _yfGlobalChatChannel = null;
+function _yfChatSubscribeGlobalUnread() {
+  const uid = window._S?.user?.uid;
+  if (!uid || !window.supabase) return;
+  if (_yfGlobalChatChannel) { try { window.supabase.removeChannel(_yfGlobalChatChannel); } catch (e) {} }
+  _yfGlobalChatChannel = window.supabase.channel('food_chat_unread_' + uid)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'food_chat_messages' }, () => { _yfChatRefreshUnreadBadge(); })
+    .subscribe();
+}
+
 // Ikut jalan tiap kali renderUserState() dipanggil (login/logout/update profil)
 // — dibungkus dari luar, TIDAK ada satu baris pun kode renderUserState asli yang diubah.
 (function() {
@@ -23272,10 +23356,16 @@ async function _yfRefreshKurirMenuLabel() {
   window.renderUserState = function(...args) {
     const result = _origRenderUserState.apply(this, args);
     _yfRefreshKurirMenuLabel();
+    _yfChatRefreshUnreadBadge();
+    _yfChatSubscribeGlobalUnread();
     return result;
   };
 })();
-document.addEventListener('DOMContentLoaded', () => setTimeout(_yfRefreshKurirMenuLabel, 1500));
+document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
+  _yfRefreshKurirMenuLabel();
+  _yfChatRefreshUnreadBadge();
+  _yfChatSubscribeGlobalUnread();
+}, 1500));
 </script>
 
 </body>
