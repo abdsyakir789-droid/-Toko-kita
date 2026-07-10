@@ -14,6 +14,7 @@
   window._R2_URL    = 'https://yallamart-upload-staging.abdsyakir789.workers.dev';
   window._R2_TOKEN  = 'yallamart-staging-2026';
   window._KV_ENABLED = false;   // staging: KV cache dimatikan (production: true)
+  window._SKIP_REG_OTP = true;  // staging only: lewati verifikasi OTP saat daftar akun baru (production: false/hapus)
 </script>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-9VPFMLYW9G"></script>
@@ -75,6 +76,23 @@ html { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
     window.renderMegaphone = renderMegaphone;
     renderMegaphone(document.getElementById('megaphoneMob'), 18, '#000000');
     renderMegaphone(document.getElementById('megaphoneDesktop'), 20, '#000000');
+
+    // Inject YallaFood icon (Lucide Utensils) di bottom nav
+    window.renderYallaFoodNavIcon = function() {
+      const el = document.getElementById('mnavYallaFoodIcon');
+      if (!el || !window.lucide) return;
+      const svg = lucide.createElement(lucide.Utensils);
+      svg.setAttribute('width', 24);
+      svg.setAttribute('height', 24);
+      svg.setAttribute('stroke', '#000000');
+      svg.setAttribute('stroke-width', '2');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      el.innerHTML = '';
+      el.appendChild(svg);
+    };
+    window.renderYallaFoodNavIcon();
   });
 </script>
 <style>
@@ -659,22 +677,21 @@ button, .btn {
   filter:drop-shadow(0 1px 2px rgba(156,163,175,.5));
   flex-shrink:0;
 }
-/* ── ADMIN PANEL MODAL ── */
+/* ── ADMIN PANEL MODAL (fullscreen — konsisten dgn #shopsAdminOverlay) ── */
 #adminPanelOverlay{
   position:fixed;inset:0;z-index:800;
-  background:rgba(0,0,0,.6);
-  display:none;align-items:flex-end;justify-content:center;
-  backdrop-filter:blur(5px);
+  background:#fff;
+  display:none;align-items:stretch;justify-content:stretch;
+  padding:0;
 }
 #adminPanelOverlay.open{display:flex}
 #adminPanelSheet{
   background:#fff;
-  border-radius:24px 24px 0 0;
-  width:100%;max-width:520px;
-  max-height:88vh;
+  border-radius:0;
+  width:100%;max-width:none;
+  height:100vh;max-height:100vh;
   display:flex;flex-direction:column;
-  animation:mIn .3s cubic-bezier(.34,1.2,.64,1);
-  box-shadow:0 -4px 20px rgba(15,23,42,.08), 0 -1px 4px rgba(15,23,42,.05);
+  box-shadow:none;
 }
 .ap-tab{border-bottom:2.5px solid transparent;transition:all .2s;padding:8px 4px;font-size:11px;font-weight:600;letter-spacing:-.005em;color:#9ca3af;cursor:pointer;white-space:nowrap}
 .ap-tab.active{color:#6366F1;border-bottom-color:#6366F1;font-weight:800}
@@ -2927,10 +2944,14 @@ h3.text-sm.font-bold.text-gray-800 {
   <!-- CATEGORY GRID -->
   <section class="mt-0">
     <div class="bg-white rounded-b-2xl px-3 py-1">
-      <div class="msc flex md:grid md:grid-cols-11 gap-2">
+      <div class="msc flex md:grid md:grid-cols-12 gap-2">
         <button onclick="filterCat('semua')" data-cat="semua" class="cb active flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-0.5">
           <div class="w-11 h-11 flex items-center justify-center"><img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1780851336/mobile_app_icon__3D_glossy_grid_9_squares_symbol____emerald_green_color_10B981__rounded_square_shap-removebg-preview_pjkqck.png" class="w-11 h-11 object-contain" alt="Semua"/></div>
           <span class="text-[10px] font-semibold whitespace-nowrap">Semua</span>
+        </button>
+        <button onclick="filterCat('gratis-ongkir')" data-cat="gratis-ongkir" class="cb flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-0.5">
+          <div class="w-11 h-11 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3"/><rect width="9" height="11" x="12" y="11" rx="2"/><circle cx="17" cy="22" r="1"/><circle cx="5" cy="22" r="1"/></svg></div>
+          <span class="text-[10px] font-semibold whitespace-nowrap">Taushil</span>
         </button>
         <button onclick="filterCat('elektronik')" data-cat="elektronik" class="cb flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-0.5">
           <div class="w-11 h-11 flex items-center justify-center"><img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1780851338/Designer__4_-removebg-preview_hh7htq.png" class="w-11 h-11 object-contain" alt="Elektronik"/></div>
@@ -3184,6 +3205,20 @@ h3.text-sm.font-bold.text-gray-800 {
     </button>
   </div>
 
+  <!-- ══ KURIR YALLAFOOD — menu baru, murni tambahan, tidak mengubah row lain (MOBILE ONLY) ══ -->
+  <div class="md:hidden mb-4">
+    <button onclick="openDaftarKurir()" class="w-full flex items-center gap-3 bg-white rounded-2xl py-4 px-4 transition-all text-left">
+      <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+        <i class="fa-solid fa-motorcycle text-amber-500"></i>
+      </div>
+      <div class="flex-1">
+        <p style="font-size:13px;font-weight:700;color:#111827;margin:0">Daftar Kurir YallaFood</p>
+        <p style="font-size:10px;color:#6b7280;margin:0">Jadi mitra pengantar makanan</p>
+      </div>
+      <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
+    </button>
+  </div>
+
   <!-- ══════════════════════════════════════════════════
        DESKTOP QUICK ACTIONS ROW — hanya tablet & laptop
        Urutan: Pesan Masuk · Rating · Buka Toko · Pengaturan
@@ -3249,6 +3284,20 @@ h3.text-sm.font-bold.text-gray-800 {
         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/><path d="M12 22V12"/></svg>
       </div>
       <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Kelola Toko</p>
+    </button>
+  </div>
+
+  <!-- ══ KURIR YALLAFOOD — Desktop, menu baru murni tambahan ══ -->
+  <div class="hidden md:block mb-4">
+    <button onclick="openDaftarKurir()" class="w-full flex items-center gap-3 bg-white rounded-2xl py-4 px-5 transition-all hover:shadow-md text-left">
+      <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+        <i class="fa-solid fa-motorcycle text-amber-500"></i>
+      </div>
+      <div class="flex-1">
+        <p class="text-sm font-bold text-gray-900">Daftar Kurir YallaFood</p>
+        <p class="text-xs text-gray-500">Jadi mitra pengantar makanan</p>
+      </div>
+      <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
     </button>
   </div>
 
@@ -4245,6 +4294,21 @@ h3.text-sm.font-bold.text-gray-800 {
         <i class="fa-solid fa-truck-fast text-primary text-base opacity-70"></i>
       </div>
 
+      <!-- ✅ Checkbox Jual via YallaFood -->
+      <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 cursor-pointer mb-3.5" onclick="document.getElementById('isYallaFood').click()">
+        <div class="relative flex-shrink-0">
+          <input type="checkbox" id="isYallaFood" class="sr-only" onchange="updateYallaFoodCheckStyle(this)"/>
+          <div id="yallaFoodCheckBox" class="w-5 h-5 rounded-md border-2 border-gray-300 flex items-center justify-center transition-all bg-white">
+            <i id="yallaFoodCheckIcon" class="fa-solid fa-check text-white text-[10px] hidden"></i>
+          </div>
+        </div>
+        <div class="flex-1">
+          <p class="text-sm font-bold text-gray-800">Jual via YallaFood</p>
+          <p class="text-[10px] text-gray-500 mt-0.5">Muncul di YallaFood, pesan langsung (bukan keranjang)</p>
+        </div>
+        <i class="fa-solid fa-utensils text-amber-500 text-base opacity-70"></i>
+      </div>
+
       <!-- Tombol Submit Hijau -->
       <button id="submitAdBtn" onclick="submitAd()" class="w-full bg-gradient-to-r from-primary to-pd hover:from-pd hover:to-pdd text-white font-bold py-3.5 rounded-2xl text-sm transition-all shadow-[0_4px_14px_rgba(16,185,129,.35)]">
         <i class="fa-solid fa-rocket mr-1"></i> Pasang Iklan Sekarang
@@ -4738,10 +4802,10 @@ h3.text-sm.font-bold.text-gray-800 {
     <span>Beranda</span>
   </button>
 
-  <!-- 2. Yalla Taushil (filter siap-taushil) -->
-  <button id="mnav-taushil" onclick="filterCat('gratis-ongkir');setMobTab('taushil')" class="mob-nav-btn">
-    <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3"/><rect width="9" height="11" x="12" y="11" rx="2"/><circle cx="17" cy="22" r="1"/><circle cx="5" cy="22" r="1"/></svg></span>
-    <span>Yalla Taushil</span>
+  <!-- 2. YallaFood (direct-order makanan) -->
+  <button id="mnav-yallafood" onclick="openYallaFoodHome();setMobTab('yallafood')" class="mob-nav-btn">
+    <span class="lucide-icon" id="mnavYallaFoodIcon"></span>
+    <span>YallaFood</span>
   </button>
 
   <!-- 3. Official -->
@@ -5554,7 +5618,7 @@ window._FB = {
   },
 
   // ── Post Ad ───────────────────────────────────────────────────
-  async postAd(title, price, cat, desc, siapTaushil, file, location, variants, size, varName) {
+  async postAd(title, price, cat, desc, siapTaushil, file, location, variants, size, varName, isYallaFood) {
     const wrap=document.getElementById('uploadProgressWrap');
     const bar=document.getElementById('uploadBar');
     const pct=document.getElementById('uploadPct');
@@ -5574,7 +5638,7 @@ window._FB = {
         method: 'POST',
         prefer: 'return=representation',
         body: JSON.stringify({
-          title, price:Number(price), cat, description:desc, siap_taushil:!!siapTaushil, img_url:imgUrl, img_public_id:imgPublicId,
+          title, price:Number(price), cat, description:desc, siap_taushil:!!siapTaushil, is_yallafood:!!isYallaFood, img_url:imgUrl, img_public_id:imgPublicId,
           location: location||'',
           variants: (variants && variants.length > 0) ? variants : [],
           size: size||'',
@@ -7136,6 +7200,7 @@ var _reviewAdId = '';
 var _reviewAdTitle = '';
 var _reviewAdImg = '';
 var _reviewSellerUid = '';
+var _reviewType = 'physical'; // 'physical' | 'food' — dipakai untuk kolom reviews.review_type (YallaFood)
 
 window.openReviewFullScreen = async function(adId, adTitle, adImg, sellerUid) {
   const fs = document.getElementById('reviewFullScreen');
@@ -7228,11 +7293,12 @@ window.closeReviewFullScreen = function() {
   document.body.style.overflow = '';
 };
 
-window.openReviewWrite = function(adId, adTitle, adImg, sellerUid) {
+window.openReviewWrite = function(adId, adTitle, adImg, sellerUid, type) {
   _reviewAdId = adId;
   _reviewAdTitle = adTitle;
   _reviewAdImg = adImg;
   _reviewSellerUid = sellerUid;
+  _reviewType = type || 'physical';
   _reviewRating = 0;
 
   // Reset UI
@@ -7288,7 +7354,7 @@ window.submitReview = async function() {
   }
 
   // Cek apakah sudah pernah ulas produk ini — kalau ada, timpa (overwrite) bukan blokir
-  const _chkRes = await window._supaFetch('/rest/v1/reviews?buyer_uid=eq.'+uid+'&ad_id=eq.'+_reviewAdId+'&select=id&limit=1');
+  const _chkRes = await window._supaFetch('/rest/v1/reviews?buyer_uid=eq.'+uid+'&ad_id=eq.'+_reviewAdId+'&review_type=eq.'+_reviewType+'&select=id&limit=1');
   const _chkData = _chkRes.ok ? await _chkRes.json() : [];
   const _existingReviewId = _chkData.length ? _chkData[0].id : null;
 
@@ -7303,6 +7369,7 @@ window.submitReview = async function() {
     seller_uid: _reviewSellerUid,
     rating: _reviewRating,
     comment: comment || null,
+    review_type: _reviewType,
     created_at: new Date().toISOString()
   };
   try {
@@ -13555,7 +13622,7 @@ window.doRegister=async()=>{
   const pass=document.getElementById('regPwd').value;
   const terms=document.getElementById('regTerms').checked;
   if(!name||!email||!phone||!pass){showToast('Lengkapi semua kolom','red');return;}
-  if(!otpEmail){showToast('Verifikasi OTP Email dulu','red');return;}
+  if(!window._SKIP_REG_OTP && !otpEmail){showToast('Verifikasi OTP Email dulu','red');return;}
   // OTP WhatsApp TIDAK lagi wajib — cukup verifikasi Email. Nomor WA tetap wajib diisi
   // & divalidasi format Mesir, lalu disimpan ke profil (tanpa verifikasi OTP WA).
   const _regCleanPhone = phone.replace(/\D/g, '');
@@ -13563,7 +13630,7 @@ window.doRegister=async()=>{
   if(!_regIsEgypt){showToast('Nomor WhatsApp harus nomor Mesir 🇪🇬 (+20 / 20)','red');return;}
   if(!terms){showToast('Setujui Syarat & Ketentuan dulu','red');return;}
   if(pass.length<6){showToast('Kata sandi min. 6 karakter','red');return;}
-  if(window._regOtpEmail !== email){showToast('Email berbeda dengan saat OTP dikirim. Kirim OTP ulang.','red');return;}
+  if(!window._SKIP_REG_OTP && window._regOtpEmail !== email){showToast('Email berbeda dengan saat OTP dikirim. Kirim OTP ulang.','red');return;}
   // (OTP WhatsApp tidak wajib — pengecekan _regOtpViaWa/_regOtpPhone dilewati)
 
   // ── Validasi Duplikasi Akun (email & nomor WA) ──────────────────
@@ -13595,7 +13662,10 @@ window.doRegister=async()=>{
   if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i> Memverifikasi OTP...';}
   try{
     // Verifikasi OTP — cukup Email (OTP WhatsApp tidak lagi wajib).
-    await _verifyOtp(email, otpEmail, 'signup');
+    // Staging: bisa dilewati via window._SKIP_REG_OTP supaya bisa daftar user test tanpa OTP.
+    if (!window._SKIP_REG_OTP) {
+      await _verifyOtp(email, otpEmail, 'signup');
+    }
     if(btn){btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i> Mendaftar...';}
     // Pakai fetch manual langsung ke Supabase REST — tidak bergantung pada module JS yang async
     const SUPA_URL = window._SUPA_URL;
@@ -13745,6 +13815,7 @@ window.closePostModal=()=>{
   const ov=document.getElementById('postOverlay');ov.style.opacity='0';setTimeout(()=>ov.style.display='none',300);document.body.style.overflow='';
   // Reset form fields
   const cb=document.getElementById('siapTaushil'); if(cb){cb.checked=false;updateTaushilStyle(cb);}
+  const yfcb=document.getElementById('isYallaFood'); if(yfcb){yfcb.checked=false;updateYallaFoodCheckStyle(yfcb);}
   const loc=document.getElementById('adLocation'); if(loc) loc.value='';
   const title=document.getElementById('adTitle'); if(title) title.value='';
   const price=document.getElementById('adPrice'); if(price) price.value='';
@@ -13773,6 +13844,22 @@ window.updateTaushilStyle = (cb) => {
     if(wrap) wrap.style.background='';
   }
 };
+
+// Animasi custom checkbox Jual via YallaFood
+window.updateYallaFoodCheckStyle = (cb) => {
+  const box = document.getElementById('yallaFoodCheckBox');
+  const chk = document.getElementById('yallaFoodCheckIcon');
+  const wrap = cb.closest ? cb.closest('[onclick]') : null;
+  if(cb.checked){
+    box.className='w-5 h-5 rounded-md border-2 border-amber-500 flex items-center justify-center transition-all bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,.15)]';
+    chk.classList.remove('hidden');
+    if(wrap) wrap.style.background='rgba(245,158,11,0.08)';
+  } else {
+    box.className='w-5 h-5 rounded-md border-2 border-gray-300 flex items-center justify-center transition-all bg-white';
+    chk.classList.add('hidden');
+    if(wrap) wrap.style.background='';
+  }
+};
 window.previewPhoto=input=>{
   const f=input.files[0];if(!f)return;
   const _show=src=>{document.getElementById('photoPreview').innerHTML=`<img src="${src}" class="w-full h-full object-cover rounded-2xl"/>`;};
@@ -13793,6 +13880,7 @@ window.submitAd=async()=>{
   const desc=document.getElementById('adDesc').value.trim();
   const location=document.getElementById('adLocation').value.trim();
   const siapTaushil=document.getElementById('siapTaushil').checked;
+  const isYallaFood=document.getElementById('isYallaFood').checked;
   const file=document.getElementById('photoInput').files[0];
   if(!title||!price||!cat){showToast('Lengkapi kolom wajib','red');return;}
   if(title.length>600){showToast('Judul maksimal 600 karakter','red');return;}
@@ -13855,7 +13943,7 @@ window.submitAd=async()=>{
       : [];
     const size=document.getElementById('adSize')?document.getElementById('adSize').value.trim():'';
     const varName=document.getElementById('adVarName')?document.getElementById('adVarName').value.trim():'';
-    await window._FB.postAd(title,price,cat,desc,siapTaushil,file,location,variants,size,varName);
+    await window._FB.postAd(title,price,cat,desc,siapTaushil,file,location,variants,size,varName,isYallaFood);
   }
   catch(e){
     if((e.message||'').includes('EXPLICIT_CONTENT')) { showExplicitContentModal(); }
@@ -14322,7 +14410,7 @@ window.loadBillboardImages = loadBillboardImages;
 
 // ── Active tab highlight for bottom nav ───────────────────────
 window.setMobTab = function(tab) {
-  ['home','taushil','official','notif','akun'].forEach(t => {
+  ['home','yallafood','official','notif','akun'].forEach(t => {
     const el = document.getElementById('mnav-' + t);
     if(el) el.classList.toggle('active-tab', t === tab);
   });
@@ -14664,6 +14752,7 @@ if ('serviceWorker' in navigator) {
         <button id="aptab-verify" onclick="switchApTab('verify')" class="ap-tab">Verifikasi User</button>
         <button id="aptab-cleanup" onclick="switchApTab('cleanup')" class="ap-tab">🗑️ Iklan Hantu</button>
         <button id="aptab-title" onclick="switchApTab('title'); if(window.loadSponsorTitleAdminUI) loadSponsorTitleAdminUI();" class="ap-tab">📝 Judul Section</button>
+        <button id="aptab-kurir" onclick="switchApTab('kurir'); if(window.loadKurirAdminUI) loadKurirAdminUI();" class="ap-tab">🛵 Kurir YallaFood</button>
       </div>
     </div>
 
@@ -14799,6 +14888,15 @@ if ('serviceWorker' in navigator) {
             <i class="fa-solid fa-floppy-disk mr-1"></i> Simpan Judul
           </button>
         </div>
+      </div>
+
+      <!-- ── Tab: Kurir YallaFood (approval mitra) ── -->
+      <div id="aptab-kurir-content" style="display:none">
+        <div class="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-4">
+          <p class="text-sm font-black text-gray-800 mb-1">🛵 Approval Mitra Kurir YallaFood</p>
+          <p class="text-[11px] text-gray-500">Setujui atau tolak pendaftaran mitra kurir. Notifikasi pesanan hanya aktif untuk kurir berstatus Aktif.</p>
+        </div>
+        <div id="kurirAdminList"><p class="text-center text-gray-400 text-sm py-8">Memuat...</p></div>
       </div>
 
     </div><!-- /body -->
@@ -15086,7 +15184,7 @@ window.closeAdminPanel = function() {
 };
 
 window.switchApTab = function(tab) {
-  ['switch','ads','verify','cleanup','title'].forEach(t => {
+  ['switch','ads','verify','cleanup','title','kurir'].forEach(t => {
     const btn = document.getElementById('aptab-' + t);
     const content = document.getElementById('aptab-' + t + '-content');
     if(btn) btn.classList.toggle('active', t === tab);
@@ -15995,6 +16093,21 @@ window.removeVerification = async function() {
         <i class="fa-solid fa-truck-fast text-primary text-base opacity-70"></i>
       </div>
 
+      <!-- ✅ Checkbox Jual via YallaFood -->
+      <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 cursor-pointer mb-3.5" onclick="document.getElementById('editIsYallaFood').click()">
+        <div class="relative flex-shrink-0">
+          <input type="checkbox" id="editIsYallaFood" class="sr-only"/>
+          <div id="editYallaFoodBox" class="w-5 h-5 rounded-md border-2 border-gray-300 flex items-center justify-center transition-all bg-white">
+            <i id="editYallaFoodCheck" class="fa-solid fa-check text-white text-[10px] hidden"></i>
+          </div>
+        </div>
+        <div class="flex-1">
+          <p class="text-sm font-bold text-gray-800">Jual via YallaFood</p>
+          <p class="text-[10px] text-gray-500 mt-0.5">Muncul di YallaFood, pesan langsung (bukan keranjang)</p>
+        </div>
+        <i class="fa-solid fa-utensils text-amber-500 text-base opacity-70"></i>
+      </div>
+
       <!-- Tombol Submit Hijau -->
       <button id="editAdSubmitBtn" onclick="submitEditAd()" class="w-full bg-gradient-to-r from-primary to-pd hover:from-pd hover:to-pdd text-white font-bold py-3.5 rounded-2xl text-sm transition-all shadow-[0_4px_14px_rgba(16,185,129,.35)]">
         <i class="fa-solid fa-floppy-disk mr-1"></i> Simpan Perubahan
@@ -16045,6 +16158,12 @@ window.openEditAd = function(adId) {
   document.getElementById('editTaushilBox').style.background = taushil ? '#10B981' : '';
   document.getElementById('editTaushilBox').style.borderColor = taushil ? '#10B981' : '';
   document.getElementById('editTaushilCheck').classList.toggle('hidden', !taushil);
+
+  const isYallaFood = ad.is_yallafood || false;
+  document.getElementById('editIsYallaFood').checked = isYallaFood;
+  document.getElementById('editYallaFoodBox').style.background = isYallaFood ? '#F59E0B' : '';
+  document.getElementById('editYallaFoodBox').style.borderColor = isYallaFood ? '#F59E0B' : '';
+  document.getElementById('editYallaFoodCheck').classList.toggle('hidden', !isYallaFood);
 
   // Preview foto lama
   const prev = document.getElementById('editPhotoPreview');
@@ -16102,6 +16221,7 @@ window.submitEditAd = async function() {
   const desc = document.getElementById('editAdDesc').value.trim();
   const location = document.getElementById('editAdLocation').value.trim();
   const siapTaushil = document.getElementById('editSiapTaushil').checked;
+  const isYallaFood = document.getElementById('editIsYallaFood').checked;
 
   if(!title) { showToast('Judul iklan wajib diisi','red'); return; }
   if(title.length>600) { showToast('Judul maksimal 600 karakter','red'); return; }
@@ -16158,6 +16278,7 @@ window.submitEditAd = async function() {
         title, price: Number(price), cat, description: desc,
         location: location || '',
         siap_taushil: siapTaushil,
+        is_yallafood: isYallaFood,
         img_url: imgUrl,
         img_public_id: imgPublicId,
         size: size,
@@ -16284,6 +16405,19 @@ document.getElementById('editSiapTaushil')?.addEventListener('change', function(
   const check = document.getElementById('editTaushilCheck');
   if(this.checked) {
     box.style.background = '#10B981'; box.style.borderColor = '#10B981';
+    check.classList.remove('hidden');
+  } else {
+    box.style.background = ''; box.style.borderColor = '';
+    check.classList.add('hidden');
+  }
+});
+
+// Checkbox jual via YallaFood di edit modal
+document.getElementById('editIsYallaFood')?.addEventListener('change', function() {
+  const box = document.getElementById('editYallaFoodBox');
+  const check = document.getElementById('editYallaFoodCheck');
+  if(this.checked) {
+    box.style.background = '#F59E0B'; box.style.borderColor = '#F59E0B';
     check.classList.remove('hidden');
   } else {
     box.style.background = ''; box.style.borderColor = '';
@@ -22021,6 +22155,7 @@ window.closeKelolaToko = function() {
           window.renderMegaphone(document.getElementById('megaphoneMob'), 18, '#000000');
           window.renderMegaphone(document.getElementById('megaphoneDesktop'), 20, '#000000');
         }
+        if (typeof window.renderYallaFoodNavIcon === 'function') window.renderYallaFoodNavIcon();
       } catch (e) {
         console.warn('[PTR] Megaphone icon exception:', e && e.message || e);
       }
@@ -22079,6 +22214,835 @@ window.closeKelolaToko = function() {
     };
   }
 })();
+</script>
+
+<!-- ============================================================
+     🍔 YALLAFOOD — modul baru, terpisah dari cart/checkout barang fisik.
+     Tidak menyentuh: chat, notifikasi, yallacare, broadcast, daftar toko,
+     upload iklan/status, atau logika inti jam operasional.
+     ============================================================ -->
+
+<!-- YALLAFOOD HOME (buyer: browse menu) -->
+<div id="yallaFoodHome" style="display:none;position:fixed;inset:0;z-index:52;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeYallaFoodHome()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">YallaFood</h2>
+    <button onclick="openFoodOrderTracking()" class="text-xs font-semibold text-primary px-2 py-1.5">Pesanan Saya</button>
+    <button onclick="openYallaFoodSellerMenu()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-store text-gray-600"></i></button>
+  </div>
+  <div id="yallaFoodList" class="flex-1 overflow-y-auto px-3 py-3" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-content:start"></div>
+</div>
+
+<!-- YALLAFOOD DETAIL + PESAN SEKARANG -->
+<div id="yallaFoodDetailSheet" style="display:none;position:fixed;inset:0;z-index:53;background:#fff;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white/95 backdrop-blur px-4 py-3" style="flex-shrink:0;position:absolute;top:0;left:0;right:0;z-index:2">
+    <button onclick="closeFoodDetail()" class="w-9 h-9 flex items-center justify-center rounded-full bg-white/90 shadow-sm"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+  </div>
+  <div class="flex-1 overflow-y-auto" id="yallaFoodDetailBody"></div>
+  <div id="yallaFoodDetailActionBar" class="bg-white px-4 py-3" style="flex-shrink:0;box-shadow:0 -4px 16px rgba(0,0,0,.06)"></div>
+</div>
+
+<!-- YALLAFOOD: Ringkasan & Konfirmasi Pesanan -->
+<div id="yfOrderSummaryModal" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.4);align-items:flex-end;justify-content:center">
+  <div class="bg-white w-full rounded-t-3xl p-5" style="max-width:480px">
+    <h3 class="font-bold text-base mb-3">Konfirmasi Pesanan</h3>
+    <div id="yfOrderSummaryBody" class="text-sm text-gray-700" style="display:flex;flex-direction:column;gap:6px"></div>
+    <button onclick="yfSubmitFoodOrder()" class="w-full bg-primary text-white font-bold rounded-2xl py-3 mt-4">Konfirmasi Pesanan (COD)</button>
+    <button onclick="yfCloseOrderSummary()" class="w-full text-gray-500 font-semibold rounded-2xl py-2 mt-1">Batal</button>
+  </div>
+</div>
+
+<!-- YALLAFOOD ORDER TRACKING (buyer: pesanan saya) -->
+<div id="yallaFoodOrderTracking" style="display:none;position:fixed;inset:0;z-index:54;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeFoodOrderTracking()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Pesanan YallaFood Saya</h2>
+  </div>
+  <div id="yallaFoodTrackingList" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:10px"></div>
+</div>
+
+<!-- YALLAFOOD SELLER: menu alat toko -->
+<div id="yallaFoodSellerMenu" style="display:none;position:fixed;inset:0;z-index:59;background:rgba(0,0,0,.4);align-items:flex-end;justify-content:center" onclick="if(event.target===this) closeYallaFoodSellerMenu()">
+  <div class="bg-white w-full rounded-t-3xl p-5" style="max-width:480px">
+    <h3 class="font-bold text-base mb-3">Alat Seller YallaFood</h3>
+    <button onclick="closeYallaFoodSellerMenu();openYallaFoodLokasiToko()" class="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 font-semibold text-sm mb-1"><i class="fa-solid fa-location-dot mr-2 text-primary"></i>Atur Lokasi Toko</button>
+    <button onclick="closeYallaFoodSellerMenu();openKelolaPesananYallaFood()" class="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 font-semibold text-sm"><i class="fa-solid fa-receipt mr-2 text-primary"></i>Kelola Pesanan Masuk</button>
+  </div>
+</div>
+
+<!-- YALLAFOOD SELLER: KELOLA PESANAN MASUK -->
+<div id="yallaFoodKelolaPesanan" style="display:none;position:fixed;inset:0;z-index:54;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeKelolaPesananYallaFood()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Kelola Pesanan YallaFood</h2>
+  </div>
+  <div id="yallaFoodKelolaList" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:10px"></div>
+</div>
+
+<!-- YALLAFOOD SELLER: LOKASI TOKO -->
+<div id="yallaFoodLokasiToko" style="display:none;position:fixed;inset:0;z-index:54;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeYallaFoodLokasiToko()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Lokasi Toko (YallaFood)</h2>
+  </div>
+  <div class="flex-1 overflow-y-auto px-4 py-4">
+    <p class="text-sm text-gray-500 mb-4">Lokasi ini dipakai untuk menghitung ongkir instan pesanan YallaFood. Wajib diisi sebelum produk YallaFood kamu bisa menerima pesanan.</p>
+    <button onclick="yfUseMyLocation()" class="w-full bg-primary text-white font-bold rounded-2xl py-3 mb-3"><i class="fa-solid fa-location-crosshairs mr-2"></i>Gunakan Lokasi Saya Sekarang</button>
+    <div id="yfLokasiStatus" class="text-xs text-gray-500 mb-4"></div>
+    <label class="text-xs font-semibold text-gray-600">Latitude</label>
+    <input id="yfLokasiLat" type="number" step="any" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-3 text-sm" placeholder="30.0444"/>
+    <label class="text-xs font-semibold text-gray-600">Longitude</label>
+    <input id="yfLokasiLng" type="number" step="any" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-4 text-sm" placeholder="31.2357"/>
+    <button onclick="yfSaveLokasiToko()" class="w-full bg-gray-900 text-white font-bold rounded-2xl py-3">Simpan Lokasi</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 🍔 YALLAFOOD MODULE — direct-order makanan (parallel/modular)
+// Tabel: food_orders (baru, terpisah dari orders barang fisik).
+// Reuse read-only: window.checkStoreStatus/isStoreOpen (jam operasional),
+// window._supaFetch (data layer), window._S.user (sesi user aktif).
+// ============================================================
+
+window._yfState = { list: [], current: null, qty: 1, pendingOrder: null };
+
+function _yfHaversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) ** 2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function _yfGetOngkirConfig() {
+  try {
+    const r = await window._supaFetch('/rest/v1/settings?key=eq.yallafood_ongkir_config&select=value&limit=1');
+    const rows = r.ok ? await r.json() : [];
+    const v = rows[0]?.value;
+    if (v && typeof v === 'object') return { base_fee: Number(v.base_fee) || 0, rate_per_km: Number(v.rate_per_km) || 0 };
+  } catch (e) { console.warn('[YallaFood] ongkir config fallback:', e.message); }
+  return { base_fee: 10, rate_per_km: 3 };
+}
+
+function _yfFmtPrice(n) { return 'LE ' + Number(n || 0).toLocaleString('en-EG'); }
+function _yfRatingLabel(ad) {
+  const count = Number(ad.rating_count || 0);
+  if (!count) return 'Baru';
+  return Number(ad.rating_score || 0).toFixed(1);
+}
+function _yfValidVariants(ad) {
+  return Array.isArray(ad.variants) ? ad.variants.filter(v => v && v.name) : [];
+}
+function _yfCardPriceLabel(ad) {
+  const variants = _yfValidVariants(ad);
+  if (!variants.length) return _yfFmtPrice(ad.price);
+  const min = Math.min(...variants.map(v => Number(v.price || ad.price || 0)));
+  return 'Mulai ' + _yfFmtPrice(min);
+}
+function _yfActivePrice() {
+  const ad = window._yfState.current;
+  const v = window._yfState.selectedVariant;
+  return v ? Number(v.price || ad?.price || 0) : Number(ad?.price || 0);
+}
+window.yfSelectVariant = function(idx) {
+  const variants = window._yfState.currentVariants || [];
+  window._yfState.selectedVariant = variants[idx] || null;
+  document.querySelectorAll('#yfVariantPicker button').forEach((btn, i) => {
+    btn.className = 'text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 ' + (i === idx ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-200');
+  });
+  const priceEl = document.getElementById('yfActivePrice');
+  if (priceEl) priceEl.textContent = _yfFmtPrice(_yfActivePrice());
+};
+async function _yfFetchShopAlamatMap(sellerUids) {
+  const uids = [...new Set(sellerUids)].filter(Boolean);
+  const map = {};
+  if (!uids.length) return map;
+  try {
+    const r = await window._supaFetch(`/rest/v1/shops?user_id=in.(${uids.map(encodeURIComponent).join(',')})&select=user_id,alamat`);
+    const rows = r.ok ? await r.json() : [];
+    rows.forEach(s => { map[s.user_id] = s.alamat || ''; });
+  } catch (e) { console.warn('[YallaFood] shop alamat fetch fallback:', e.message); }
+  return map;
+}
+
+const _YF_STATUS_LABEL = { menunggu_kurir: 'Mencari Kurir', diterima: 'Pemesanan Diterima', dimasak: 'Restoran Memasak', dijemput: 'Kurir Menjemput', menuju: 'Kurir Menuju Anda', selesai: 'Selesai', dibatalkan: 'Dibatalkan' };
+const _YF_STATUS_SEQ = ['diterima', 'dimasak', 'dijemput', 'menuju', 'selesai'];
+function _yfNextStatus(cur) { const i = _YF_STATUS_SEQ.indexOf(cur); return i >= 0 && i < _YF_STATUS_SEQ.length - 1 ? _YF_STATUS_SEQ[i + 1] : null; }
+
+// ── HOME (buyer browse) ─────────────────────────────────────
+window.openYallaFoodHome = async function() {
+  document.getElementById('yallaFoodHome').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  await _yfLoadList();
+};
+window.closeYallaFoodHome = function() {
+  document.getElementById('yallaFoodHome').style.display = 'none';
+  document.body.style.overflow = '';
+};
+
+async function _yfLoadList() {
+  const box = document.getElementById('yallaFoodList');
+  box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat menu...</p>';
+  try {
+    const r = await window._supaFetch('/rest/v1/ads?is_yallafood=eq.true&select=*&order=created_at.desc');
+    const rows = r.ok ? await r.json() : [];
+    window._yfState.list = rows;
+    if (!rows.length) {
+      box.style.display = 'block';
+      box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada menu YallaFood tersedia.</p>';
+      return;
+    }
+    box.style.display = 'grid';
+    const shopMap = await _yfFetchShopAlamatMap(rows.map(a => a.seller_uid));
+    box.innerHTML = rows.map(ad => {
+      const alamat = shopMap[ad.seller_uid] || '';
+      return `
+      <div class="bg-white rounded-2xl overflow-hidden border border-gray-100 cursor-pointer flex flex-col" onclick="openFoodDetail('${ad.id}')">
+        <div class="relative w-full" style="aspect-ratio:1/1;background:#f3f4f6">
+          <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0" onerror="this.style.background='#eee'"/>
+          <span id="yfStoreBadge_${ad.id}" class="absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/90 text-gray-400 shadow-sm">...</span>
+        </div>
+        <div class="p-2.5 flex flex-col gap-1 flex-1">
+          <p class="font-bold text-[13px] text-gray-900 lc2 leading-snug" style="min-height:2.4em">${ad.title || ''}</p>
+          <p class="text-primary font-extrabold text-[15px]">${_yfCardPriceLabel(ad)}</p>
+          <div class="flex items-center gap-1 text-[11px] text-gray-500">
+            <i class="fa-solid fa-star text-amber-400"></i><span>${_yfRatingLabel(ad)}</span>
+          </div>
+          ${alamat ? `<div class="flex items-center gap-1 text-[11px] text-gray-400"><i class="fa-solid fa-location-dot flex-shrink-0"></i><span class="lc1">${alamat}</span></div>` : ''}
+        </div>
+      </div>
+    `;
+    }).join('');
+    rows.forEach(async ad => {
+      const open = await window.checkStoreStatus(ad.seller_uid);
+      const el = document.getElementById('yfStoreBadge_' + ad.id);
+      if (el) { el.textContent = open ? 'Buka' : 'Tutup'; el.className = 'absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm ' + (open ? 'bg-primary/90 text-white' : 'bg-white/90 text-gray-400'); }
+    });
+  } catch (e) {
+    box.style.display = 'block';
+    box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat menu.</p>';
+  }
+}
+
+// ── DETAIL + PESAN SEKARANG (Zero Gap & No Divider: Foto → Deskripsi → Ulasan → Info Penjual) ──
+window.openFoodDetail = async function(adId) {
+  const ad = window._yfState.list.find(a => String(a.id) === String(adId));
+  if (!ad) { showToast('Menu tidak ditemukan', 'red'); return; }
+  window._yfState.current = ad;
+  window._yfState.qty = 1;
+  document.getElementById('yallaFoodDetailSheet').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  const body = document.getElementById('yallaFoodDetailBody');
+  const actionBar = document.getElementById('yallaFoodDetailActionBar');
+  body.innerHTML = '<p class="text-center text-gray-400 text-sm py-16">Memuat...</p>';
+  actionBar.innerHTML = '';
+  const [isOpen, shopMap] = await Promise.all([
+    window.checkStoreStatus(ad.seller_uid),
+    _yfFetchShopAlamatMap([ad.seller_uid])
+  ]);
+  window._yfState.currentOpen = isOpen;
+  const alamat = shopMap[ad.seller_uid] || '';
+  const variants = _yfValidVariants(ad);
+  window._yfState.currentVariants = variants;
+  window._yfState.selectedVariant = variants[0] || null;
+
+  body.innerHTML = `
+    <div class="relative w-full" style="aspect-ratio:4/3;background:#f3f4f6">
+      <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0"/>
+    </div>
+    <div class="px-4 pt-4">
+      <div class="flex items-center gap-2">
+        <h3 class="font-bold text-lg flex-1">${ad.title || ''}</h3>
+        <span class="text-[10px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${isOpen ? 'bg-pl text-primary' : 'bg-gray-100 text-gray-400'}">${isOpen ? 'Buka' : 'Tutup'}</span>
+      </div>
+      <div class="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
+        <i class="fa-solid fa-star text-amber-400"></i><span>${_yfRatingLabel(ad)}</span>
+        ${alamat ? `<span class="text-gray-300">·</span><i class="fa-solid fa-location-dot"></i><span class="lc1">${alamat}</span>` : ''}
+      </div>
+      <p id="yfActivePrice" class="text-primary font-extrabold text-xl mt-2">${_yfFmtPrice(_yfActivePrice())}</p>
+      ${variants.length ? `
+      <div class="mt-1">
+        <p class="text-xs font-semibold text-gray-600 mt-2 mb-1.5">Pilih Varian</p>
+        <div id="yfVariantPicker" class="flex gap-2 flex-wrap">
+          ${variants.map((v, i) => `<button onclick="yfSelectVariant(${i})" class="text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 ${i === 0 ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-200'}">${v.name}${v.size ? ' (' + v.size + ')' : ''}</button>`).join('')}
+        </div>
+      </div>` : ''}
+      <p class="text-sm text-gray-600 mt-3 leading-relaxed">${ad.description || ''}</p>
+    </div>
+    <div class="px-4 pt-6">
+      <h4 class="font-bold text-sm text-gray-800 mb-2">Ulasan</h4>
+      <div id="yfDetailReviews"><p class="text-xs text-gray-400 py-2">Memuat ulasan...</p></div>
+    </div>
+    <div class="px-4 pt-6 pb-8">
+      <h4 class="font-bold text-sm text-gray-800 mb-2">Info Penjual</h4>
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-store text-gray-400"></i></div>
+        <div class="min-w-0">
+          <p class="font-semibold text-sm lc1">${ad.seller_name || ''}</p>
+          <p class="text-xs text-gray-500 lc1">${alamat || 'Lokasi belum diisi'}</p>
+        </div>
+      </div>
+    </div>
+  `;
+  _yfLoadFoodReviews(ad.id);
+
+  actionBar.innerHTML = `
+    <div class="flex items-center gap-3 mb-3">
+      <span class="text-sm font-semibold">Jumlah</span>
+      <button onclick="yfChangeQty(-1)" class="w-8 h-8 rounded-full bg-gray-100 font-bold">-</button>
+      <span id="yfQtyLabel" class="font-bold w-6 text-center">1</span>
+      <button onclick="yfChangeQty(1)" class="w-8 h-8 rounded-full bg-gray-100 font-bold">+</button>
+      <textarea id="yfOrderNotes" rows="1" class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Catatan (opsional)"></textarea>
+    </div>
+    <button id="yfPesanBtn" onclick="yfStartOrder()" class="w-full font-bold rounded-2xl py-3 ${isOpen ? 'bg-primary text-white' : 'bg-gray-200 text-gray-400'}" ${isOpen ? '' : 'disabled'}>
+      ${isOpen ? 'Pesan Sekarang' : 'Toko Sedang Tutup'}
+    </button>
+  `;
+};
+window.closeFoodDetail = function() {
+  document.getElementById('yallaFoodDetailSheet').style.display = 'none';
+};
+
+async function _yfLoadFoodReviews(adId) {
+  const box = document.getElementById('yfDetailReviews');
+  if (!box) return;
+  try {
+    const r = await window._supaFetch(`/rest/v1/reviews?ad_id=eq.${encodeURIComponent(adId)}&review_type=eq.food&select=*&order=created_at.desc&limit=20`);
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) { box.innerHTML = '<p class="text-xs text-gray-400 py-2">Belum ada ulasan untuk menu ini.</p>'; return; }
+    box.innerHTML = `<div style="display:flex;flex-direction:column;gap:14px">` + rows.map(rv => {
+      const stars = [1,2,3,4,5].map(i => `<i class="fa-solid fa-star text-[10px] ${i <= (rv.rating||0) ? 'text-amber-400' : 'text-gray-200'}"></i>`).join('');
+      return `
+      <div>
+        <div class="flex items-center gap-2">
+          <p class="text-xs font-semibold text-gray-700">${rv.buyer_name || 'Pembeli'}</p>
+          <div class="flex gap-0.5">${stars}</div>
+        </div>
+        ${rv.comment ? `<p class="text-xs text-gray-500 mt-1">${rv.comment}</p>` : ''}
+      </div>`;
+    }).join('') + `</div>`;
+  } catch (e) {
+    box.innerHTML = '<p class="text-xs text-red-400 py-2">Gagal memuat ulasan.</p>';
+  }
+}
+window.yfChangeQty = function(d) {
+  window._yfState.qty = Math.max(1, (window._yfState.qty || 1) + d);
+  const el = document.getElementById('yfQtyLabel');
+  if (el) el.textContent = window._yfState.qty;
+};
+
+// ── ALUR PESAN: GPS → jarak → ongkir → konfirmasi ────────────
+window.yfStartOrder = function() {
+  const ad = window._yfState.current;
+  if (!ad || !window._yfState.currentOpen) return;
+  if (!navigator.geolocation) { showToast('Perangkat tidak mendukung GPS', 'red'); return; }
+  const btn = document.getElementById('yfPesanBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Mendeteksi lokasi...'; }
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    try {
+      await _yfComputeAndShowSummary(ad, pos.coords.latitude, pos.coords.longitude);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Pesan Sekarang'; }
+    }
+  }, (err) => {
+    showToast('Gagal mendapat lokasi GPS: ' + err.message, 'red');
+    if (btn) { btn.disabled = false; btn.textContent = 'Pesan Sekarang'; }
+  }, { enableHighAccuracy: true, timeout: 15000 });
+};
+
+async function _yfComputeAndShowSummary(ad, buyerLat, buyerLng) {
+  const shopRes = await window._supaFetch(`/rest/v1/shops?user_id=eq.${encodeURIComponent(ad.seller_uid)}&select=lat,lng,nama_toko&limit=1`);
+  const shopRows = shopRes.ok ? await shopRes.json() : [];
+  const shop = shopRows[0];
+  if (!shop || shop.lat == null || shop.lng == null) {
+    showToast('Toko belum mengatur lokasi, belum bisa menerima pesanan YallaFood', 'red');
+    return;
+  }
+  const distanceKm = _yfHaversineKm(buyerLat, buyerLng, Number(shop.lat), Number(shop.lng));
+  const cfg = await _yfGetOngkirConfig();
+  const ongkir = Math.round(cfg.base_fee + cfg.rate_per_km * distanceKm);
+  const qty = window._yfState.qty || 1;
+  const unitPrice = _yfActivePrice();
+  const variantName = window._yfState.selectedVariant?.name || null;
+  const subtotal = unitPrice * qty;
+  const total = subtotal + ongkir;
+  window._yfState.pendingOrder = {
+    ad, qty, buyerLat, buyerLng, distanceKm, ongkir, subtotal, total, unitPrice, variantName,
+    notes: (document.getElementById('yfOrderNotes')?.value || '').trim()
+  };
+  document.getElementById('yfOrderSummaryBody').innerHTML = `
+    <div class="flex justify-between"><span>${ad.title}${variantName ? ' ('+variantName+')' : ''} x${qty}</span><span>${_yfFmtPrice(subtotal)}</span></div>
+    <div class="flex justify-between text-gray-500"><span>Jarak ke toko</span><span>${distanceKm.toFixed(1)} km</span></div>
+    <div class="flex justify-between"><span>Ongkir Instan</span><span>${_yfFmtPrice(ongkir)}</span></div>
+    <div class="flex justify-between font-bold text-base border-t border-gray-100 pt-2 mt-1"><span>Total (COD)</span><span>${_yfFmtPrice(total)}</span></div>
+  `;
+  document.getElementById('yfOrderSummaryModal').style.display = 'flex';
+}
+window.yfCloseOrderSummary = function() {
+  document.getElementById('yfOrderSummaryModal').style.display = 'none';
+};
+
+window.yfSubmitFoodOrder = async function() {
+  const p = window._yfState.pendingOrder;
+  const user = window._S?.user;
+  if (!p || !user?.uid) { showToast('Sesi tidak valid, coba login ulang', 'red'); return; }
+  try {
+    const res = await window._supaFetch('/rest/v1/food_orders', {
+      method: 'POST',
+      prefer: 'return=representation',
+      body: JSON.stringify({
+        buyer_id: user.uid, buyer_name: user.name || '', buyer_photo: user.photoUrl || '',
+        seller_id: p.ad.seller_uid, seller_name: p.ad.seller_name || '',
+        ad_id: String(p.ad.id), ad_title: p.ad.title || '', ad_img: p.ad.img_url || '',
+        price: p.unitPrice || 0, qty: p.qty, notes: p.notes || '', variant: p.variantName || null,
+        buyer_lat: p.buyerLat, buyer_lng: p.buyerLng,
+        distance_km: Math.round(p.distanceKm * 100) / 100,
+        ongkir: p.ongkir, total: p.total, payment_method: 'cod', status: 'menunggu_kurir'
+      })
+    });
+    if (!res.ok) throw new Error('Gagal menyimpan pesanan');
+    const [createdOrder] = await res.json().catch(() => [null]);
+    if (createdOrder?.id) {
+      window._supaFetch('/rest/v1/food_order_logs', {
+        method: 'POST', prefer: 'return=minimal',
+        body: JSON.stringify({ food_order_id: createdOrder.id, event: 'created', actor_uid: user.uid, meta: { status: 'menunggu_kurir' } })
+      }).catch(() => {});
+    }
+    showToast('Pesanan YallaFood berhasil dibuat!', 'green');
+    yfCloseOrderSummary();
+    closeFoodDetail();
+    openFoodOrderTracking();
+  } catch (e) {
+    showToast('Gagal membuat pesanan: ' + e.message, 'red');
+  }
+};
+
+// ── TRACKING (buyer: pesanan saya) ───────────────────────────
+window.openFoodOrderTracking = async function() {
+  document.getElementById('yallaFoodOrderTracking').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  await _yfLoadTracking();
+  _yfSubscribeBuyerRealtime();
+};
+window.closeFoodOrderTracking = function() {
+  document.getElementById('yallaFoodOrderTracking').style.display = 'none';
+};
+async function _yfLoadTracking() {
+  const box = document.getElementById('yallaFoodTrackingList');
+  const uid = window._S?.user?.uid;
+  if (!uid) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Silakan login dulu.</p>'; return; }
+  box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat pesanan...</p>';
+  try {
+    const r = await window._supaFetch(`/rest/v1/food_orders?buyer_id=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc`);
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood.</p>'; return; }
+    box.innerHTML = rows.map(o => `
+      <div class="bg-white rounded-2xl p-3 border border-gray-100">
+        <div class="flex gap-3">
+          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
+          <div class="flex-1 min-w-0">
+            <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' ('+o.variant+')' : ''} x${o.qty}</p>
+            <p class="text-xs text-gray-500">${o.seller_name || ''}</p>
+            <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary">${_YF_STATUS_LABEL[o.status] || o.status}</span>
+        </div>
+        ${o.status === 'selesai' ? `<button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="w-full mt-2 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan</button>` : ''}
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat pesanan.</p>';
+  }
+}
+let _yfBuyerChannel = null;
+function _yfSubscribeBuyerRealtime() {
+  const uid = window._S?.user?.uid;
+  if (!uid || !window.supabase) return;
+  if (_yfBuyerChannel) { try { window.supabase.removeChannel(_yfBuyerChannel); } catch (e) {} }
+  _yfBuyerChannel = window.supabase.channel('food_orders_buyer_' + uid)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_orders', filter: `buyer_id=eq.${uid}` }, () => { _yfLoadTracking(); })
+    .subscribe();
+}
+
+// ── SELLER: menu alat toko ────────────────────────────────────
+window.openYallaFoodSellerMenu = function() { document.getElementById('yallaFoodSellerMenu').style.display = 'flex'; };
+window.closeYallaFoodSellerMenu = function() { document.getElementById('yallaFoodSellerMenu').style.display = 'none'; };
+
+// ── SELLER: lokasi toko ───────────────────────────────────────
+window.openYallaFoodLokasiToko = async function() {
+  document.getElementById('yallaFoodLokasiToko').style.display = 'flex';
+  const uid = window._S?.user?.uid;
+  if (!uid) return;
+  try {
+    const r = await window._supaFetch(`/rest/v1/shops?user_id=eq.${encodeURIComponent(uid)}&select=lat,lng&limit=1`);
+    const rows = r.ok ? await r.json() : [];
+    if (rows[0]?.lat != null) document.getElementById('yfLokasiLat').value = rows[0].lat;
+    if (rows[0]?.lng != null) document.getElementById('yfLokasiLng').value = rows[0].lng;
+  } catch (e) {}
+};
+window.closeYallaFoodLokasiToko = function() { document.getElementById('yallaFoodLokasiToko').style.display = 'none'; };
+window.yfUseMyLocation = function() {
+  const status = document.getElementById('yfLokasiStatus');
+  if (!navigator.geolocation) { status.textContent = 'GPS tidak didukung perangkat ini.'; return; }
+  status.textContent = 'Mendeteksi lokasi...';
+  navigator.geolocation.getCurrentPosition((pos) => {
+    document.getElementById('yfLokasiLat').value = pos.coords.latitude;
+    document.getElementById('yfLokasiLng').value = pos.coords.longitude;
+    status.textContent = 'Lokasi terdeteksi. Klik Simpan Lokasi untuk menyimpan.';
+  }, (err) => { status.textContent = 'Gagal mendeteksi lokasi: ' + err.message; }, { enableHighAccuracy: true, timeout: 15000 });
+};
+window.yfSaveLokasiToko = async function() {
+  const uid = window._S?.user?.uid;
+  const lat = parseFloat(document.getElementById('yfLokasiLat').value);
+  const lng = parseFloat(document.getElementById('yfLokasiLng').value);
+  if (!uid) { showToast('Silakan login dulu', 'red'); return; }
+  if (isNaN(lat) || isNaN(lng)) { showToast('Isi latitude & longitude yang valid', 'red'); return; }
+  try {
+    const res = await window._supaFetch(`/rest/v1/shops?user_id=eq.${encodeURIComponent(uid)}`, {
+      method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ lat, lng })
+    });
+    if (!res.ok) throw new Error('Gagal menyimpan');
+    showToast('Lokasi toko tersimpan!', 'green');
+    closeYallaFoodLokasiToko();
+  } catch (e) {
+    showToast('Gagal menyimpan lokasi: ' + e.message, 'red');
+  }
+};
+
+// ── SELLER: kelola pesanan masuk ─────────────────────────────
+window.openKelolaPesananYallaFood = async function() {
+  document.getElementById('yallaFoodKelolaPesanan').style.display = 'flex';
+  await _yfLoadKelolaPesanan();
+  _yfSubscribeSellerRealtime();
+};
+window.closeKelolaPesananYallaFood = function() { document.getElementById('yallaFoodKelolaPesanan').style.display = 'none'; };
+async function _yfLoadKelolaPesanan() {
+  const box = document.getElementById('yallaFoodKelolaList');
+  const uid = window._S?.user?.uid;
+  if (!uid) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Silakan login dulu.</p>'; return; }
+  box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat pesanan masuk...</p>';
+  try {
+    // status=neq.menunggu_kurir — seller baru lihat pesanan SETELAH kurir mengambilnya
+    const r = await window._supaFetch(`/rest/v1/food_orders?seller_id=eq.${encodeURIComponent(uid)}&status=neq.menunggu_kurir&select=*&order=created_at.desc`);
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood masuk.</p>'; return; }
+    box.innerHTML = rows.map(o => {
+      const next = _yfNextStatus(o.status);
+      const canCancel = o.status === 'diterima';
+      return `
+      <div class="bg-white rounded-2xl p-3 border border-gray-100">
+        <div class="flex gap-3 mb-2">
+          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
+          <div class="flex-1 min-w-0">
+            <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' ('+o.variant+')' : ''} x${o.qty}</p>
+            <p class="text-xs text-gray-500 lc1">${o.buyer_name || ''}${o.notes ? ' • ' + o.notes : ''}</p>
+            <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary">${_YF_STATUS_LABEL[o.status] || o.status}</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          ${next ? `<button onclick="yfAdvanceOrderStatus('${o.id}','${next}')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Lanjut: ${_YF_STATUS_LABEL[next]}</button>` : ''}
+          ${canCancel ? `<button onclick="yfAdvanceOrderStatus('${o.id}','dibatalkan')" class="text-xs font-semibold text-red-500 rounded-xl py-2 px-3">Batalkan</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat pesanan.</p>';
+  }
+}
+window.yfAdvanceOrderStatus = async function(orderId, newStatus) {
+  try {
+    const res = await window._supaFetch(`/rest/v1/food_orders?id=eq.${encodeURIComponent(orderId)}`, {
+      method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ status: newStatus, updated_at: new Date().toISOString() })
+    });
+    if (!res.ok) throw new Error('Gagal update status');
+    await _yfLoadKelolaPesanan();
+  } catch (e) {
+    showToast('Gagal update status pesanan: ' + e.message, 'red');
+  }
+};
+let _yfSellerChannel = null;
+function _yfSubscribeSellerRealtime() {
+  const uid = window._S?.user?.uid;
+  if (!uid || !window.supabase) return;
+  if (_yfSellerChannel) { try { window.supabase.removeChannel(_yfSellerChannel); } catch (e) {} }
+  _yfSellerChannel = window.supabase.channel('food_orders_seller_' + uid)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_orders', filter: `seller_id=eq.${uid}` }, () => { _yfLoadKelolaPesanan(); })
+    .subscribe();
+}
+</script>
+
+<!-- ============================================================
+     🛵 KURIR YALLAFOOD — modul baru, terpisah total dari sistem
+     notifikasi/chat/broadcast utama. Realtime in-app saja (bukan
+     push), tidak menyentuh tabel users utama (courier_profiles &
+     food_order_logs terpisah).
+     ============================================================ -->
+
+<!-- KURIR: status / form pendaftaran -->
+<div id="kurirStatusOverlay" style="display:none;position:fixed;inset:0;z-index:55;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeDaftarKurir()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Kurir YallaFood</h2>
+  </div>
+  <div id="kurirStatusBody" class="flex-1 overflow-y-auto px-4 py-4"></div>
+</div>
+
+<!-- KURIR: dashboard (waiting room + pesanan saya antar) -->
+<div id="kurirDashboard" style="display:none;position:fixed;inset:0;z-index:55;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeKurirDashboard()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Dashboard Kurir</h2>
+  </div>
+  <div class="flex-1 overflow-y-auto px-3 py-3">
+    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Pesanan Menunggu Kurir</p>
+    <div id="kurirWaitingRoomList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px"></div>
+    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Pesanan Saya Antar</p>
+    <div id="kurirMyDeliveriesList" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 🛵 KURIR YALLAFOOD MODULE
+// Tabel: courier_profiles (profil mitra), food_order_logs (audit).
+// Notifikasi: realtime in-app saja (postgres_changes), TIDAK memakai
+// sistem push/notifications utama sama sekali.
+// ============================================================
+
+window._kurirState = { profile: null };
+
+function _kurirStatusLabel(s) {
+  return { pending: 'Menunggu Verifikasi Admin', active: 'Aktif', rejected: 'Ditolak' }[s] || s;
+}
+
+async function _kurirFetchOwnProfile(uid) {
+  const r = await window._supaFetch(`/rest/v1/courier_profiles?uid=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc&limit=1`);
+  const rows = r.ok ? await r.json() : [];
+  return rows[0] || null;
+}
+
+window.openDaftarKurir = async function() {
+  const overlay = document.getElementById('kurirStatusOverlay');
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  const body = document.getElementById('kurirStatusBody');
+  const user = window._S?.user;
+  if (!user?.uid) {
+    body.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Silakan login dulu.</p>';
+    return;
+  }
+  body.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat...</p>';
+  const profile = await _kurirFetchOwnProfile(user.uid);
+  window._kurirState.profile = profile;
+
+  if (!profile) {
+    body.innerHTML = `
+      <p class="text-sm text-gray-500 mb-4">Isi data berikut untuk mendaftar sebagai mitra pengantar makanan YallaFood. Akun kamu akan berstatus <b>Menunggu Verifikasi</b> sampai disetujui admin.</p>
+      <label class="text-xs font-semibold text-gray-600">Nama Lengkap</label>
+      <input id="kurirRegName" type="text" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-3 text-sm" value="${user.name || ''}" placeholder="Nama lengkap"/>
+      <label class="text-xs font-semibold text-gray-600">Daerah/Wilayah Siap Antar</label>
+      <textarea id="kurirRegArea" rows="2" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-4 text-sm" placeholder="Contoh: Nadi Qomui, Hay Asher, sekitar Rehab"></textarea>
+      <button onclick="submitDaftarKurir()" class="w-full bg-primary text-white font-bold rounded-2xl py-3">Daftar Sekarang</button>
+    `;
+    return;
+  }
+
+  if (profile.status === 'active') {
+    body.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fa-solid fa-circle-check text-primary text-4xl mb-3"></i>
+        <p class="font-bold text-base mb-1">Kamu mitra kurir YallaFood aktif!</p>
+        <p class="text-sm text-gray-500 mb-5">Daerah: ${profile.coverage_area || '-'}</p>
+        <button onclick="closeDaftarKurir();openKurirDashboard()" class="w-full bg-primary text-white font-bold rounded-2xl py-3">Buka Dashboard Kurir</button>
+      </div>
+    `;
+  } else if (profile.status === 'rejected') {
+    body.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fa-solid fa-circle-xmark text-red-400 text-4xl mb-3"></i>
+        <p class="font-bold text-base mb-1">Pendaftaran ditolak</p>
+        <p class="text-sm text-gray-500">Hubungi admin YallaCare untuk info lebih lanjut.</p>
+      </div>
+    `;
+  } else {
+    body.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fa-solid fa-clock text-amber-400 text-4xl mb-3"></i>
+        <p class="font-bold text-base mb-1">Menunggu Verifikasi Admin</p>
+        <p class="text-sm text-gray-500">Nama: ${profile.name}<br/>Daerah: ${profile.coverage_area || '-'}</p>
+      </div>
+    `;
+  }
+};
+window.closeDaftarKurir = function() {
+  document.getElementById('kurirStatusOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+};
+
+window.submitDaftarKurir = async function() {
+  const user = window._S?.user;
+  if (!user?.uid) { showToast('Login dulu', 'red'); return; }
+  const name = document.getElementById('kurirRegName').value.trim();
+  const area = document.getElementById('kurirRegArea').value.trim();
+  if (!name) { showToast('Nama wajib diisi', 'red'); return; }
+  try {
+    const res = await window._supaFetch('/rest/v1/courier_profiles', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify({ uid: user.uid, name, coverage_area: area, status: 'pending' })
+    });
+    if (!res.ok) throw new Error('Gagal mendaftar');
+    showToast('Pendaftaran terkirim, menunggu verifikasi admin!', 'green');
+    openDaftarKurir();
+  } catch (e) {
+    showToast('Gagal mendaftar: ' + e.message, 'red');
+  }
+};
+
+// ── DASHBOARD KURIR ───────────────────────────────────────────
+window.openKurirDashboard = async function() {
+  const user = window._S?.user;
+  if (!user?.uid) { showToast('Login dulu', 'red'); return; }
+  const profile = await _kurirFetchOwnProfile(user.uid);
+  window._kurirState.profile = profile;
+  if (!profile || profile.status !== 'active') { showToast('Kamu belum jadi mitra kurir aktif', 'red'); return; }
+  document.getElementById('kurirDashboard').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  await _kurirLoadWaitingRoom();
+  await _kurirLoadMyDeliveries();
+  _kurirSubscribeRealtime();
+};
+window.closeKurirDashboard = function() {
+  document.getElementById('kurirDashboard').style.display = 'none';
+  document.body.style.overflow = '';
+};
+
+async function _kurirLoadWaitingRoom() {
+  const box = document.getElementById('kurirWaitingRoomList');
+  box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
+  try {
+    const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir&select=*&order=created_at.asc');
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan menunggu kurir.</p>'; return; }
+    box.innerHTML = rows.map(o => `
+      <div class="bg-white rounded-2xl p-3 border border-gray-100">
+        <div class="flex gap-3 mb-2">
+          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
+          <div class="flex-1 min-w-0">
+            <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' (' + o.variant + ')' : ''} x${o.qty}</p>
+            <p class="text-xs text-gray-500 lc1">${o.seller_name || ''}</p>
+            <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
+          </div>
+        </div>
+        <button onclick="yfKurirClaimOrder('${o.id}')" class="w-full bg-primary text-white text-xs font-bold rounded-xl py-2">Ambil Pesanan</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = '<p class="text-center text-red-400 text-xs py-4">Gagal memuat.</p>';
+  }
+}
+
+async function _kurirLoadMyDeliveries() {
+  const box = document.getElementById('kurirMyDeliveriesList');
+  const uid = window._S?.user?.uid;
+  box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
+  try {
+    const r = await window._supaFetch(`/rest/v1/food_orders?courier_id=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc&limit=20`);
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan yang kamu antar.</p>'; return; }
+    box.innerHTML = rows.map(o => `
+      <div class="bg-white rounded-2xl p-3 border border-gray-100">
+        <div class="flex gap-3">
+          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
+          <div class="flex-1 min-w-0">
+            <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' (' + o.variant + ')' : ''} x${o.qty}</p>
+            <p class="text-xs text-gray-500 lc1">${o.seller_name || ''} → ${o.buyer_name || ''}</p>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary flex-shrink-0">${_YF_STATUS_LABEL[o.status] || o.status}</span>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = '<p class="text-center text-red-400 text-xs py-4">Gagal memuat.</p>';
+  }
+}
+
+window.yfKurirClaimOrder = async function(orderId) {
+  const user = window._S?.user;
+  if (!user?.uid) return;
+  try {
+    const res = await window._supaFetch(`/rest/v1/food_orders?id=eq.${encodeURIComponent(orderId)}&status=eq.menunggu_kurir`, {
+      method: 'PATCH', prefer: 'return=representation',
+      body: JSON.stringify({ courier_id: user.uid, courier_name: user.name || '', status: 'diterima', updated_at: new Date().toISOString() })
+    });
+    const updated = res.ok ? await res.json() : [];
+    if (!updated.length) { showToast('Pesanan sudah diambil kurir lain', 'red'); await _kurirLoadWaitingRoom(); return; }
+    window._supaFetch('/rest/v1/food_order_logs', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify({ food_order_id: orderId, event: 'courier_claimed', actor_uid: user.uid, meta: { courier_name: user.name || '' } })
+    }).catch(() => {});
+    showToast('Pesanan berhasil diambil!', 'green');
+    await _kurirLoadWaitingRoom();
+    await _kurirLoadMyDeliveries();
+  } catch (e) {
+    showToast('Gagal mengambil pesanan: ' + e.message, 'red');
+  }
+};
+
+let _kurirChannel = null;
+function _kurirSubscribeRealtime() {
+  if (!window.supabase) return;
+  if (_kurirChannel) { try { window.supabase.removeChannel(_kurirChannel); } catch (e) {} }
+  _kurirChannel = window.supabase.channel('food_orders_kurir_pool')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_orders', filter: 'status=eq.menunggu_kurir' }, () => { _kurirLoadWaitingRoom(); })
+    .subscribe();
+}
+
+// ── ADMIN: approval mitra kurir (tab baru di Panel Admin) ────
+window.loadKurirAdminUI = async function() {
+  const box = document.getElementById('kurirAdminList');
+  if (!box) return;
+  box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat...</p>';
+  try {
+    const r = await window._supaFetch('/rest/v1/courier_profiles?select=*&order=applied_at.desc');
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pendaftar kurir.</p>'; return; }
+    box.innerHTML = rows.map(c => `
+      <div class="bg-white rounded-2xl p-3.5 border border-gray-100 mb-2.5">
+        <div class="flex items-center justify-between mb-1">
+          <p class="font-bold text-sm text-gray-800">${c.name}</p>
+          <span class="text-[10px] font-bold px-2 py-1 rounded-full ${c.status === 'active' ? 'bg-pl text-primary' : c.status === 'rejected' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}">${_kurirStatusLabel(c.status)}</span>
+        </div>
+        <p class="text-xs text-gray-500 mb-2.5">Daerah: ${c.coverage_area || '-'}</p>
+        ${c.status === 'pending' ? `
+        <div style="display:flex;gap:8px">
+          <button onclick="kurirAdminSetStatus('${c.id}','active')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Setujui</button>
+          <button onclick="kurirAdminSetStatus('${c.id}','rejected')" class="flex-1 bg-gray-100 text-gray-600 text-xs font-bold rounded-xl py-2">Tolak</button>
+        </div>` : ''}
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat data kurir.</p>';
+  }
+};
+
+window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
+  try {
+    const admin = window._S?.user;
+    const res = await window._supaFetch(`/rest/v1/courier_profiles?id=eq.${encodeURIComponent(courierRowId)}`, {
+      method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ status: newStatus, approved_at: new Date().toISOString(), approved_by: admin?.email || '' })
+    });
+    if (!res.ok) throw new Error('Gagal update status kurir');
+    showToast(newStatus === 'active' ? 'Kurir disetujui!' : 'Kurir ditolak', 'green');
+    await window.loadKurirAdminUI();
+  } catch (e) {
+    showToast('Gagal: ' + e.message, 'red');
+  }
+};
 </script>
 
 </body>
