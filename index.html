@@ -22539,13 +22539,32 @@ window.yfStartOrder = function() {
   if (!navigator.geolocation) { showToast('Perangkat tidak mendukung GPS', 'red'); return; }
   const btn = document.getElementById('yfPesanBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Mendeteksi lokasi...'; }
+
+  // Pengaman tambahan: sebagian browser/HP tidak selalu menghormati opsi
+  // `timeout` bawaan geolocation (mis. saat GPS sistem mati) sehingga callback
+  // sukses/gagal tidak pernah terpanggil dan tombol macet selamanya. Timer ini
+  // memaksa tombol kembali normal + kasih pesan jelas kalau itu terjadi.
+  let _yfGeoSettled = false;
+  const _yfGeoSafetyTimer = setTimeout(() => {
+    if (_yfGeoSettled) return;
+    _yfGeoSettled = true;
+    showToast('Gagal mendeteksi lokasi. Pastikan GPS/Lokasi di HP kamu aktif, lalu coba lagi.', 'red');
+    if (btn) { btn.disabled = false; btn.textContent = 'Pesan Sekarang'; }
+  }, 20000);
+
   navigator.geolocation.getCurrentPosition(async (pos) => {
+    if (_yfGeoSettled) return;
+    _yfGeoSettled = true;
+    clearTimeout(_yfGeoSafetyTimer);
     try {
       await _yfComputeAndShowSummary(ad, pos.coords.latitude, pos.coords.longitude);
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Pesan Sekarang'; }
     }
   }, (err) => {
+    if (_yfGeoSettled) return;
+    _yfGeoSettled = true;
+    clearTimeout(_yfGeoSafetyTimer);
     showToast('Gagal mendapat lokasi GPS: ' + err.message, 'red');
     if (btn) { btn.disabled = false; btn.textContent = 'Pesan Sekarang'; }
   }, { enableHighAccuracy: true, timeout: 15000 });
