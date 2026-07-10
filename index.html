@@ -23301,6 +23301,12 @@ window.closeYfChat = function() {
   document.body.style.overflow = '';
   if (_yfChatChannel && window.supabase) { try { window.supabase.removeChannel(_yfChatChannel); } catch (e) {} }
   _yfChatChannel = null;
+  // Chat yang baru dibaca menandai lastRead di localStorage (lihat _yfChatLoadMessages),
+  // tapi card Dashboard Kurir di baliknya sudah terlanjur dirender dgn badge LAMA.
+  // Refresh di sini supaya badge per-tombol langsung hilang begitu chat ditutup,
+  // bukan menunggu event realtime berikutnya.
+  const dash = document.getElementById('kurirDashboard');
+  if (dash && dash.style.display === 'flex') _kurirLoadMyDeliveries();
 };
 
 async function _yfChatLoadMessages() {
