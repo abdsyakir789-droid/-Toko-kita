@@ -22639,12 +22639,33 @@ window.yfSubmitFoodOrder = async function() {
   const p = window._yfState.pendingOrder;
   const user = window._S?.user;
   if (!p || !user?.uid) { showToast('Sesi tidak valid, coba login ulang', 'red'); return; }
+
+  // [VALIDASI ALAMAT] Sama persis dengan pola yang sudah dipakai checkout barang
+  // fisik (lihat checkoutToChat) — reuse showAddressWarningToast()+openAlamatSaya()
+  // yang sudah ada, TIDAK bikin popup/alur alamat baru. Pesanan YallaFood dilarang
+  // masuk ke antrean kurir tanpa alamat valid.
+  let _buyerAddress = '';
+  try {
+    const _addrRes = await window._supaFetch('/rest/v1/users?uid=eq.' + user.uid + '&select=address&limit=1');
+    const _addrData = await _addrRes.json();
+    _buyerAddress = (_addrData && _addrData[0] && _addrData[0].address || '').trim();
+    if (!_buyerAddress) {
+      showAddressWarningToast();
+      setTimeout(function () { openAlamatSaya(); }, 1000);
+      return;
+    }
+  } catch (e) {
+    showToast('Gagal memeriksa alamat, coba lagi', 'red');
+    return;
+  }
+
   try {
     const res = await window._supaFetch('/rest/v1/food_orders', {
       method: 'POST',
       prefer: 'return=representation',
       body: JSON.stringify({
         buyer_id: user.uid, buyer_name: user.name || '', buyer_photo: user.photoUrl || '',
+        buyer_address: _buyerAddress,
         seller_id: p.ad.seller_uid, seller_name: p.ad.seller_name || '',
         ad_id: String(p.ad.id), ad_title: p.ad.title || '', ad_img: p.ad.img_url || '',
         price: p.unitPrice || 0, qty: p.qty, notes: p.notes || '', variant: p.variantName || null,
@@ -22699,7 +22720,17 @@ async function _yfLoadTracking() {
             <p class="text-xs text-gray-500">${o.seller_name || ''}</p>
             <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
           </div>
-          <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary">${_YF_STATUS_LABEL[o.status] || o.status}</span>
+          ${o.status === 'menunggu_kurir' ? `
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:150px">
+            <button onclick="yfCancelFoodOrder('${o.id}')" class="text-[10px] font-bold px-2 py-1 rounded-full bg-red-50 text-red-500" style="white-space:nowrap">Batalkan</button>
+            <span class="text-[10px] font-bold px-2 py-1 rounded-full bg-pl text-primary" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap">Mencari Kurir <i class="fa-solid fa-spinner fa-spin" style="font-size:9px"></i></span>
+          </div>
+          ` : o.status === 'diterima' ? `
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
+            <span class="text-[10px] font-bold px-2 py-1 rounded-full bg-pl text-primary" style="white-space:nowrap">Pemesanan Diterima</span>
+            ${o.courier_name ? `<span class="text-[10px] font-bold text-gray-900" style="white-space:nowrap">Kurir: ${o.courier_name}</span>` : ''}
+          </div>
+          ` : `<span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full flex-shrink-0 ${o.status === 'dibatalkan' ? 'bg-red-50 text-red-500' : 'bg-pl text-primary'}">${_YF_STATUS_LABEL[o.status] || o.status}</span>`}
         </div>
         ${o.courier_id ? `<button onclick="openYfChat('${o.id}','buyer_kurir','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" class="w-full mt-2 text-xs font-bold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir</button>` : ''}
         ${o.status === 'selesai' ? `<button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="w-full mt-2 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan</button>` : ''}
@@ -22709,6 +22740,33 @@ async function _yfLoadTracking() {
     box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat pesanan.</p>';
   }
 }
+// Batalkan pesanan SELAGI masih 'menunggu_kurir' — tidak menyentuh logika
+// pencarian/klaim kurir sama sekali, cuma PATCH status food_orders sendiri.
+// Filter status=eq.menunggu_kurir di WHERE mencegah race condition dengan
+// kurir yang mengklaim di saat bersamaan (siapa lebih dulu commit, menang;
+// yang kalah dapat updated.length===0 dan tidak menggantung, cukup refresh).
+window.yfCancelFoodOrder = async function(orderId) {
+  const user = window._S?.user;
+  if (!user?.uid) { showToast('Login dulu', 'red'); return; }
+  if (!confirm('Batalkan pencarian kurir untuk pesanan ini?')) return;
+  try {
+    const res = await window._supaFetch(`/rest/v1/food_orders?id=eq.${encodeURIComponent(orderId)}&buyer_id=eq.${encodeURIComponent(user.uid)}&status=eq.menunggu_kurir`, {
+      method: 'PATCH', prefer: 'return=representation',
+      body: JSON.stringify({ status: 'dibatalkan', updated_at: new Date().toISOString() })
+    });
+    const updated = res.ok ? await res.json() : [];
+    if (!updated.length) { showToast('Pesanan sudah diproses, tidak bisa dibatalkan lagi', 'red'); await _yfLoadTracking(); return; }
+    window._supaFetch('/rest/v1/food_order_logs', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify({ food_order_id: orderId, event: 'cancelled_by_buyer', actor_uid: user.uid })
+    }).catch(() => {});
+    showToast('Pesanan dibatalkan', 'green');
+    await _yfLoadTracking();
+  } catch (e) {
+    showToast('Gagal membatalkan: ' + e.message, 'red');
+  }
+};
+
 let _yfBuyerChannel = null;
 function _yfSubscribeBuyerRealtime() {
   const uid = window._S?.user?.uid;
@@ -22996,6 +23054,12 @@ async function _kurirLoadWaitingRoom() {
             <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
           </div>
         </div>
+        ${o.buyer_address ? `
+        <div style="display:flex;align-items:flex-start;gap:6px;background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
+          <i class="fa-solid fa-location-dot" style="color:#9ca3af;font-size:11px;margin-top:2px;flex-shrink:0"></i>
+          <p style="font-size:11px;color:#4b5563;line-height:1.4;margin:0;word-break:break-word">${_sadEscHtml(o.buyer_address)}</p>
+        </div>
+        ` : ''}
         <button onclick="yfKurirClaimOrder('${o.id}')" class="w-full bg-primary text-white text-xs font-bold rounded-xl py-2">Ambil Pesanan</button>
       </div>
     `).join('');
@@ -23076,6 +23140,10 @@ window.yfKurirClaimOrder = async function(orderId) {
     // Reset badge antrean 'Menunggu Kurir' di menu profil setelah kurir mengambil pesanan
     _yfOrderQueueSetLastSeen();
     _yfOrderQueueRefreshBadge();
+    // Beri tahu kurir LAIN (broadcast, bukan postgres_changes — lihat penjelasan
+    // di _yfOrderPoolBroadcastSubscribe) supaya badge & waiting room mereka
+    // ikut sinkron begitu pesanan ini hilang dari antrean bersama.
+    _yfOrderPoolBroadcastNotify();
     showToast('Pesanan berhasil diambil!', 'green');
     await _kurirLoadWaitingRoom();
     await _kurirLoadMyDeliveries();
@@ -23381,7 +23449,9 @@ function _yfChatSubscribeGlobalUnread() {
       const dash = document.getElementById('kurirDashboard');
       if (dash && dash.style.display === 'flex') _kurirLoadMyDeliveries();
     })
-    .subscribe();
+    .subscribe((status, err) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[YallaFood Chat] channel unread global bermasalah:', status, err?.message || '');
+    });
 }
 
 // ============================================================
@@ -23423,9 +23493,47 @@ function _yfOrderQueueSubscribeGlobal() {
   const uid = window._S?.user?.uid;
   if (!uid || !window.supabase) return;
   if (_yfOrderQueueChannel) { try { window.supabase.removeChannel(_yfOrderQueueChannel); } catch (e) {} }
+  // Menangkap pesanan BARU masuk antrean (row ini masih terlihat oleh semua
+  // kurir aktif lewat RLS 'status=menunggu_kurir', jadi event INSERT normal
+  // sampai). Untuk kasus "sudah diambil kurir lain", lihat _yfOrderPoolBroadcast
+  // di bawah — RLS food_orders membuat baris yang sudah diklaim ORANG LAIN
+  // langsung tidak terlihat oleh kurir lain, jadi Postgres Realtime TIDAK
+  // pernah mengirim event UPDATE itu ke mereka (bukan bug filter, tapi
+  // keterbatasan RLS+Realtime). Makanya sinkronisasi "hilang setelah diambil
+  // kurir lain" pakai jalur broadcast terpisah, bukan postgres_changes.
   _yfOrderQueueChannel = window.supabase.channel('food_orders_queue_badge_' + uid)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'food_orders', filter: 'status=eq.menunggu_kurir' }, () => { _yfOrderQueueRefreshBadge(); })
-    .subscribe();
+    .subscribe((status, err) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[YallaFood Kurir] channel badge antrean bermasalah:', status, err?.message || '');
+    });
+}
+
+// ============================================================
+// 📡 BROADCAST POOL EVENT — solusi untuk kasus yang TIDAK BISA
+// ditangani postgres_changes: saat kurir A mengklaim pesanan, baris itu
+// langsung hilang dari SELECT kurir B/C/dst (RLS food_orders), sehingga
+// Realtime tidak pernah mengirim event UPDATE ke mereka. Broadcast Supabase
+// Realtime tidak terikat RLS baris tabel, jadi dipakai sebagai sinyal
+// ringan "ada perubahan di pool, tolong cek ulang" — bukan pengganti
+// postgres_changes, cuma pelengkap utk celah spesifik ini.
+// ============================================================
+let _yfOrderPoolBroadcastChannel = null;
+function _yfOrderPoolBroadcastSubscribe() {
+  const uid = window._S?.user?.uid;
+  if (!uid || !window.supabase) return;
+  if (_yfOrderPoolBroadcastChannel) { try { window.supabase.removeChannel(_yfOrderPoolBroadcastChannel); } catch (e) {} }
+  _yfOrderPoolBroadcastChannel = window.supabase.channel('food_orders_pool_broadcast', { config: { broadcast: { self: false } } })
+    .on('broadcast', { event: 'pool_changed' }, () => {
+      _yfOrderQueueRefreshBadge();
+      const dash = document.getElementById('kurirDashboard');
+      if (dash && dash.style.display === 'flex') _kurirLoadWaitingRoom();
+    })
+    .subscribe((status, err) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[YallaFood Kurir] channel broadcast pool bermasalah:', status, err?.message || '');
+    });
+}
+function _yfOrderPoolBroadcastNotify() {
+  try { _yfOrderPoolBroadcastChannel?.send({ type: 'broadcast', event: 'pool_changed', payload: {} }); } catch (e) {}
 }
 
 // ============================================================
@@ -23474,6 +23582,27 @@ document.addEventListener('click', function(e) {
     .catch(() => {});
 });
 
+// ============================================================
+// 📶 RECOVERY SAAT TAB/APP KEMBALI AKTIF — event-driven, BUKAN
+// setInterval/polling. Browser mobile men-suspend koneksi WebSocket
+// saat tab di-background (mis. layar kurir mati menunggu order).
+// Saat kurir membuka lagi ('visibilitychange' -> visible), channel
+// realtime yang sempat mati di-resubscribe + state direkonsiliasi
+// SEKALI (bukan loop) supaya badge & notifikasi akurat tanpa perlu
+// refresh manual.
+// ============================================================
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!window._S?.user?.uid) return;
+  _yfOrderQueueSubscribeGlobal();
+  _yfOrderPoolBroadcastSubscribe();
+  _yfChatSubscribeGlobalUnread();
+  _yfOrderQueueRefreshBadge();
+  _yfChatRefreshUnreadBadge();
+  const dash = document.getElementById('kurirDashboard');
+  if (dash && dash.style.display === 'flex') { _kurirLoadWaitingRoom(); _kurirLoadMyDeliveries(); }
+});
+
 // Ikut jalan tiap kali renderUserState() dipanggil (login/logout/update profil)
 // — dibungkus dari luar, TIDAK ada satu baris pun kode renderUserState asli yang diubah.
 (function() {
@@ -23485,6 +23614,7 @@ document.addEventListener('click', function(e) {
     _yfChatSubscribeGlobalUnread();
     _yfOrderQueueRefreshBadge();
     _yfOrderQueueSubscribeGlobal();
+    _yfOrderPoolBroadcastSubscribe();
     return result;
   };
 })();
@@ -23494,6 +23624,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   _yfChatSubscribeGlobalUnread();
   _yfOrderQueueRefreshBadge();
   _yfOrderQueueSubscribeGlobal();
+  _yfOrderPoolBroadcastSubscribe();
 }, 1500));
 </script>
 
