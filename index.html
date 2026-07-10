@@ -3213,6 +3213,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0" style="position:relative">
         <span class="lucide-icon" id="menuKurirIconMob"></span>
         <span id="yfChatBadgeKurirMob" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center">0</span>
+        <span id="yfOrderBadgeKurirMob" style="display:none;position:absolute;top:-4px;left:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center">0</span>
       </div>
       <div class="flex-1">
         <p id="menuKurirLabelMob" style="font-size:13px;font-weight:700;color:#111827;margin:0">Daftar Kurir YallaFood</p>
@@ -3296,6 +3297,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <div class="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0" style="position:relative">
         <span class="lucide-icon" id="menuKurirIconDesktop"></span>
         <span id="yfChatBadgeKurirDesktop" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center">0</span>
+        <span id="yfOrderBadgeKurirDesktop" style="display:none;position:absolute;top:-4px;left:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center">0</span>
       </div>
       <div class="flex-1">
         <p id="menuKurirLabelDesktop" class="text-sm font-bold text-gray-900">Daftar Kurir YallaFood</p>
@@ -22658,6 +22660,7 @@ window.yfSubmitFoodOrder = async function() {
         method: 'POST', prefer: 'return=minimal',
         body: JSON.stringify({ food_order_id: createdOrder.id, event: 'created', actor_uid: user.uid, meta: { status: 'menunggu_kurir' } })
       }).catch(() => {});
+      _yfNotifyActiveCouriers(createdOrder).catch(() => {});
     }
     showToast('Pesanan YallaFood berhasil dibuat!', 'green');
     yfCloseOrderSummary();
@@ -23009,7 +23012,30 @@ async function _kurirLoadMyDeliveries() {
     const r = await window._supaFetch(`/rest/v1/food_orders?courier_id=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc&limit=20`);
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan yang kamu antar.</p>'; return; }
-    box.innerHTML = rows.map(o => `
+
+    // Badge unread PER TOMBOL (Chat Buyer / Chat Seller) — bukan agregat.
+    // Satu query room + satu query pesan untuk semua order sekaligus (bukan loop per-row).
+    const unreadMap = {};
+    try {
+      const orderIds = rows.map(o => o.id);
+      const rr = await window._supaFetch(`/rest/v1/food_chat_rooms?food_order_id=in.(${orderIds.join(',')})&select=id,food_order_id,thread`);
+      const roomRows = rr.ok ? await rr.json() : [];
+      if (roomRows.length) {
+        const roomIds = roomRows.map(x => x.id);
+        const mr = await window._supaFetch(`/rest/v1/food_chat_messages?room_id=in.(${roomIds.join(',')})&sender_uid=neq.${encodeURIComponent(uid)}&select=room_id,created_at`);
+        const msgs = mr.ok ? await mr.json() : [];
+        const countByRoom = {};
+        msgs.forEach(m => { if (new Date(m.created_at).getTime() > _yfChatGetLastRead(m.room_id)) countByRoom[m.room_id] = (countByRoom[m.room_id] || 0) + 1; });
+        roomRows.forEach(rm => { unreadMap[rm.food_order_id + '_' + rm.thread] = countByRoom[rm.id] || 0; });
+      }
+    } catch (e) { console.warn('[YallaFood Kurir] gagal hitung badge chat per-tombol:', e.message); }
+
+    const _yfBtnBadge = (n) => n > 0 ? `<span style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0 3px">${n > 9 ? '9+' : n}</span>` : '';
+
+    box.innerHTML = rows.map(o => {
+      const buyerUnread = unreadMap[o.id + '_buyer_kurir'] || 0;
+      const sellerUnread = unreadMap[o.id + '_kurir_seller'] || 0;
+      return `
       <div class="bg-white rounded-2xl p-3 border border-gray-100">
         <div class="flex gap-3">
           <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
@@ -23020,11 +23046,12 @@ async function _kurirLoadMyDeliveries() {
           <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary flex-shrink-0">${_YF_STATUS_LABEL[o.status] || o.status}</span>
         </div>
         <div style="display:flex;gap:8px;margin-top:8px">
-          <button onclick="openYfChat('${o.id}','buyer_kurir','${(o.buyer_name||'Buyer').replace(/['"\`]/g,'')}')" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Buyer</button>
-          <button onclick="openYfChat('${o.id}','kurir_seller','${(o.seller_name||'Seller').replace(/['"\`]/g,'')}')" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Seller</button>
+          <button onclick="openYfChat('${o.id}','buyer_kurir','${(o.buyer_name||'Buyer').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Buyer${_yfBtnBadge(buyerUnread)}</button>
+          <button onclick="openYfChat('${o.id}','kurir_seller','${(o.seller_name||'Seller').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Seller${_yfBtnBadge(sellerUnread)}</button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   } catch (e) {
     box.innerHTML = '<p class="text-center text-red-400 text-xs py-4">Gagal memuat.</p>';
   }
@@ -23046,6 +23073,9 @@ window.yfKurirClaimOrder = async function(orderId) {
     }).catch(() => {});
     // Otomatis buka 2 room chat sementara: Buyer<->Kurir dan Kurir<->Seller
     _yfChatCreateRoomsForOrder(updated[0], user.uid, user.name || '').catch(() => {});
+    // Reset badge antrean 'Menunggu Kurir' di menu profil setelah kurir mengambil pesanan
+    _yfOrderQueueSetLastSeen();
+    _yfOrderQueueRefreshBadge();
     showToast('Pesanan berhasil diambil!', 'green');
     await _kurirLoadWaitingRoom();
     await _kurirLoadMyDeliveries();
@@ -23345,9 +23375,104 @@ function _yfChatSubscribeGlobalUnread() {
   if (!uid || !window.supabase) return;
   if (_yfGlobalChatChannel) { try { window.supabase.removeChannel(_yfGlobalChatChannel); } catch (e) {} }
   _yfGlobalChatChannel = window.supabase.channel('food_chat_unread_' + uid)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'food_chat_messages' }, () => { _yfChatRefreshUnreadBadge(); })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'food_chat_messages' }, () => {
+      _yfChatRefreshUnreadBadge();
+      // Kalau Dashboard Kurir sedang terbuka, refresh juga badge per-tombol Chat Buyer/Chat Seller
+      const dash = document.getElementById('kurirDashboard');
+      if (dash && dash.style.display === 'flex') _kurirLoadMyDeliveries();
+    })
     .subscribe();
 }
+
+// ============================================================
+// 🔔 BADGE ANTREAN 'MENUNGGU KURIR' — terpisah TOTAL dari badge chat
+// di atas. Hanya aktif untuk kurir berstatus 'active'. Last-seen di
+// localStorage (pola sama seperti badge chat), event-driven via
+// Supabase Realtime pada food_orders (bukan polling/interval).
+// ============================================================
+function _yfOrderQueueLastSeenKey(uid) { return 'yf_orderqueue_lastseen_' + uid; }
+function _yfOrderQueueGetLastSeen() {
+  const uid = window._S?.user?.uid; if (!uid) return 0;
+  try { return parseInt(localStorage.getItem(_yfOrderQueueLastSeenKey(uid)) || '0'); } catch (e) { return 0; }
+}
+function _yfOrderQueueSetLastSeen() {
+  const uid = window._S?.user?.uid; if (!uid) return;
+  try { localStorage.setItem(_yfOrderQueueLastSeenKey(uid), Date.now().toString()); } catch (e) {}
+}
+async function _yfOrderQueueRefreshBadge() {
+  const badges = ['yfOrderBadgeKurirMob', 'yfOrderBadgeKurirDesktop'].map(id => document.getElementById(id)).filter(Boolean);
+  if (!badges.length) return;
+  const user = window._S?.user;
+  if (!user?.uid) { badges.forEach(b => { b.style.display = 'none'; }); return; }
+  try {
+    const pr = await window._supaFetch(`/rest/v1/courier_profiles?uid=eq.${encodeURIComponent(user.uid)}&select=status&limit=1`);
+    const prow = pr.ok ? await pr.json() : [];
+    if (prow[0]?.status !== 'active') { badges.forEach(b => { b.style.display = 'none'; }); return; }
+    const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir&select=created_at');
+    const rows = r.ok ? await r.json() : [];
+    const lastSeen = _yfOrderQueueGetLastSeen();
+    const count = rows.filter(o => new Date(o.created_at).getTime() > lastSeen).length;
+    badges.forEach(b => {
+      b.textContent = count > 9 ? '9+' : String(count);
+      b.style.display = count > 0 ? 'flex' : 'none';
+    });
+  } catch (e) { console.warn('[YallaFood Kurir] gagal hitung badge antrean:', e.message); }
+}
+let _yfOrderQueueChannel = null;
+function _yfOrderQueueSubscribeGlobal() {
+  const uid = window._S?.user?.uid;
+  if (!uid || !window.supabase) return;
+  if (_yfOrderQueueChannel) { try { window.supabase.removeChannel(_yfOrderQueueChannel); } catch (e) {} }
+  _yfOrderQueueChannel = window.supabase.channel('food_orders_queue_badge_' + uid)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'food_orders', filter: 'status=eq.menunggu_kurir' }, () => { _yfOrderQueueRefreshBadge(); })
+    .subscribe();
+}
+
+// ============================================================
+// 🔔 PUSH NOTIFICATION KE BEL — HANYA menambahkan hook/listener.
+// Tidak ada satu baris pun kode inti sistem notifikasi (render/badge/
+// klik/mark-read) yang diubah. Insert row ke tabel `notifications`
+// yang sudah ada (skema sama seperti notif follow/chat lain) supaya
+// tampil lewat pipeline bel yang sudah berjalan apa adanya.
+// ============================================================
+async function _yfNotifyActiveCouriers(order) {
+  try {
+    const cr = await window._supaFetch('/rest/v1/courier_profiles?status=eq.active&select=uid');
+    const couriers = cr.ok ? await cr.json() : [];
+    if (!couriers.length) return;
+    const now = new Date().toISOString();
+    const payload = couriers
+      .filter(c => c.uid && c.uid !== order.buyer_id)
+      .map(c => ({
+        to_uid: c.uid, user_id: c.uid, type: 'yallafood_kurir',
+        message: 'Pesanan YallaFood: Cek Sekarang!',
+        sender_name: 'Sistem YallaFood', is_read: false, created_at: now
+      }));
+    if (!payload.length) return;
+    await window._supaFetch('/rest/v1/notifications', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify(payload) });
+  } catch (e) { console.warn('[YallaFood Kurir] gagal kirim notifikasi bel:', e.message); }
+}
+
+// Hook klik TAMBAHAN (bukan pengganti) di atas listener notif yang sudah ada —
+// hanya menambah redirect ke Dashboard Kurir khusus notif type 'yallafood_kurir'.
+// Listener default (markNotifRead dkk) tetap jalan apa adanya, tidak disentuh.
+document.addEventListener('click', function(e) {
+  const card = e.target.closest('.notif-act-item');
+  if (!card) return;
+  const nid = card.getAttribute('data-notif-id');
+  if (!nid) return;
+  window._supaFetch(`/rest/v1/notifications?id=eq.${encodeURIComponent(nid)}&select=type&limit=1`)
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => {
+      if (rows[0]?.type === 'yallafood_kurir') {
+        setTimeout(() => {
+          if (typeof closeNotifFullScreen === 'function') closeNotifFullScreen();
+          openKurirDashboard();
+        }, 150);
+      }
+    })
+    .catch(() => {});
+});
 
 // Ikut jalan tiap kali renderUserState() dipanggil (login/logout/update profil)
 // — dibungkus dari luar, TIDAK ada satu baris pun kode renderUserState asli yang diubah.
@@ -23358,6 +23483,8 @@ function _yfChatSubscribeGlobalUnread() {
     _yfRefreshKurirMenuLabel();
     _yfChatRefreshUnreadBadge();
     _yfChatSubscribeGlobalUnread();
+    _yfOrderQueueRefreshBadge();
+    _yfOrderQueueSubscribeGlobal();
     return result;
   };
 })();
@@ -23365,6 +23492,8 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   _yfRefreshKurirMenuLabel();
   _yfChatRefreshUnreadBadge();
   _yfChatSubscribeGlobalUnread();
+  _yfOrderQueueRefreshBadge();
+  _yfOrderQueueSubscribeGlobal();
 }, 1500));
 </script>
 
