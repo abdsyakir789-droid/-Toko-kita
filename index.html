@@ -2841,6 +2841,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <button onclick="filterCat('fashion')" data-nav="fashion" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-shirt mr-1 text-[10px]"></i>Fashion</button>
       <button onclick="filterCat('kecantikan')" data-nav="kecantikan" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-wand-sparkles mr-1 text-[10px]"></i>Kecantikan</button>
       <button onclick="filterCat('makanan')" data-nav="makanan" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-utensils mr-1 text-[10px]"></i>Makanan</button>
+      <button onclick="openYallaFoodHome()" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-burger mr-1 text-[10px]"></i>YallaFood</button>
     </div>
   </div>
 </header>
@@ -3207,12 +3208,12 @@ h3.text-sm.font-bold.text-gray-800 {
 
   <!-- ══ KURIR YALLAFOOD — menu baru, murni tambahan, tidak mengubah row lain (MOBILE ONLY) ══ -->
   <div class="md:hidden mb-4">
-    <button onclick="openDaftarKurir()" class="w-full flex items-center gap-3 bg-white rounded-2xl py-4 px-4 transition-all text-left">
-      <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
-        <i class="fa-solid fa-motorcycle text-amber-500"></i>
+    <button id="menuKurirBtnMob" onclick="openDaftarKurir()" class="w-full flex items-center gap-3 bg-white rounded-2xl py-4 px-4 transition-all text-left">
+      <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0">
+        <span class="lucide-icon" id="menuKurirIconMob"></span>
       </div>
       <div class="flex-1">
-        <p style="font-size:13px;font-weight:700;color:#111827;margin:0">Daftar Kurir YallaFood</p>
+        <p id="menuKurirLabelMob" style="font-size:13px;font-weight:700;color:#111827;margin:0">Daftar Kurir YallaFood</p>
         <p style="font-size:10px;color:#6b7280;margin:0">Jadi mitra pengantar makanan</p>
       </div>
       <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
@@ -3289,12 +3290,12 @@ h3.text-sm.font-bold.text-gray-800 {
 
   <!-- ══ KURIR YALLAFOOD — Desktop, menu baru murni tambahan ══ -->
   <div class="hidden md:block mb-4">
-    <button onclick="openDaftarKurir()" class="w-full flex items-center gap-3 bg-white rounded-2xl py-4 px-5 transition-all hover:shadow-md text-left">
-      <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
-        <i class="fa-solid fa-motorcycle text-amber-500"></i>
+    <button id="menuKurirBtnDesktop" onclick="openDaftarKurir()" class="w-full flex items-center gap-3 bg-white rounded-2xl py-4 px-5 transition-all hover:shadow-md text-left">
+      <div class="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0">
+        <span class="lucide-icon" id="menuKurirIconDesktop"></span>
       </div>
       <div class="flex-1">
-        <p class="text-sm font-bold text-gray-900">Daftar Kurir YallaFood</p>
+        <p id="menuKurirLabelDesktop" class="text-sm font-bold text-gray-900">Daftar Kurir YallaFood</p>
         <p class="text-xs text-gray-500">Jadi mitra pengantar makanan</p>
       </div>
       <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
@@ -22667,6 +22668,7 @@ async function _yfLoadTracking() {
           </div>
           <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary">${_YF_STATUS_LABEL[o.status] || o.status}</span>
         </div>
+        ${o.courier_id ? `<button onclick="openYfChat('${o.id}','buyer_kurir','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" class="w-full mt-2 text-xs font-bold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir</button>` : ''}
         ${o.status === 'selesai' ? `<button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="w-full mt-2 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan</button>` : ''}
       </div>
     `).join('');
@@ -22764,6 +22766,7 @@ async function _yfLoadKelolaPesanan() {
         <div style="display:flex;gap:8px">
           ${next ? `<button onclick="yfAdvanceOrderStatus('${o.id}','${next}')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Lanjut: ${_YF_STATUS_LABEL[next]}</button>` : ''}
           ${canCancel ? `<button onclick="yfAdvanceOrderStatus('${o.id}','dibatalkan')" class="text-xs font-semibold text-red-500 rounded-xl py-2 px-3">Batalkan</button>` : ''}
+          ${o.courier_id ? `<button onclick="openYfChat('${o.id}','kurir_seller','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" class="text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2 px-3"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir</button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -22778,6 +22781,10 @@ window.yfAdvanceOrderStatus = async function(orderId, newStatus) {
       body: JSON.stringify({ status: newStatus, updated_at: new Date().toISOString() })
     });
     if (!res.ok) throw new Error('Gagal update status');
+    // Chat sementara YallaFood wajib terkunci begitu pesanan selesai/dibatalkan
+    if (newStatus === 'selesai' || newStatus === 'dibatalkan') {
+      _yfChatCloseRoomsForOrder(orderId).catch(() => {});
+    }
     await _yfLoadKelolaPesanan();
   } catch (e) {
     showToast('Gagal update status pesanan: ' + e.message, 'red');
@@ -22982,6 +22989,10 @@ async function _kurirLoadMyDeliveries() {
           </div>
           <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary flex-shrink-0">${_YF_STATUS_LABEL[o.status] || o.status}</span>
         </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button onclick="openYfChat('${o.id}','buyer_kurir','${(o.buyer_name||'Buyer').replace(/['"\`]/g,'')}')" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Buyer</button>
+          <button onclick="openYfChat('${o.id}','kurir_seller','${(o.seller_name||'Seller').replace(/['"\`]/g,'')}')" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Seller</button>
+        </div>
       </div>
     `).join('');
   } catch (e) {
@@ -23003,6 +23014,8 @@ window.yfKurirClaimOrder = async function(orderId) {
       method: 'POST', prefer: 'return=minimal',
       body: JSON.stringify({ food_order_id: orderId, event: 'courier_claimed', actor_uid: user.uid, meta: { courier_name: user.name || '' } })
     }).catch(() => {});
+    // Otomatis buka 2 room chat sementara: Buyer<->Kurir dan Kurir<->Seller
+    _yfChatCreateRoomsForOrder(updated[0], user.uid, user.name || '').catch(() => {});
     showToast('Pesanan berhasil diambil!', 'green');
     await _kurirLoadWaitingRoom();
     await _kurirLoadMyDeliveries();
@@ -23062,6 +23075,207 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     showToast('Gagal: ' + e.message, 'red');
   }
 };
+</script>
+
+<!-- ============================================================
+     💬 CHAT YALLAFOOD — sementara, khusus transaksi YallaFood.
+     Tabel: food_chat_rooms, food_chat_messages (terpisah TOTAL dari
+     chats/chat_messages barang fisik). Auto-buka saat kurir klaim,
+     auto-terkunci saat pesanan selesai/dibatalkan.
+     ============================================================ -->
+<div id="yfChatModal" style="display:none;position:fixed;inset:0;z-index:56;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeYfChat()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <div class="flex-1 min-w-0">
+      <h2 id="yfChatTitle" class="font-bold text-base lc1">Chat</h2>
+      <p id="yfChatSubtitle" class="text-xs text-gray-400"></p>
+    </div>
+  </div>
+  <div id="yfChatMessages" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:8px"></div>
+  <div id="yfChatInputBar" class="bg-white px-3 py-2.5 flex items-center gap-2" style="flex-shrink:0;box-shadow:0 -4px 16px rgba(0,0,0,.06)">
+    <input id="yfChatInput" type="text" class="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm" placeholder="Tulis pesan..." onkeydown="if(event.key==='Enter') window.yfChatSend()"/>
+    <button onclick="yfChatSend()" class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-paper-plane text-sm"></i></button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 💬 YALLAFOOD CHAT MODULE — namespace terpisah (_yfChat*),
+// tidak memanggil/mengubah satu pun fungsi chat barang fisik.
+// ============================================================
+
+window._yfChatState = { roomId: null, status: 'open', thread: null, otherName: '' };
+let _yfChatChannel = null;
+
+async function _yfChatCreateRoomsForOrder(order, courierUid, courierName) {
+  if (!order?.id) return;
+  try {
+    const chk = await window._supaFetch(`/rest/v1/food_chat_rooms?food_order_id=eq.${encodeURIComponent(order.id)}&select=id&limit=1`);
+    const chkRows = chk.ok ? await chk.json() : [];
+    if (chkRows.length) return; // room sudah pernah dibuat, jangan duplikat
+
+    await window._supaFetch('/rest/v1/food_chat_rooms', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify([
+        {
+          food_order_id: order.id, thread: 'buyer_kurir',
+          participant_a_uid: order.buyer_id, participant_a_name: order.buyer_name || '',
+          participant_b_uid: courierUid, participant_b_name: courierName || ''
+        },
+        {
+          food_order_id: order.id, thread: 'kurir_seller',
+          participant_a_uid: courierUid, participant_a_name: courierName || '',
+          participant_b_uid: order.seller_id, participant_b_name: order.seller_name || ''
+        }
+      ])
+    });
+  } catch (e) { console.warn('[YallaFood Chat] gagal buat room:', e.message); }
+}
+
+async function _yfChatCloseRoomsForOrder(foodOrderId) {
+  try {
+    await window._supaFetch(`/rest/v1/food_chat_rooms?food_order_id=eq.${encodeURIComponent(foodOrderId)}&status=eq.open`, {
+      method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ status: 'closed', closed_at: new Date().toISOString() })
+    });
+  } catch (e) { console.warn('[YallaFood Chat] gagal tutup room:', e.message); }
+}
+
+window.openYfChat = async function(foodOrderId, thread, otherName) {
+  const modal = document.getElementById('yfChatModal');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  document.getElementById('yfChatTitle').textContent = otherName || 'Chat';
+  document.getElementById('yfChatSubtitle').textContent = 'Chat sementara pesanan YallaFood';
+  document.getElementById('yfChatMessages').innerHTML = '<p class="text-center text-gray-400 text-xs py-6">Memuat...</p>';
+  try {
+    const r = await window._supaFetch(`/rest/v1/food_chat_rooms?food_order_id=eq.${encodeURIComponent(foodOrderId)}&thread=eq.${encodeURIComponent(thread)}&select=*&limit=1`);
+    const rows = r.ok ? await r.json() : [];
+    const room = rows[0];
+    if (!room) {
+      document.getElementById('yfChatMessages').innerHTML = '<p class="text-center text-gray-400 text-xs py-6">Chat belum tersedia untuk pesanan ini.</p>';
+      document.getElementById('yfChatInputBar').style.display = 'none';
+      return;
+    }
+    window._yfChatState = { roomId: room.id, status: room.status, thread, otherName: otherName || '' };
+    document.getElementById('yfChatInputBar').style.display = room.status === 'open' ? 'flex' : 'none';
+    if (room.status !== 'open') {
+      document.getElementById('yfChatSubtitle').textContent = 'Chat sudah ditutup (pesanan selesai/dibatalkan)';
+    }
+    await _yfChatLoadMessages();
+    _yfChatSubscribeRealtime(room.id);
+  } catch (e) {
+    document.getElementById('yfChatMessages').innerHTML = '<p class="text-center text-red-400 text-xs py-6">Gagal memuat chat.</p>';
+  }
+};
+window.closeYfChat = function() {
+  document.getElementById('yfChatModal').style.display = 'none';
+  document.body.style.overflow = '';
+  if (_yfChatChannel && window.supabase) { try { window.supabase.removeChannel(_yfChatChannel); } catch (e) {} }
+  _yfChatChannel = null;
+};
+
+async function _yfChatLoadMessages() {
+  const box = document.getElementById('yfChatMessages');
+  const uid = window._S?.user?.uid;
+  try {
+    const r = await window._supaFetch(`/rest/v1/food_chat_messages?room_id=eq.${encodeURIComponent(window._yfChatState.roomId)}&select=*&order=created_at.asc`);
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-6">Belum ada pesan. Mulai percakapan!</p>'; return; }
+    box.innerHTML = rows.map(m => {
+      const mine = m.sender_uid === uid;
+      return `<div style="display:flex;justify-content:${mine ? 'flex-end' : 'flex-start'}">
+        <div style="max-width:75%;padding:8px 12px;border-radius:14px;background:${mine ? '#10B981' : '#fff'};color:${mine ? '#fff' : '#111827'};border:${mine ? 'none' : '1px solid #f3f4f6'}">
+          <p style="font-size:13px;margin:0;word-break:break-word">${(m.text || '').replace(/</g,'&lt;')}</p>
+        </div>
+      </div>`;
+    }).join('');
+    box.scrollTop = box.scrollHeight;
+  } catch (e) {
+    box.innerHTML = '<p class="text-center text-red-400 text-xs py-6">Gagal memuat pesan.</p>';
+  }
+}
+
+window.yfChatSend = async function() {
+  const input = document.getElementById('yfChatInput');
+  const text = input.value.trim();
+  const user = window._S?.user;
+  if (!text || !user?.uid || !window._yfChatState.roomId) return;
+  if (window._yfChatState.status !== 'open') { showToast('Chat sudah ditutup', 'red'); return; }
+  input.value = '';
+  try {
+    const res = await window._supaFetch('/rest/v1/food_chat_messages', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify({ room_id: window._yfChatState.roomId, sender_uid: user.uid, sender_name: user.name || '', text })
+    });
+    if (!res.ok) throw new Error('Gagal mengirim pesan');
+    await _yfChatLoadMessages();
+  } catch (e) {
+    showToast('Gagal mengirim pesan: ' + e.message, 'red');
+  }
+};
+
+function _yfChatSubscribeRealtime(roomId) {
+  if (!window.supabase) return;
+  if (_yfChatChannel) { try { window.supabase.removeChannel(_yfChatChannel); } catch (e) {} }
+  _yfChatChannel = window.supabase.channel('food_chat_' + roomId)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'food_chat_messages', filter: `room_id=eq.${roomId}` }, () => { _yfChatLoadMessages(); })
+    .subscribe();
+}
+
+// ============================================================
+// 🚲 MENU 'KURIR YALLAFOOD' DI PROFIL — dynamic label + direct access.
+// Tidak menyentuh openDaftarKurir()/alur pendaftaran sama sekali:
+// hanya mengganti target onclick tombol menu profil sesuai status.
+// ============================================================
+function _yfRenderKurirMenuIcon() {
+  ['menuKurirIconMob', 'menuKurirIconDesktop'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el || !window.lucide || el.dataset.rendered) return;
+    const svg = lucide.createElement(lucide.Bike);
+    svg.setAttribute('width', 22); svg.setAttribute('height', 22);
+    svg.setAttribute('stroke', '#111827'); svg.setAttribute('stroke-width', '2.5');
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+    el.innerHTML = ''; el.appendChild(svg);
+    el.dataset.rendered = '1';
+  });
+}
+
+async function _yfRefreshKurirMenuLabel() {
+  _yfRenderKurirMenuIcon();
+  const mobBtn = document.getElementById('menuKurirBtnMob');
+  const deskBtn = document.getElementById('menuKurirBtnDesktop');
+  if (!mobBtn && !deskBtn) return;
+  const user = window._S?.user;
+  let isActive = false;
+  if (user?.uid) {
+    try {
+      const r = await window._supaFetch(`/rest/v1/courier_profiles?uid=eq.${encodeURIComponent(user.uid)}&select=status&limit=1`);
+      const rows = r.ok ? await r.json() : [];
+      isActive = rows[0]?.status === 'active';
+    } catch (e) { /* fail-open ke label default */ }
+  }
+  const label = isActive ? 'Pesanan YallaFood' : 'Daftar Kurir YallaFood';
+  const action = isActive ? 'openKurirDashboard()' : 'openDaftarKurir()';
+  if (mobBtn) mobBtn.setAttribute('onclick', action);
+  if (deskBtn) deskBtn.setAttribute('onclick', action);
+  const mobLabel = document.getElementById('menuKurirLabelMob');
+  const deskLabel = document.getElementById('menuKurirLabelDesktop');
+  if (mobLabel) mobLabel.textContent = label;
+  if (deskLabel) deskLabel.textContent = label;
+}
+
+// Ikut jalan tiap kali renderUserState() dipanggil (login/logout/update profil)
+// — dibungkus dari luar, TIDAK ada satu baris pun kode renderUserState asli yang diubah.
+(function() {
+  const _origRenderUserState = window.renderUserState;
+  window.renderUserState = function(...args) {
+    const result = _origRenderUserState.apply(this, args);
+    _yfRefreshKurirMenuLabel();
+    return result;
+  };
+})();
+document.addEventListener('DOMContentLoaded', () => setTimeout(_yfRefreshKurirMenuLabel, 1500));
 </script>
 
 </body>
