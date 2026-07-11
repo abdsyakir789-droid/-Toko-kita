@@ -78,11 +78,11 @@ html { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
     renderMegaphone(document.getElementById('megaphoneMob'), 18, '#000000');
     renderMegaphone(document.getElementById('megaphoneDesktop'), 20, '#000000');
 
-    // Inject YallaFood icon (Lucide Utensils) di bottom nav
+    // Inject YallaFood icon (Lucide Bike) di bottom nav
     window.renderYallaFoodNavIcon = function() {
       const el = document.getElementById('mnavYallaFoodIcon');
       if (!el || !window.lucide) return;
-      const svg = lucide.createElement(lucide.Utensils);
+      const svg = lucide.createElement(lucide.Bike);
       svg.setAttribute('width', 24);
       svg.setAttribute('height', 24);
       svg.setAttribute('stroke', '#000000');
@@ -3184,7 +3184,7 @@ h3.text-sm.font-bold.text-gray-800 {
     <!-- Buka Toko -->
     <button onclick="openDaftarToko()" id="btnBukaToko" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 px-2 transition-all text-center">
       <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0">
-        <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/><path d="M10 12v4"/><path d="M14 12v4"/></svg></span>
+        <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"/><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"/><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"/></svg></span>
       </div>
       <p style="font-size:10px;font-weight:700;color:#111827;margin:0;line-height:1.3">Buka Toko</p>
     </button>
@@ -3197,7 +3197,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <p style="font-size:10px;font-weight:700;color:#111827;margin:0;line-height:1.3">Iklan Saya</p>
     </button>
     <button id="btnKelolaToko" onclick="openKelolaToko()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 px-2 transition-all text-center w-1/4">
-      <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/><path d="M12 22V12"/></svg></span>
+      <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"/><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"/><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"/></svg></span>
       <p style="font-size:10px;font-weight:700;color:#111827;margin:0;line-height:1.3">Kelola Toko</p>
     </button>
     <!-- Pengaturan (khusus mobile Admin — Top Bar penuh, dipindah ke sini via JS di renderUserState) -->
@@ -3256,7 +3256,7 @@ h3.text-sm.font-bold.text-gray-800 {
     <!-- 3. Buka Toko -->
     <button onclick="openDaftarToko()" id="btnBukaTokoDesk" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 flex-1 transition-all hover:shadow-md hover:-translate-y-0.5 text-center group">
       <div class="w-10 h-10 rounded-xl bg-gray-50 group-hover:bg-primary/10 flex items-center justify-center flex-shrink-0 transition-colors">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/><path d="M10 12v4"/><path d="M14 12v4"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"/><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"/><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"/></svg>
       </div>
       <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Buka Toko</p>
     </button>
@@ -3285,7 +3285,7 @@ h3.text-sm.font-bold.text-gray-800 {
     </button>
     <button id="btnKelolaTokoDsk" onclick="openKelolaToko()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 flex-1 transition-all hover:shadow-md hover:-translate-y-0.5 text-center group">
       <div class="w-10 h-10 rounded-xl bg-gray-50 group-hover:bg-primary/10 flex items-center justify-center flex-shrink-0 transition-colors">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/><path d="M12 22V12"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"/><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"/><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"/></svg>
       </div>
       <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Kelola Toko</p>
     </button>
@@ -22233,11 +22233,21 @@ window.closeKelolaToko = function() {
 
 <!-- YALLAFOOD HOME (buyer: browse menu) -->
 <div id="yallaFoodHome" style="display:none;position:fixed;inset:0;z-index:52;background:#f8fafc;flex-direction:column">
-  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeYallaFoodHome()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
-    <h2 class="font-bold text-base flex-1">YallaFood</h2>
-    <button onclick="openFoodOrderTracking()" class="text-xs font-semibold text-primary px-2 py-1.5">Pesanan Saya</button>
-    <button onclick="openYallaFoodSellerMenu()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-store text-gray-600"></i></button>
+  <div class="flex items-center gap-1 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeYallaFoodHome()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 flex-shrink-0"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1 lc1">YallaFood</h2>
+    <button onclick="openFoodOrderTracking()" class="flex flex-col items-center justify-center gap-0.5 rounded-xl hover:bg-gray-100 flex-shrink-0 px-1.5 py-1" title="Pesanan Saya">
+      <span class="lucide-icon" id="yfTopbarPesananIcon"></span>
+      <span style="font-size:9px;font-weight:600;color:#111827;line-height:1;white-space:nowrap">Pesanan Saya</span>
+    </button>
+    <button onclick="openYallaFoodLokasiToko()" class="flex flex-col items-center justify-center gap-0.5 rounded-xl hover:bg-gray-100 flex-shrink-0 px-1.5 py-1" title="Atur Lokasi Toko">
+      <span class="lucide-icon" id="yfTopbarLokasiIcon"></span>
+      <span style="font-size:9px;font-weight:600;color:#111827;line-height:1;white-space:nowrap">Atur Lokasi</span>
+    </button>
+    <button onclick="openKelolaPesananYallaFood()" class="flex flex-col items-center justify-center gap-0.5 rounded-xl hover:bg-gray-100 flex-shrink-0 px-1.5 py-1" title="Kelola Pesanan">
+      <span class="lucide-icon" id="yfTopbarKelolaIcon"></span>
+      <span style="font-size:9px;font-weight:600;color:#111827;line-height:1;white-space:nowrap">Pesanan Masuk</span>
+    </button>
   </div>
   <div id="yallaFoodList" class="flex-1 overflow-y-auto px-3 py-3" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-content:start"></div>
 </div>
@@ -22404,9 +22414,30 @@ const _YF_STATUS_SEQ = ['diterima', 'dimasak', 'dijemput', 'menuju', 'selesai'];
 function _yfNextStatus(cur) { const i = _YF_STATUS_SEQ.indexOf(cur); return i >= 0 && i < _YF_STATUS_SEQ.length - 1 ? _YF_STATUS_SEQ[i + 1] : null; }
 
 // ── HOME (buyer browse) ─────────────────────────────────────
+// Ikon shortcut top bar YallaFood (Pesanan Saya / Atur Lokasi Toko / Kelola Pesanan) —
+// murni render ikon Lucide sekali, tidak mengubah fungsi yang dipanggil tombolnya.
+function _yfRenderTopbarIcons() {
+  const specs = [
+    ['yfTopbarPesananIcon', 'Package'],
+    ['yfTopbarLokasiIcon', 'MapPin'],
+    ['yfTopbarKelolaIcon', 'Store']
+  ];
+  specs.forEach(([id, iconName]) => {
+    const el = document.getElementById(id);
+    if (!el || !window.lucide || el.dataset.rendered) return;
+    const svg = lucide.createElement(lucide[iconName]);
+    svg.setAttribute('width', 20); svg.setAttribute('height', 20);
+    svg.setAttribute('stroke', '#374151'); svg.setAttribute('stroke-width', '2.5');
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+    el.innerHTML = ''; el.appendChild(svg);
+    el.dataset.rendered = '1';
+  });
+}
+
 window.openYallaFoodHome = async function() {
   document.getElementById('yallaFoodHome').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  _yfRenderTopbarIcons();
   await _yfLoadList();
 };
 window.closeYallaFoodHome = function() {
@@ -22849,10 +22880,13 @@ async function _yfLoadKelolaPesanan() {
           <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
           <div class="flex-1 min-w-0">
             <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' ('+o.variant+')' : ''} x${o.qty}</p>
-            <p class="text-xs text-gray-500 lc1">${o.buyer_name || ''}${o.notes ? ' • ' + o.notes : ''}</p>
-            <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
+            ${o.notes ? `<p class="text-xs text-gray-500 lc1">${o.notes}</p>` : ''}
+            <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice((o.price || 0) * (o.qty || 1))}</p>
           </div>
-          <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary">${_YF_STATUS_LABEL[o.status] || o.status}</span>
+          <div class="flex flex-col items-end gap-1 flex-shrink-0">
+            <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary" style="white-space:nowrap">${_YF_STATUS_LABEL[o.status] || o.status}</span>
+            ${o.courier_name ? `<span class="text-[10px] font-bold text-gray-900" style="white-space:nowrap">Kurir: ${o.courier_name}</span>` : ''}
+          </div>
         </div>
         <div style="display:flex;gap:8px">
           ${next ? `<button onclick="yfAdvanceOrderStatus('${o.id}','${next}')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Lanjut: ${_YF_STATUS_LABEL[next]}</button>` : ''}
@@ -23046,12 +23080,21 @@ async function _kurirLoadWaitingRoom() {
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan menunggu kurir.</p>'; return; }
     box.innerHTML = rows.map(o => `
       <div class="bg-white rounded-2xl p-3 border border-gray-100">
+        <div class="flex items-center gap-1.5 mb-2 min-w-0">
+          <i class="fa-solid fa-store text-gray-400" style="font-size:11px;flex-shrink:0"></i>
+          <p class="text-xs font-semibold text-gray-600 lc1">${o.seller_name || ''}</p>
+        </div>
         <div class="flex gap-3 mb-2">
           <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
-          <div class="flex-1 min-w-0">
-            <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' (' + o.variant + ')' : ''} x${o.qty}</p>
-            <p class="text-xs text-gray-500 lc1">${o.seller_name || ''}</p>
-            <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
+          <div class="flex-1 min-w-0 flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' (' + o.variant + ')' : ''} x${o.qty}</p>
+              <p class="text-xs font-semibold text-gray-600 mt-1">Ongkir:</p>
+            </div>
+            <div class="flex-shrink-0 text-right">
+              <p class="text-primary font-bold text-sm">${_yfFmtPrice((o.price || 0) * (o.qty || 1))}</p>
+              <p class="text-primary font-bold text-xs mt-1">${_yfFmtPrice(o.ongkir || 0)}</p>
+            </div>
           </div>
         </div>
         ${o.buyer_address ? `
