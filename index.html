@@ -1782,7 +1782,7 @@ html,body{overscroll-behavior-y:contain}
   overflow: hidden;
   height: 18px;
   width: 100%;
-  margin: 2px 0;
+  margin: -3px 0 2px;
 }
 .pc-marquee-track {
   animation: pcMarqueeUp 9s ease-in-out infinite;
@@ -22581,6 +22581,21 @@ async function _yfLoadList() {
         </div>
         <div class="p-2.5 flex flex-col gap-1 flex-1">
           <p class="text-[12.5px] font-medium text-slate-900 lc2" style="min-height:2.4em;font-family:'Inter',sans-serif;line-height:1.5;letter-spacing:-.01em">${ad.title || ''}</p>
+          ${(()=>{
+            // Marquee sama persis dengan kartu YallaMart — reuse, bukan sistem baru.
+            const _colors=['#E91E8C','#8B3A0F','#7B2FBE','#F4600C','#0077B6','#2E7D32','#C62828','#00838F'];
+            const _rndColor=()=>_colors[Math.floor(Math.random()*_colors.length)];
+            const _MAX=22;
+            function _fitText(txt){
+              if(txt.length<=_MAX) return txt;
+              let cut=txt.lastIndexOf(' ',_MAX);
+              if(cut<=0) cut=_MAX;
+              return txt.slice(0,cut)+'...';
+            }
+            const _rows=['Sekali nyoba dijamin ketagihan!','Bahan pilihan, fresh & higienis','Pesan sekarang, enak dijamin!'];
+            const _all=[..._rows,_rows[0]].map(_fitText);
+            return `<div class="pc-marquee-wrap"><div class="pc-marquee-track" style="height:${_all.length*17}px;font-family:'Inter',sans-serif;font-size:10.5px;font-weight:400;color:#6b7280">${_all.map(t=>`<div style="color:${_rndColor()}">${t}</div>`).join('')}</div></div>`;
+          })()}
           <p class="text-primary font-extrabold text-[15px]">${_yfCardPriceLabel(ad)}</p>
           <div class="flex items-center gap-1" style="font-family:'Inter',sans-serif">
             <svg class="yic" width="10" height="10" viewBox="0 0 24 24" fill="#F4B740" stroke="#F4B740" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -22647,18 +22662,26 @@ window.openFoodDetail = async function(adId) {
       <div id="yfDetailReviews"><p class="text-xs text-gray-400 py-2">Memuat ulasan...</p></div>
     </div>
     <div class="px-4 pt-6 pb-8">
-      <h4 class="font-bold text-sm text-gray-800 mb-2">Info Penjual</h4>
-      <div class="flex items-center gap-3">
-        <div class="w-11 h-11 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-store text-gray-400"></i></div>
-        <div class="min-w-0">
-          <p class="font-semibold text-sm lc1">${ad.seller_name || ''}</p>
-          <p class="text-xs text-gray-500 lc1">${alamat || 'Lokasi belum diisi'}</p>
+      <h4 class="font-bold text-sm text-gray-800 mb-3">Info Penjual</h4>
+      <button onclick="_yfOpenSellerStore('${ad.seller_uid}')" class="flex items-center gap-3 w-full text-left hover:opacity-80 transition-opacity">
+        <div id="yfSellerAvatar" class="w-12 h-12 rounded-full bg-primary text-white text-base font-black flex items-center justify-center overflow-hidden flex-shrink-0">${ad.seller_photo ? `<img src="${ad.seller_photo}" class="w-full h-full object-cover"/>` : (ad.seller_name || 'P').charAt(0).toUpperCase()}</div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1 flex-wrap">
+            <p id="yfSellerName" class="font-semibold text-sm lc1" style="color:#111827">${ad.seller_name || ''}</p>
+          </div>
+          <div class="flex items-center gap-1 mt-1">
+            <i class="fa-solid fa-star text-amber-400 text-[11px]"></i>
+            <span id="yfSellerRatingVal" class="text-xs font-bold" style="color:#111827">0.0</span>
+            <span class="text-[10px] text-gray-400">Rating Toko</span>
+          </div>
         </div>
-      </div>
+        <i class="fa-solid fa-chevron-right text-gray-300 text-xs flex-shrink-0"></i>
+      </button>
     </div>
   `;
   _yfBuildDetailSlider(ad, variants);
   _yfLoadFoodReviews(ad.id);
+  _yfInjectSellerInfo(ad);
 
   actionBar.innerHTML = `
     <div class="flex items-center gap-3 mb-3">
@@ -22676,6 +22699,54 @@ window.openFoodDetail = async function(adId) {
 window.closeFoodDetail = function() {
   document.getElementById('yallaFoodDetailSheet').style.display = 'none';
 };
+
+// Navigasi 'Info Penjual' YallaFood -> halaman Profil Toko, reuse viewSellerStore()
+// yang sama persis dipakai halaman detail produk fisik (pola dari openDetailStore()).
+window._yfOpenSellerStore = function(uid) {
+  closeFoodDetail();
+  closeYallaFoodHome(); // tutup juga overlay YallaFood (z-index di atas #page-etalase), kalau tidak profil toko tampil tapi ketutup
+  viewSellerStore(uid);
+};
+
+// Isi badge verifikasi + rating toko secara async setelah render awal —
+// reuse getVerificationStatus()/renderVerifyBadge() yang sama persis dipakai
+// halaman detail produk fisik, PLUS cek isAdmin(seller_email) (badge 'Verified
+// Developer' emas milik akun admin tunggal — sistem terpisah dari
+// verification_status, dipakai juga di kartu produk utama YallaMart via
+// goldBadgeHtml) supaya status centang di YallaFood benar-benar sinkron
+// dengan yang tampil di profil akun utama/kartu YallaMart.
+// Rating toko dihitung langsung dari tabel `reviews` (bukan RPC
+// get_seller_avg_rating() — RPC itu ternyata TIDAK ADA di database, dicek
+// langsung dan selalu 404, jadi widget rating di halaman produk fisik pun
+// sebenarnya diam-diam gagal. Di sini dihitung manual: rata-rata
+// reviews.rating milik seller ini, pola yang sama seperti penghitungan
+// rating per-produk).
+async function _yfInjectSellerInfo(ad) {
+  if (!ad?.seller_uid) return;
+  try {
+    const nameEl = document.getElementById('yfSellerName');
+    let badgeHtml = '';
+    if (isAdmin(ad.seller_email || '')) {
+      badgeHtml = goldBadgeHtml;
+    } else {
+      const status = await getVerificationStatus(ad.seller_uid);
+      if (status) badgeHtml = renderVerifyBadge(status);
+    }
+    if (nameEl && badgeHtml) {
+      nameEl.parentElement.querySelectorAll('.vbadge-blue,.vbadge-silver,.vbadge-gold').forEach(el => el.remove());
+      const badge = document.createElement('span');
+      badge.innerHTML = badgeHtml;
+      if (badge.firstElementChild) nameEl.parentElement.insertBefore(badge.firstElementChild, nameEl.nextSibling);
+    }
+  } catch (e) {}
+  try {
+    const r = await window._supaFetch(`/rest/v1/reviews?seller_uid=eq.${encodeURIComponent(ad.seller_uid)}&select=rating`);
+    const rows = r.ok ? await r.json() : [];
+    const avg = rows.length ? rows.reduce((s, rv) => s + (rv.rating || 0), 0) / rows.length : 0;
+    const ratingEl = document.getElementById('yfSellerRatingVal');
+    if (ratingEl) ratingEl.textContent = fmtRating(avg);
+  } catch (e) {}
+}
 
 async function _yfLoadFoodReviews(adId) {
   const box = document.getElementById('yfDetailReviews');
@@ -23001,6 +23072,17 @@ async function _yfLoadTracking() {
       }
     } catch (e) { console.warn('[YallaFood Tracking] gagal hitung badge chat kurir:', e.message); }
 
+    // Foto profil kurir — batch query 1x ke tabel users (bukan loop per-row).
+    const courierPhotoMap = {};
+    try {
+      const courierIds = [...new Set(rows.filter(o => o.courier_id).map(o => o.courier_id))];
+      if (courierIds.length) {
+        const ur = await window._supaFetch(`/rest/v1/users?uid=in.(${courierIds.join(',')})&select=uid,photo_url`);
+        const urows = ur.ok ? await ur.json() : [];
+        urows.forEach(u => { courierPhotoMap[u.uid] = u.photo_url || ''; });
+      }
+    } catch (e) { console.warn('[YallaFood Tracking] gagal ambil foto kurir:', e.message); }
+
     box.innerHTML = rows.map(o => `
       <div class="bg-white rounded-2xl p-3 border border-gray-100">
         <div class="flex items-center justify-between gap-1.5 mb-2 min-w-0">
@@ -23028,7 +23110,17 @@ async function _yfLoadTracking() {
             <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
           </div>
         </div>
-        ${o.courier_id ? `<button onclick="openYfChat('${o.id}','buyer_kurir','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" style="position:relative" class="w-full mt-2 text-xs font-bold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir${_yfBtnBadge(unreadMap[o.id] || 0)}</button>` : ''}
+        ${o.courier_id ? `
+        <div class="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-100">
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="w-8 h-8 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
+              ${courierPhotoMap[o.courier_id] ? `<img src="${courierPhotoMap[o.courier_id]}" class="w-full h-full object-cover"/>` : `<i class="fa-solid fa-motorcycle text-gray-400 text-xs"></i>`}
+            </div>
+            <p class="text-sm font-semibold truncate" style="color:#111827">${o.courier_name || 'Kurir'}</p>
+          </div>
+          <button onclick="openYfChat('${o.id}','buyer_kurir','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-shrink-0 text-xs font-bold text-gray-700 border border-gray-200 rounded-xl py-2 px-3"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir${_yfBtnBadge(unreadMap[o.id] || 0)}</button>
+        </div>
+        ` : ''}
         ${o.status === 'selesai' ? `<button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="w-full mt-2 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan</button>` : ''}
       </div>
     `).join('');
@@ -23410,9 +23502,12 @@ async function _kurirLoadWaitingRoom() {
           </div>
         </div>
         ${o.buyer_address ? `
-        <div style="display:flex;align-items:flex-start;gap:6px;background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
-          <i class="fa-solid fa-location-dot" style="color:#111827;font-size:13px;margin-top:2px;flex-shrink:0"></i>
-          <p style="font-size:13px;font-weight:600;color:#111827;line-height:1.4;margin:0;word-break:break-word">Alamat Pembeli: ${_sadEscHtml(o.buyer_address)}</p>
+        <div style="background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
+          <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0 0 4px;word-break:break-word">Nama Pembeli: ${_sadEscHtml(o.buyer_name || '')}</p>
+          <div style="display:flex;align-items:flex-start;gap:6px">
+            <i class="fa-solid fa-location-dot" style="color:#111827;font-size:13px;margin-top:2px;flex-shrink:0"></i>
+            <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Alamat Pembeli: ${_sadEscHtml(o.buyer_address)}</p>
+          </div>
         </div>
         ` : ''}
         <button onclick="yfKurirClaimOrder('${o.id}')" class="w-full bg-primary text-white text-xs font-bold rounded-xl py-2">Ambil Pesanan</button>
@@ -23460,7 +23555,7 @@ async function _kurirLoadMyDeliveries() {
             <p class="text-xs font-semibold lc1" style="color:#111827;line-height:1">${o.seller_name || ''}</p>
           </div>
           <div class="flex items-center gap-1.5 flex-shrink-0">
-            ${(o.status !== 'selesai' && o.status !== 'dibatalkan') ? `<button onclick="yfAdvanceOrderStatus('${o.id}','selesai').then(()=>_kurirLoadMyDeliveries())" class="text-[10px] font-bold px-2 py-1 rounded-full bg-primary text-white" style="white-space:nowrap">Selesai</button>` : ''}
+            ${(o.status === 'dijemput' || o.status === 'menuju') ? `<button onclick="yfAdvanceOrderStatus('${o.id}','selesai').then(()=>_kurirLoadMyDeliveries())" class="text-[10px] font-bold px-2 py-1 rounded-full bg-primary text-white" style="white-space:nowrap">Selesai</button>` : ''}
             <span class="text-[10px] font-bold px-2 py-1 rounded-full bg-pl text-primary" style="white-space:nowrap">${_YF_STATUS_LABEL[o.status] || o.status}</span>
           </div>
         </div>
@@ -23474,9 +23569,12 @@ async function _kurirLoadMyDeliveries() {
           </div>
         </div>
         ${o.buyer_address ? `
-        <div style="display:flex;align-items:flex-start;gap:6px;background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
-          <i class="fa-solid fa-location-dot" style="color:#111827;font-size:13px;margin-top:2px;flex-shrink:0"></i>
-          <p style="font-size:13px;font-weight:600;color:#111827;line-height:1.4;margin:0;word-break:break-word">Alamat Pembeli: ${_sadEscHtml(o.buyer_address)}</p>
+        <div style="background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
+          <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0 0 4px;word-break:break-word">Nama Pembeli: ${_sadEscHtml(o.buyer_name || '')}</p>
+          <div style="display:flex;align-items:flex-start;gap:6px">
+            <i class="fa-solid fa-location-dot" style="color:#111827;font-size:13px;margin-top:2px;flex-shrink:0"></i>
+            <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Alamat Pembeli: ${_sadEscHtml(o.buyer_address)}</p>
+          </div>
         </div>
         ` : ''}
         <div style="display:flex;gap:8px;margin-top:8px">
