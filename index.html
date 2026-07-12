@@ -22953,6 +22953,7 @@ window.yfSubmitFoodOrder = async function() {
         body: JSON.stringify({ food_order_id: createdOrder.id, event: 'created', actor_uid: user.uid, meta: { status: 'menunggu_kurir' } })
       }).catch(() => {});
       _yfNotifyActiveCouriers(createdOrder).catch(() => {});
+      _yfNotifySeller(createdOrder).catch(() => {});
     }
     showToast('Pesanan YallaFood berhasil dibuat!', 'green');
     yfCloseOrderSummary();
@@ -23190,16 +23191,32 @@ async function _yfLoadKelolaPesanan() {
     box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat pesanan.</p>';
   }
 }
+// Pesan notif bel real-time ke BUYER saat seller memajukan status pesanan —
+// dikirim lewat tabel `notifications` yang sama seperti notif lain (pipeline bel
+// yang sudah berjalan apa adanya), bukan sistem baru.
+const _YF_BUYER_STATUS_NOTIF = { dimasak: 'Pesanan Anda sedang diproses', dijemput: 'Pesanan Anda sedang dijemput oleh kurir' };
 window.yfAdvanceOrderStatus = async function(orderId, newStatus) {
   try {
     const res = await window._supaFetch(`/rest/v1/food_orders?id=eq.${encodeURIComponent(orderId)}`, {
-      method: 'PATCH', prefer: 'return=minimal',
+      method: 'PATCH', prefer: 'return=representation',
       body: JSON.stringify({ status: newStatus, updated_at: new Date().toISOString() })
     });
     if (!res.ok) throw new Error('Gagal update status');
+    const updated = await res.json();
+    const order = updated[0];
     // Chat sementara YallaFood wajib terkunci begitu pesanan selesai/dibatalkan
     if (newStatus === 'selesai' || newStatus === 'dibatalkan') {
       _yfChatCloseRoomsForOrder(orderId).catch(() => {});
+    }
+    const buyerMsg = _YF_BUYER_STATUS_NOTIF[newStatus];
+    if (buyerMsg && order?.buyer_id) {
+      window._supaFetch('/rest/v1/notifications', {
+        method: 'POST', prefer: 'return=minimal',
+        body: JSON.stringify([{
+          to_uid: order.buyer_id, user_id: order.buyer_id, type: 'yallafood_status',
+          message: buyerMsg, sender_name: order.seller_name || window._S?.user?.name || 'Sistem YallaFood', is_read: false, created_at: new Date().toISOString()
+        }])
+      }).catch(() => {});
     }
     await _yfLoadKelolaPesanan();
   } catch (e) {
@@ -23962,12 +23979,28 @@ async function _yfNotifyActiveCouriers(order) {
       .filter(c => c.uid && c.uid !== order.buyer_id)
       .map(c => ({
         to_uid: c.uid, user_id: c.uid, type: 'yallafood_kurir',
-        message: 'Pesanan YallaFood: Cek Sekarang!',
-        sender_name: 'Sistem YallaFood', is_read: false, created_at: now
+        message: 'Ada pesanan deliveri menunggu diambil, cek sekarang sebelum keduluan yang lain!',
+        sender_name: 'YallaFood', is_read: false, created_at: now
       }));
     if (!payload.length) return;
     await window._supaFetch('/rest/v1/notifications', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify(payload) });
   } catch (e) { console.warn('[YallaFood Kurir] gagal kirim notifikasi bel:', e.message); }
+}
+
+// Notif bel ke SELLER begitu ada pesanan YallaFood baru masuk — pola sama
+// persis seperti _yfNotifyActiveCouriers di atas (insert ke tabel `notifications`).
+async function _yfNotifySeller(order) {
+  try {
+    if (!order?.seller_id) return;
+    await window._supaFetch('/rest/v1/notifications', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify([{
+        to_uid: order.seller_id, user_id: order.seller_id, type: 'yallafood_seller_order',
+        message: 'Kamu mendapatkan pesanan di YallaFood, cek sekarang',
+        sender_name: 'YallaFood', is_read: false, created_at: new Date().toISOString()
+      }])
+    });
+  } catch (e) { console.warn('[YallaFood Seller] gagal kirim notifikasi bel:', e.message); }
 }
 
 // Hook klik TAMBAHAN (bukan pengganti) di atas listener notif yang sudah ada —
