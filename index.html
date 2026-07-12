@@ -22245,7 +22245,10 @@ window.closeKelolaToko = function() {
       <span style="font-size:9px;font-weight:600;color:#111827;line-height:1;white-space:nowrap">Atur Lokasi</span>
     </button>
     <button onclick="openKelolaPesananYallaFood()" class="flex flex-col items-center justify-center gap-0.5 rounded-xl hover:bg-gray-100 flex-shrink-0 px-1.5 py-1" title="Kelola Pesanan">
-      <span class="lucide-icon" id="yfTopbarKelolaIcon"></span>
+      <span style="position:relative;display:inline-block">
+        <span class="lucide-icon" id="yfTopbarKelolaIcon"></span>
+        <span id="yfSellerInboxBadge" style="display:none;position:absolute;top:-4px;right:-6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:15px;height:15px;border-radius:50%;align-items:center;justify-content:center;padding:0 3px">0</span>
+      </span>
       <span style="font-size:9px;font-weight:600;color:#111827;line-height:1;white-space:nowrap">Pesanan Masuk</span>
     </button>
   </div>
@@ -22254,9 +22257,6 @@ window.closeKelolaToko = function() {
 
 <!-- YALLAFOOD DETAIL + PESAN SEKARANG -->
 <div id="yallaFoodDetailSheet" style="display:none;position:fixed;inset:0;z-index:53;background:#fff;flex-direction:column">
-  <div class="flex items-center gap-2 bg-white/95 backdrop-blur px-4 py-3" style="flex-shrink:0;position:absolute;top:0;left:0;right:0;z-index:2">
-    <button onclick="closeFoodDetail()" class="w-9 h-9 flex items-center justify-center rounded-full bg-white/90 shadow-sm"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
-  </div>
   <div class="flex-1 overflow-y-auto" id="yallaFoodDetailBody"></div>
   <div id="yallaFoodDetailActionBar" class="bg-white px-4 py-3" style="flex-shrink:0;box-shadow:0 -4px 16px rgba(0,0,0,.06)"></div>
 </div>
@@ -22268,6 +22268,30 @@ window.closeKelolaToko = function() {
     <div id="yfOrderSummaryBody" class="text-sm text-gray-700" style="display:flex;flex-direction:column;gap:6px"></div>
     <button onclick="yfSubmitFoodOrder()" class="w-full bg-primary text-white font-bold rounded-2xl py-3 mt-4">Konfirmasi Pesanan (COD)</button>
     <button onclick="yfCloseOrderSummary()" class="w-full text-gray-500 font-semibold rounded-2xl py-2 mt-1">Batal</button>
+  </div>
+</div>
+
+<!-- YALLAFOOD: Wajib pilih varian sebelum lanjut checkout (produk bervarian) -->
+<div id="yfVariantConfirmModal" style="display:none;position:fixed;inset:0;z-index:61;background:rgba(0,0,0,.4);align-items:flex-end;justify-content:center">
+  <div class="bg-white w-full rounded-t-3xl p-5" style="max-width:480px">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-base">Pilih Varian</h3>
+      <button onclick="_yfCloseVariantConfirmModal()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 flex-shrink-0"><i class="fa-solid fa-xmark text-gray-500"></i></button>
+    </div>
+    <div id="yfVariantConfirmList" class="flex gap-2 flex-wrap mb-4"></div>
+    <div class="flex items-center justify-between mb-1">
+      <span class="text-sm font-semibold">Jumlah</span>
+      <div class="flex items-center gap-3">
+        <button onclick="yfChangeQty(-1)" class="w-8 h-8 rounded-full bg-gray-100 font-bold">-</button>
+        <span id="yfVariantConfirmQtyLabel" class="font-bold w-6 text-center">0</span>
+        <button onclick="yfChangeQty(1)" class="w-8 h-8 rounded-full bg-gray-100 font-bold">+</button>
+      </div>
+    </div>
+    <div class="flex items-center justify-between mb-4">
+      <span class="text-sm font-semibold">Total</span>
+      <span id="yfVariantConfirmTotalLabel" class="font-bold text-primary">LE 0</span>
+    </div>
+    <button id="yfVariantConfirmBtn" onclick="yfConfirmVariantAndProceed()" class="w-full font-bold rounded-2xl py-3 bg-gray-200 text-gray-400" disabled>Beli Sekarang</button>
   </div>
 </div>
 
@@ -22369,11 +22393,6 @@ async function _yfGetOngkirConfig() {
 }
 
 function _yfFmtPrice(n) { return 'LE ' + Number(n || 0).toLocaleString('en-EG'); }
-function _yfRatingLabel(ad) {
-  const count = Number(ad.rating_count || 0);
-  if (!count) return 'Baru';
-  return Number(ad.rating_score || 0).toFixed(1);
-}
 function _yfValidVariants(ad) {
   return Array.isArray(ad.variants) ? ad.variants.filter(v => v && v.name) : [];
 }
@@ -22381,21 +22400,90 @@ function _yfCardPriceLabel(ad) {
   const variants = _yfValidVariants(ad);
   if (!variants.length) return _yfFmtPrice(ad.price);
   const min = Math.min(...variants.map(v => Number(v.price || ad.price || 0)));
-  return 'Mulai ' + _yfFmtPrice(min);
+  return _yfFmtPrice(min);
 }
 function _yfActivePrice() {
   const ad = window._yfState.current;
   const v = window._yfState.selectedVariant;
   return v ? Number(v.price || ad?.price || 0) : Number(ad?.price || 0);
 }
+// idx -1 = slide utama/tanpa varian (harga dasar ad.price), idx >= 0 = index varian.
 window.yfSelectVariant = function(idx) {
   const variants = window._yfState.currentVariants || [];
-  window._yfState.selectedVariant = variants[idx] || null;
-  document.querySelectorAll('#yfVariantPicker button').forEach((btn, i) => {
-    btn.className = 'text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 ' + (i === idx ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-200');
+  window._yfState.selectedVariant = idx >= 0 ? (variants[idx] || null) : null;
+  document.querySelectorAll('[id^="yfThumb_"]').forEach(el => {
+    const i = parseInt(el.id.replace('yfThumb_', ''), 10);
+    el.style.borderColor = i === (idx + 1) ? '#10B981' : '#e5e7eb';
   });
   const priceEl = document.getElementById('yfActivePrice');
   if (priceEl) priceEl.textContent = _yfFmtPrice(_yfActivePrice());
+};
+
+// ── Carousel foto utama + varian (mirror pola slider produk fisik: foto utama
+// + 1 slide per varian, thumbnail box di bawah banner bisa diklik utk pindah
+// slide SEKALIGUS memilih varian). Namespace yf* terpisah total dari slider
+// produk fisik (detailSliderTrack dkk) — tidak berbagi state/element apa pun.
+function _yfBuildDetailSlider(ad, variants) {
+  const slides = [{ url: ad.img_url || '' }];
+  variants.forEach(v => slides.push({ url: v.img_url || ad.img_url || '' }));
+  window._yfState.detailSlides = slides;
+
+  const track = document.getElementById('yfDetailSliderTrack');
+  const counter = document.getElementById('yfDetailSlideCounter');
+  const thumbStrip = document.getElementById('yfDetailThumbStrip');
+  if (!track) return;
+
+  track.innerHTML = slides.map(s => `
+    <div class="flex-shrink-0 w-full h-full bg-black" style="min-width:100%">
+      <img src="${s.url}" class="w-full h-full object-cover" onerror="this.style.opacity='.3'"/>
+    </div>
+  `).join('');
+
+  const startIdx = variants.length ? 1 : 0;
+
+  if (slides.length > 1 && thumbStrip) {
+    thumbStrip.style.display = 'flex';
+    thumbStrip.innerHTML = slides.map((s, i) => `
+      <div onclick="yfDetailGoSlide(${i})" id="yfThumb_${i}" class="flex-shrink-0 rounded-xl overflow-hidden cursor-pointer transition-all" style="width:58px;height:58px;border:2px solid ${i === startIdx ? '#10B981' : '#e5e7eb'}">
+        <img src="${s.url}" class="w-full h-full object-cover" onerror="this.style.opacity='.3'"/>
+      </div>
+    `).join('');
+  }
+  if (slides.length > 1 && counter) {
+    counter.style.display = 'block';
+    counter.textContent = (startIdx + 1) + ' / ' + slides.length;
+  }
+
+  track.style.transform = 'translateX(-' + (startIdx * 100) + '%)';
+  window._yfState.detailSlideIdx = startIdx;
+
+  if (track._yfSwipeStart) track.removeEventListener('touchstart', track._yfSwipeStart);
+  if (track._yfSwipeEnd) track.removeEventListener('touchend', track._yfSwipeEnd);
+  let sx = 0;
+  track._yfSwipeStart = e => { sx = e.touches[0].clientX; };
+  track._yfSwipeEnd = e => {
+    const diff = sx - e.changedTouches[0].clientX;
+    const curIdx = window._yfState.detailSlideIdx || 0;
+    if (Math.abs(diff) > 40) {
+      if (diff > 0 && curIdx < slides.length - 1) window.yfDetailGoSlide(curIdx + 1);
+      else if (diff < 0 && curIdx > 0) window.yfDetailGoSlide(curIdx - 1);
+    }
+  };
+  track.addEventListener('touchstart', track._yfSwipeStart, { passive: true });
+  track.addEventListener('touchend', track._yfSwipeEnd, { passive: true });
+}
+
+window.yfDetailGoSlide = function(idx) {
+  const slides = window._yfState.detailSlides || [];
+  const track = document.getElementById('yfDetailSliderTrack');
+  const counter = document.getElementById('yfDetailSlideCounter');
+  if (!track || !slides[idx]) return;
+  window._yfState.detailSlideIdx = idx;
+  track.style.transform = 'translateX(-' + (idx * 100) + '%)';
+  if (counter) counter.textContent = (idx + 1) + ' / ' + slides.length;
+  yfSelectVariant(idx - 1);
+  const active = document.getElementById('yfThumb_' + idx);
+  if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 };
 async function _yfFetchShopAlamatMap(sellerUids) {
   const uids = [...new Set(sellerUids)].filter(Boolean);
@@ -22445,6 +22533,16 @@ window.closeYallaFoodHome = function() {
   document.body.style.overflow = '';
 };
 
+// Samakan cara baca rating dengan _loadAllAds() di YallaMart: rating_score → rating (legacy) → 0
+function _yfRating(ad) {
+  return ad.rating_score !== undefined && ad.rating_score !== null ? Number(ad.rating_score) : (ad.rating ? Number(ad.rating) : 0);
+}
+
+// Badge unread lokal per-tombol chat (dipakai di kartu pesanan buyer/seller/kurir)
+function _yfBtnBadge(n) {
+  return n > 0 ? `<span style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0 3px">${n > 9 ? '9+' : n}</span>` : '';
+}
+
 async function _yfLoadList() {
   const box = document.getElementById('yallaFoodList');
   box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat menu...</p>';
@@ -22465,24 +22563,20 @@ async function _yfLoadList() {
       <div class="bg-white rounded-2xl overflow-hidden border border-gray-100 cursor-pointer flex flex-col" onclick="openFoodDetail('${ad.id}')">
         <div class="relative w-full" style="aspect-ratio:1/1;background:#f3f4f6">
           <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0" onerror="this.style.background='#eee'"/>
-          <span id="yfStoreBadge_${ad.id}" class="absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/90 text-gray-400 shadow-sm">...</span>
         </div>
         <div class="p-2.5 flex flex-col gap-1 flex-1">
-          <p class="font-bold text-[13px] text-gray-900 lc2 leading-snug" style="min-height:2.4em">${ad.title || ''}</p>
+          <p class="text-[12.5px] font-medium text-slate-900 lc2" style="min-height:2.4em;font-family:'Inter',sans-serif;line-height:1.5;letter-spacing:-.01em">${ad.title || ''}</p>
           <p class="text-primary font-extrabold text-[15px]">${_yfCardPriceLabel(ad)}</p>
-          <div class="flex items-center gap-1 text-[11px] text-gray-500">
-            <i class="fa-solid fa-star text-amber-400"></i><span>${_yfRatingLabel(ad)}</span>
+          <div class="flex items-center gap-1" style="font-family:'Inter',sans-serif">
+            <svg class="yic" width="10" height="10" viewBox="0 0 24 24" fill="#F4B740" stroke="#F4B740" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <span style="font-size:10px;font-weight:500;color:#6b7280">${fmtRating(_yfRating(ad))}</span>
+            <span style="font-size:10px;font-weight:500;color:#6b7280;white-space:nowrap">· ${fmtSold(ad.sold || 0)}</span>
           </div>
           ${alamat ? `<div class="flex items-center gap-1 text-[11px] text-gray-400"><i class="fa-solid fa-location-dot flex-shrink-0"></i><span class="lc1">${alamat}</span></div>` : ''}
         </div>
       </div>
     `;
     }).join('');
-    rows.forEach(async ad => {
-      const open = await window.checkStoreStatus(ad.seller_uid);
-      const el = document.getElementById('yfStoreBadge_' + ad.id);
-      if (el) { el.textContent = open ? 'Buka' : 'Tutup'; el.className = 'absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm ' + (open ? 'bg-primary/90 text-white' : 'bg-white/90 text-gray-400'); }
-    });
   } catch (e) {
     box.style.display = 'block';
     box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat menu.</p>';
@@ -22512,26 +22606,27 @@ window.openFoodDetail = async function(adId) {
   window._yfState.selectedVariant = variants[0] || null;
 
   body.innerHTML = `
-    <div class="relative w-full" style="aspect-ratio:4/3;background:#f3f4f6">
-      <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0"/>
+    <div class="relative w-full bg-black" style="aspect-ratio:1/1;max-height:420px;overflow:hidden">
+      <div id="yfDetailSliderTrack" class="flex h-full" style="transition:transform .3s ease;will-change:transform"></div>
+      <button onclick="closeFoodDetail()" class="absolute top-4 left-4 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-sm transition-colors shadow-lg" style="z-index:5"><i class="fa-solid fa-arrow-left text-base"></i></button>
+      <div id="yfDetailSlideCounter" class="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-[11px] font-bold px-3 py-1 rounded-full backdrop-blur-sm" style="z-index:5;display:none"></div>
     </div>
+    <div id="yfDetailThumbStrip" class="bg-white flex gap-2 overflow-x-auto px-3 py-2.5" style="scrollbar-width:none;-ms-overflow-style:none;display:none"></div>
     <div class="px-4 pt-4">
-      <div class="flex items-center gap-2">
-        <h3 class="font-bold text-lg flex-1">${ad.title || ''}</h3>
-        <span class="text-[10px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${isOpen ? 'bg-pl text-primary' : 'bg-gray-100 text-gray-400'}">${isOpen ? 'Buka' : 'Tutup'}</span>
+      <div class="flex items-center justify-between gap-2">
+        <p id="yfActivePrice" class="text-primary font-extrabold text-xl">${_yfFmtPrice(_yfActivePrice())}</p>
       </div>
-      <div class="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
-        <i class="fa-solid fa-star text-amber-400"></i><span>${_yfRatingLabel(ad)}</span>
-        ${alamat ? `<span class="text-gray-300">·</span><i class="fa-solid fa-location-dot"></i><span class="lc1">${alamat}</span>` : ''}
-      </div>
-      <p id="yfActivePrice" class="text-primary font-extrabold text-xl mt-2">${_yfFmtPrice(_yfActivePrice())}</p>
-      ${variants.length ? `
-      <div class="mt-1">
-        <p class="text-xs font-semibold text-gray-600 mt-2 mb-1.5">Pilih Varian</p>
-        <div id="yfVariantPicker" class="flex gap-2 flex-wrap">
-          ${variants.map((v, i) => `<button onclick="yfSelectVariant(${i})" class="text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 ${i === 0 ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-200'}">${v.name}${v.size ? ' (' + v.size + ')' : ''}</button>`).join('')}
+      <h3 class="text-[12.5px] font-medium text-slate-900 mt-1" style="font-family:'Inter',sans-serif;line-height:1.5;letter-spacing:-.01em">${ad.title || ''}</h3>
+      <div class="flex items-center gap-3 mt-1.5 flex-wrap">
+        <div class="flex items-center gap-1">
+          <i class="fa-solid fa-star text-amber-400 text-sm"></i>
+          <span id="yfDetailRatingScore" style="font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:#374151">${fmtRating(_yfRating(ad))}</span>
+          <span id="yfDetailReviewCount" class="text-[11px] text-gray-400">(0 ulasan)</span>
         </div>
-      </div>` : ''}
+        <div class="w-px h-4 bg-gray-200"></div>
+        <span id="yfDetailSold" class="text-[11px] font-semibold text-gray-700">${fmtSold(ad.sold || 0)}</span>
+        ${alamat ? `<span class="text-gray-300">·</span><span class="text-[11px] text-gray-500 lc1"><i class="fa-solid fa-location-dot mr-0.5"></i>${alamat}</span>` : ''}
+      </div>
       <p class="text-sm text-gray-600 mt-3 leading-relaxed">${ad.description || ''}</p>
     </div>
     <div class="px-4 pt-6">
@@ -22549,6 +22644,7 @@ window.openFoodDetail = async function(adId) {
       </div>
     </div>
   `;
+  _yfBuildDetailSlider(ad, variants);
   _yfLoadFoodReviews(ad.id);
 
   actionBar.innerHTML = `
@@ -22557,7 +22653,7 @@ window.openFoodDetail = async function(adId) {
       <button onclick="yfChangeQty(-1)" class="w-8 h-8 rounded-full bg-gray-100 font-bold">-</button>
       <span id="yfQtyLabel" class="font-bold w-6 text-center">1</span>
       <button onclick="yfChangeQty(1)" class="w-8 h-8 rounded-full bg-gray-100 font-bold">+</button>
-      <textarea id="yfOrderNotes" rows="1" class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Catatan (opsional)"></textarea>
+      <span class="flex-1 text-right text-sm font-semibold text-gray-700">Total: <span id="yfQtyTotalLabel">1</span></span>
     </div>
     <button id="yfPesanBtn" onclick="yfStartOrder()" class="w-full font-bold rounded-2xl py-3 ${isOpen ? 'bg-primary text-white' : 'bg-gray-200 text-gray-400'}" ${isOpen ? '' : 'disabled'}>
       ${isOpen ? 'Pesan Sekarang' : 'Toko Sedang Tutup'}
@@ -22574,7 +22670,17 @@ async function _yfLoadFoodReviews(adId) {
   try {
     const r = await window._supaFetch(`/rest/v1/reviews?ad_id=eq.${encodeURIComponent(adId)}&review_type=eq.food&select=*&order=created_at.desc&limit=20`);
     const rows = r.ok ? await r.json() : [];
-    if (!rows.length) { box.innerHTML = '<p class="text-xs text-gray-400 py-2">Belum ada ulasan untuk menu ini.</p>'; return; }
+    // Sync rating & jumlah ulasan ke header — skema sama seperti detail produk fisik
+    // (dihitung live dari data ulasan, bukan dari nilai statis).
+    const rcEl = document.getElementById('yfDetailReviewCount');
+    const rsEl = document.getElementById('yfDetailRatingScore');
+    if (!rows.length) {
+      if (rcEl) rcEl.textContent = '(0 ulasan)';
+      box.innerHTML = '<p class="text-xs text-gray-400 py-2">Belum ada ulasan untuk menu ini.</p>'; return;
+    }
+    const avgRating = (rows.reduce((s, rv) => s + (rv.rating || 0), 0) / rows.length).toFixed(1);
+    if (rcEl) rcEl.textContent = '(' + rows.length + ' ulasan)';
+    if (rsEl) rsEl.textContent = avgRating;
     box.innerHTML = `<div style="display:flex;flex-direction:column;gap:14px">` + rows.map(rv => {
       const stars = [1,2,3,4,5].map(i => `<i class="fa-solid fa-star text-[10px] ${i <= (rv.rating||0) ? 'text-amber-400' : 'text-gray-200'}"></i>`).join('');
       return `
@@ -22590,16 +22696,119 @@ async function _yfLoadFoodReviews(adId) {
     box.innerHTML = '<p class="text-xs text-red-400 py-2">Gagal memuat ulasan.</p>';
   }
 }
+// Kalau ada varian yg lagi aktif di modal (multiSelection), +/- ini atur qty
+// KHUSUS varian itu (lihat _yfState.lastActiveKey). Kalau tidak (produk tanpa
+// varian, modal tidak pernah dibuka) -> perilaku asli, tidak diubah sama sekali.
 window.yfChangeQty = function(d) {
+  const sel = window._yfState.multiSelection;
+  const activeKey = window._yfState.lastActiveKey;
+  if (sel && activeKey !== null && sel[activeKey]) {
+    sel[activeKey].qty = Math.max(1, sel[activeKey].qty + d);
+    _yfRefreshVariantConfirmActive();
+    return;
+  }
   window._yfState.qty = Math.max(1, (window._yfState.qty || 1) + d);
-  const el = document.getElementById('yfQtyLabel');
-  if (el) el.textContent = window._yfState.qty;
+  ['yfQtyLabel', 'yfQtyTotalLabel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = window._yfState.qty;
+  });
+};
+
+// ── Wajib pilih varian dulu sebelum lanjut ke checkout (produk bervarian) ──
+// MULTI-SELECTION: _yfState.multiSelection = { [key]: {label, price, qty} } —
+// beberapa varian boleh terpilih (hijau) sekaligus, masing-masing punya qty
+// sendiri (default 1, diatur via tombol +/- yang sudah ada — berlaku utk
+// varian yg TERAKHIR diklik, lihat _yfState.lastActiveKey). Jumlah total =
+// penjumlahan qty semua entri. Saat checkout, semua entri digabung jadi SATU
+// baris food_orders (price=subtotal gabungan, qty=1) dengan rincian per-varian
+// ditulis ke kolom `variant` (multi-baris teks) — TIDAK ada perubahan skema
+// DB, TIDAK ada kolom/tabel baru, ongkir tetap dihitung sekali seperti biasa.
+function _yfOpenVariantConfirmModal() {
+  const ad = window._yfState.current;
+  const variants = window._yfState.currentVariants || [];
+  window._yfState.multiSelection = {};
+  window._yfState.lastActiveKey = null;
+  const list = document.getElementById('yfVariantConfirmList');
+  if (list) {
+    // Opsi utama (foto/harga dasar iklan, slide 0 di carousel) — labelnya pakai
+    // nama varian yang sudah diisi seller sendiri di ads.var_name (bukan teks
+    // generik "Original"), supaya konsisten dengan penamaan yang seller pilih.
+    const baseLabel = (ad?.var_name || ad?.title || 'Utama') + (ad?.size ? ' (' + ad.size + ')' : '');
+    const basePrice = Number(ad?.price || 0);
+    let html = `<button onclick="_yfModalToggleVariant(0,'','${baseLabel.replace(/'/g,"\\'")}',${basePrice})" data-vname="" data-label="${baseLabel.replace(/"/g,'&quot;')}" class="text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 bg-white text-gray-700 border-gray-200">${baseLabel}</button>`;
+    html += variants.map((v, i) => {
+      const label = v.name + (v.size ? ' (' + v.size + ')' : '');
+      const price = Number(v.price || ad?.price || 0);
+      return `<button onclick="_yfModalToggleVariant(${i + 1},'${(v.name||'').replace(/'/g,"\\'")}','${label.replace(/'/g,"\\'")}',${price})" data-vname="${(v.name||'').replace(/"/g,'&quot;')}" data-label="${label.replace(/"/g,'&quot;')}" class="text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 bg-white text-gray-700 border-gray-200">${label}</button>`;
+    }).join('');
+    list.innerHTML = html;
+  }
+  _yfRefreshVariantConfirmActive();
+  document.getElementById('yfVariantConfirmModal').style.display = 'flex';
+}
+// Klik pill: kalau varian itu sudah terpilih -> toggle OFF (hapus dari
+// pilihan). Kalau belum -> toggle ON (tambah ke pilihan dgn qty default 1,
+// jadi "varian aktif" target tombol +/-, dan carousel ikut pindah slide via
+// yfDetailGoSlide yang sudah ada — murni preview foto, tidak memengaruhi
+// hitungan harga final yang sekarang berbasis multiSelection).
+window._yfModalToggleVariant = function(slideIdx, key, label, price) {
+  const sel = window._yfState.multiSelection;
+  if (sel[key]) {
+    delete sel[key];
+    if (window._yfState.lastActiveKey === key) window._yfState.lastActiveKey = null;
+  } else {
+    sel[key] = { label, price: Number(price) || 0, qty: 1 };
+    window._yfState.lastActiveKey = key;
+    yfDetailGoSlide(slideIdx);
+  }
+  _yfRefreshVariantConfirmActive();
+};
+function _yfRefreshVariantConfirmActive() {
+  const list = document.getElementById('yfVariantConfirmList');
+  const sel = window._yfState.multiSelection || {};
+  if (list) {
+    list.querySelectorAll('button').forEach(btn => {
+      const key = btn.dataset.vname;
+      const entry = sel[key];
+      btn.className = 'text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 ' + (entry ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-200');
+      btn.textContent = btn.dataset.label + (entry && entry.qty > 1 ? ' ×' + entry.qty : '');
+    });
+  }
+  const totalQty = Object.values(sel).reduce((s, e) => s + e.qty, 0);
+  ['yfQtyLabel', 'yfQtyTotalLabel', 'yfVariantConfirmQtyLabel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = totalQty;
+  });
+  const totalPrice = Object.values(sel).reduce((s, e) => s + e.price * e.qty, 0);
+  const totalPriceLabel = document.getElementById('yfVariantConfirmTotalLabel');
+  if (totalPriceLabel) totalPriceLabel.textContent = _yfFmtPrice(totalPrice);
+  const confirmBtn = document.getElementById('yfVariantConfirmBtn');
+  if (confirmBtn) {
+    confirmBtn.disabled = totalQty === 0;
+    confirmBtn.className = 'w-full font-bold rounded-2xl py-3 ' + (totalQty === 0 ? 'bg-gray-200 text-gray-400' : 'bg-primary text-white');
+  }
+}
+window._yfCloseVariantConfirmModal = function() {
+  document.getElementById('yfVariantConfirmModal').style.display = 'none';
+};
+window.yfConfirmVariantAndProceed = function() {
+  const sel = window._yfState.multiSelection || {};
+  const totalQty = Object.values(sel).reduce((s, e) => s + e.qty, 0);
+  if (totalQty === 0) { showToast('Silakan pilih varian terlebih dahulu', 'red'); return; }
+  window._yfCloseVariantConfirmModal();
+  _yfProceedToOrder();
 };
 
 // ── ALUR PESAN: GPS → jarak → ongkir → konfirmasi ────────────
 window.yfStartOrder = function() {
   const ad = window._yfState.current;
   if (!ad || !window._yfState.currentOpen) return;
+  const variants = window._yfState.currentVariants || [];
+  if (variants.length > 0) { _yfOpenVariantConfirmModal(); return; }
+  _yfProceedToOrder();
+};
+function _yfProceedToOrder() {
+  const ad = window._yfState.current;
   if (!navigator.geolocation) { showToast('Perangkat tidak mendukung GPS', 'red'); return; }
   const btn = document.getElementById('yfPesanBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Mendeteksi lokasi...'; }
@@ -22645,17 +22854,34 @@ async function _yfComputeAndShowSummary(ad, buyerLat, buyerLng) {
   const distanceKm = await _yfGetDistanceKm(buyerLat, buyerLng, Number(shop.lat), Number(shop.lng));
   const cfg = await _yfGetOngkirConfig();
   const ongkir = Math.round(cfg.base_fee + cfg.rate_per_km * distanceKm);
-  const qty = window._yfState.qty || 1;
-  const unitPrice = _yfActivePrice();
-  const variantName = window._yfState.selectedVariant?.name || null;
-  const subtotal = unitPrice * qty;
+
+  // Multi-varian: gabung semua entri terpilih jadi satu subtotal + satu teks
+  // rincian ("nama x qty  harga" per baris) — TETAP satu baris food_orders,
+  // TIDAK ada tabel/kolom baru. Produk tanpa varian (modal tak pernah dibuka,
+  // multiSelection kosong/tak ada) pakai jalur asli — tidak berubah sama sekali.
+  const sel = window._yfState.multiSelection;
+  let itemLines, summaryRowsHtml, subtotal, totalQty;
+  if (sel && Object.keys(sel).length) {
+    const entries = Object.values(sel);
+    totalQty = entries.reduce((s, e) => s + e.qty, 0);
+    subtotal = entries.reduce((s, e) => s + e.price * e.qty, 0);
+    itemLines = entries.map(e => `${e.label} x ${e.qty}\t${_yfFmtPrice(e.price * e.qty)}`).join('\n');
+    summaryRowsHtml = entries.map(e => `<div class="flex justify-between"><span>${e.label} x${e.qty}</span><span>${_yfFmtPrice(e.price * e.qty)}</span></div>`).join('');
+  } else {
+    totalQty = window._yfState.qty || 1;
+    const unitPrice = _yfActivePrice();
+    subtotal = unitPrice * totalQty;
+    itemLines = null;
+    summaryRowsHtml = `<div class="flex justify-between"><span>${ad.title} x${totalQty}</span><span>${_yfFmtPrice(subtotal)}</span></div>`;
+  }
   const total = subtotal + ongkir;
   window._yfState.pendingOrder = {
-    ad, qty, buyerLat, buyerLng, distanceKm, ongkir, subtotal, total, unitPrice, variantName,
-    notes: (document.getElementById('yfOrderNotes')?.value || '').trim()
+    ad, qty: 1, buyerLat, buyerLng, distanceKm, ongkir, subtotal, total,
+    unitPrice: subtotal, variantName: itemLines,
+    notes: ''
   };
   document.getElementById('yfOrderSummaryBody').innerHTML = `
-    <div class="flex justify-between"><span>${ad.title}${variantName ? ' ('+variantName+')' : ''} x${qty}</span><span>${_yfFmtPrice(subtotal)}</span></div>
+    ${summaryRowsHtml}
     <div class="flex justify-between text-gray-500"><span>Jarak ke toko</span><span>${distanceKm.toFixed(1)} km</span></div>
     <div class="flex justify-between"><span>Ongkir Instan</span><span>${_yfFmtPrice(ongkir)}</span></div>
     <div class="flex justify-between font-bold text-base border-t border-gray-100 pt-2 mt-1"><span>Total (COD)</span><span>${_yfFmtPrice(total)}</span></div>
@@ -22742,13 +22968,33 @@ async function _yfLoadTracking() {
     const r = await window._supaFetch(`/rest/v1/food_orders?buyer_id=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc`);
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood.</p>'; return; }
+
+    // Badge unread PER TOMBOL 'Chat Kurir' — bukan agregat global.
+    const unreadMap = {};
+    try {
+      const orderIds = rows.filter(o => o.courier_id).map(o => o.id);
+      if (orderIds.length) {
+        const rr = await window._supaFetch(`/rest/v1/food_chat_rooms?food_order_id=in.(${orderIds.join(',')})&thread=eq.buyer_kurir&select=id,food_order_id`);
+        const roomRows = rr.ok ? await rr.json() : [];
+        if (roomRows.length) {
+          const roomIds = roomRows.map(x => x.id);
+          const mr = await window._supaFetch(`/rest/v1/food_chat_messages?room_id=in.(${roomIds.join(',')})&sender_uid=neq.${encodeURIComponent(uid)}&select=room_id,created_at`);
+          const msgs = mr.ok ? await mr.json() : [];
+          const countByRoom = {};
+          msgs.forEach(m => { if (new Date(m.created_at).getTime() > _yfChatGetLastRead(m.room_id)) countByRoom[m.room_id] = (countByRoom[m.room_id] || 0) + 1; });
+          roomRows.forEach(rm => { unreadMap[rm.food_order_id] = countByRoom[rm.id] || 0; });
+        }
+      }
+    } catch (e) { console.warn('[YallaFood Tracking] gagal hitung badge chat kurir:', e.message); }
+
     box.innerHTML = rows.map(o => `
       <div class="bg-white rounded-2xl p-3 border border-gray-100">
         <div class="flex gap-3">
           <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
           <div class="flex-1 min-w-0">
-            <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' ('+o.variant+')' : ''} x${o.qty}</p>
+            <p class="font-bold text-sm lc1">${o.ad_title}</p>
             <p class="text-xs text-gray-500">${o.seller_name || ''}</p>
+            ${o.variant ? `<p class="text-xs text-gray-600 mt-1" style="white-space:pre-line">${o.variant}</p>` : ''}
             <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
           </div>
           ${o.status === 'menunggu_kurir' ? `
@@ -22763,7 +23009,7 @@ async function _yfLoadTracking() {
           </div>
           ` : `<span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full flex-shrink-0 ${o.status === 'dibatalkan' ? 'bg-red-50 text-red-500' : 'bg-pl text-primary'}">${_YF_STATUS_LABEL[o.status] || o.status}</span>`}
         </div>
-        ${o.courier_id ? `<button onclick="openYfChat('${o.id}','buyer_kurir','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" class="w-full mt-2 text-xs font-bold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir</button>` : ''}
+        ${o.courier_id ? `<button onclick="openYfChat('${o.id}','buyer_kurir','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" style="position:relative" class="w-full mt-2 text-xs font-bold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir${_yfBtnBadge(unreadMap[o.id] || 0)}</button>` : ''}
         ${o.status === 'selesai' ? `<button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="w-full mt-2 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan</button>` : ''}
       </div>
     `).join('');
@@ -22859,6 +23105,9 @@ window.openKelolaPesananYallaFood = async function() {
   document.getElementById('yallaFoodKelolaPesanan').style.display = 'flex';
   await _yfLoadKelolaPesanan();
   _yfSubscribeSellerRealtime();
+  // Auto-clear badge 'Pesanan Masuk' di ikon Gerai/Toko top bar begitu seller membuka halaman ini
+  _yfSellerInboxSetLastSeen();
+  _yfSellerInboxRefreshBadge();
 };
 window.closeKelolaPesananYallaFood = function() { document.getElementById('yallaFoodKelolaPesanan').style.display = 'none'; };
 async function _yfLoadKelolaPesanan() {
@@ -22871,6 +23120,25 @@ async function _yfLoadKelolaPesanan() {
     const r = await window._supaFetch(`/rest/v1/food_orders?seller_id=eq.${encodeURIComponent(uid)}&status=neq.menunggu_kurir&select=*&order=created_at.desc`);
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood masuk.</p>'; return; }
+
+    // Badge unread PER TOMBOL 'Chat Kurir' — bukan agregat global.
+    const unreadMap = {};
+    try {
+      const orderIds = rows.filter(o => o.courier_id).map(o => o.id);
+      if (orderIds.length) {
+        const rr = await window._supaFetch(`/rest/v1/food_chat_rooms?food_order_id=in.(${orderIds.join(',')})&thread=eq.kurir_seller&select=id,food_order_id`);
+        const roomRows = rr.ok ? await rr.json() : [];
+        if (roomRows.length) {
+          const roomIds = roomRows.map(x => x.id);
+          const mr = await window._supaFetch(`/rest/v1/food_chat_messages?room_id=in.(${roomIds.join(',')})&sender_uid=neq.${encodeURIComponent(uid)}&select=room_id,created_at`);
+          const msgs = mr.ok ? await mr.json() : [];
+          const countByRoom = {};
+          msgs.forEach(m => { if (new Date(m.created_at).getTime() > _yfChatGetLastRead(m.room_id)) countByRoom[m.room_id] = (countByRoom[m.room_id] || 0) + 1; });
+          roomRows.forEach(rm => { unreadMap[rm.food_order_id] = countByRoom[rm.id] || 0; });
+        }
+      }
+    } catch (e) { console.warn('[YallaFood Kelola] gagal hitung badge chat kurir:', e.message); }
+
     box.innerHTML = rows.map(o => {
       const next = _yfNextStatus(o.status);
       const canCancel = o.status === 'diterima';
@@ -22879,8 +23147,9 @@ async function _yfLoadKelolaPesanan() {
         <div class="flex gap-3 mb-2">
           <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
           <div class="flex-1 min-w-0">
-            <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' ('+o.variant+')' : ''} x${o.qty}</p>
+            <p class="font-bold text-sm lc1">${o.ad_title}</p>
             ${o.notes ? `<p class="text-xs text-gray-500 lc1">${o.notes}</p>` : ''}
+            ${o.variant ? `<p class="text-xs text-gray-600 mt-1" style="white-space:pre-line">${o.variant}</p>` : ''}
             <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice((o.price || 0) * (o.qty || 1))}</p>
           </div>
           <div class="flex flex-col items-end gap-1 flex-shrink-0">
@@ -22891,7 +23160,7 @@ async function _yfLoadKelolaPesanan() {
         <div style="display:flex;gap:8px">
           ${next ? `<button onclick="yfAdvanceOrderStatus('${o.id}','${next}')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Lanjut: ${_YF_STATUS_LABEL[next]}</button>` : ''}
           ${canCancel ? `<button onclick="yfAdvanceOrderStatus('${o.id}','dibatalkan')" class="text-xs font-semibold text-red-500 rounded-xl py-2 px-3">Batalkan</button>` : ''}
-          ${o.courier_id ? `<button onclick="openYfChat('${o.id}','kurir_seller','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" class="text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2 px-3"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir</button>` : ''}
+          ${o.courier_id ? `<button onclick="openYfChat('${o.id}','kurir_seller','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" style="position:relative" class="text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2 px-3"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir${_yfBtnBadge(unreadMap[o.id] || 0)}</button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -23065,6 +23334,10 @@ window.openKurirDashboard = async function() {
   await _kurirLoadWaitingRoom();
   await _kurirLoadMyDeliveries();
   _kurirSubscribeRealtime();
+  // Auto-clear badge 'Menunggu Kurir' di ikon Sepeda (menu Akun) begitu kurir masuk ke Dashboard —
+  // state & storage key TERPISAH TOTAL dari badge chat (_yfChatRefreshUnreadBadge/lastread per-room).
+  _yfOrderQueueSetLastSeen();
+  _yfOrderQueueRefreshBadge();
 };
 window.closeKurirDashboard = function() {
   document.getElementById('kurirDashboard').style.display = 'none';
@@ -23088,7 +23361,7 @@ async function _kurirLoadWaitingRoom() {
           <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
           <div class="flex-1 min-w-0 flex items-start justify-between gap-2">
             <div class="min-w-0">
-              <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' (' + o.variant + ')' : ''} x${o.qty}</p>
+              <p class="font-bold text-sm lc1">${o.ad_title}</p>
               <p class="text-xs font-semibold text-gray-600 mt-1">Ongkir:</p>
             </div>
             <div class="flex-shrink-0 text-right">
@@ -23097,6 +23370,7 @@ async function _kurirLoadWaitingRoom() {
             </div>
           </div>
         </div>
+        ${o.variant ? `<p class="text-xs text-gray-600 mb-2" style="white-space:pre-line">${o.variant}</p>` : ''}
         ${o.buyer_address ? `
         <div style="display:flex;align-items:flex-start;gap:6px;background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
           <i class="fa-solid fa-location-dot" style="color:#111827;font-size:13px;margin-top:2px;flex-shrink:0"></i>
@@ -23137,8 +23411,6 @@ async function _kurirLoadMyDeliveries() {
       }
     } catch (e) { console.warn('[YallaFood Kurir] gagal hitung badge chat per-tombol:', e.message); }
 
-    const _yfBtnBadge = (n) => n > 0 ? `<span style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0 3px">${n > 9 ? '9+' : n}</span>` : '';
-
     box.innerHTML = rows.map(o => {
       const buyerUnread = unreadMap[o.id + '_buyer_kurir'] || 0;
       const sellerUnread = unreadMap[o.id + '_kurir_seller'] || 0;
@@ -23147,8 +23419,9 @@ async function _kurirLoadMyDeliveries() {
         <div class="flex gap-3">
           <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
           <div class="flex-1 min-w-0">
-            <p class="font-bold text-sm lc1">${o.ad_title}${o.variant ? ' (' + o.variant + ')' : ''} x${o.qty}</p>
+            <p class="font-bold text-sm lc1">${o.ad_title}</p>
             <p class="text-xs text-gray-500 lc1">${o.seller_name || ''} → ${o.buyer_name || ''}</p>
+            ${o.variant ? `<p class="text-xs text-gray-600 mt-1" style="white-space:pre-line">${o.variant}</p>` : ''}
           </div>
           <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary flex-shrink-0">${_YF_STATUS_LABEL[o.status] || o.status}</span>
         </div>
@@ -23470,7 +23743,10 @@ function _yfChatSetLastRead(roomId) {
 
 async function _yfChatRefreshUnreadBadge() {
   const uid = window._S?.user?.uid;
-  const badgeIds = ['yfChatBadgeMob', 'yfChatBadgeKurirMob', 'yfChatBadgeKurirDesktop'];
+  // Badge global (bottom nav & menu Daftar Kurir) sengaja dinonaktifkan —
+  // notifikasi pesan kurir sekarang hanya tampil lokal di tombol 'Chat Kurir'
+  // pada kartu pesanan terkait (lihat _yfLoadTracking/_yfLoadKelolaPesanan/_kurirLoadMyDeliveries).
+  const badgeIds = [];
   const badges = badgeIds.map(id => document.getElementById(id)).filter(Boolean);
   if (!badges.length) return;
   if (!uid) { badges.forEach(b => { b.style.display = 'none'; }); return; }
@@ -23500,9 +23776,13 @@ function _yfChatSubscribeGlobalUnread() {
   _yfGlobalChatChannel = window.supabase.channel('food_chat_unread_' + uid)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'food_chat_messages' }, () => {
       _yfChatRefreshUnreadBadge();
-      // Kalau Dashboard Kurir sedang terbuka, refresh juga badge per-tombol Chat Buyer/Chat Seller
+      // Kalau panel pesanan yang relevan sedang terbuka, refresh badge per-tombol 'Chat Kurir'/Chat Buyer/Chat Seller
       const dash = document.getElementById('kurirDashboard');
       if (dash && dash.style.display === 'flex') _kurirLoadMyDeliveries();
+      const tracking = document.getElementById('yallaFoodOrderTracking');
+      if (tracking && tracking.style.display === 'flex') _yfLoadTracking();
+      const kelola = document.getElementById('yallaFoodKelolaPesanan');
+      if (kelola && kelola.style.display === 'flex') _yfLoadKelolaPesanan();
     })
     .subscribe((status, err) => {
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[YallaFood Chat] channel unread global bermasalah:', status, err?.message || '');
@@ -23560,6 +23840,53 @@ function _yfOrderQueueSubscribeGlobal() {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'food_orders', filter: 'status=eq.menunggu_kurir' }, () => { _yfOrderQueueRefreshBadge(); })
     .subscribe((status, err) => {
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[YallaFood Kurir] channel badge antrean bermasalah:', status, err?.message || '');
+    });
+}
+
+// ============================================================
+// 🏪 BADGE 'PESANAN MASUK' PADA IKON GERAI/TOKO (top bar YallaFood) —
+// terpisah TOTAL dari badge chat & badge antrean kurir di atas. Murni
+// UI layer: hitung food_orders milik seller ini yang berstatus 'diterima'
+// (baru masuk, belum diproses) dan MASIH lebih baru dari terakhir kali
+// seller membuka halaman 'Kelola Pesanan' (last-seen di localStorage,
+// pola sama seperti badge antrean kurir). Event-driven via Supabase
+// Realtime pada food_orders (bukan polling/interval), tidak menyentuh
+// logika PATCH/klaim pesanan itu sendiri.
+// ============================================================
+function _yfSellerInboxLastSeenKey(uid) { return 'yf_sellerinbox_lastseen_' + uid; }
+function _yfSellerInboxGetLastSeen() {
+  const uid = window._S?.user?.uid; if (!uid) return 0;
+  try { return parseInt(localStorage.getItem(_yfSellerInboxLastSeenKey(uid)) || '0'); } catch (e) { return 0; }
+}
+function _yfSellerInboxSetLastSeen() {
+  const uid = window._S?.user?.uid; if (!uid) return;
+  try { localStorage.setItem(_yfSellerInboxLastSeenKey(uid), Date.now().toString()); } catch (e) {}
+}
+async function _yfSellerInboxRefreshBadge() {
+  const badge = document.getElementById('yfSellerInboxBadge');
+  if (!badge) return;
+  const uid = window._S?.user?.uid;
+  if (!uid) { badge.style.display = 'none'; return; }
+  try {
+    const r = await window._supaFetch(`/rest/v1/food_orders?seller_id=eq.${encodeURIComponent(uid)}&status=eq.diterima&select=updated_at`);
+    const rows = r.ok ? await r.json() : [];
+    const lastSeen = _yfSellerInboxGetLastSeen();
+    const count = rows.filter(o => new Date(o.updated_at).getTime() > lastSeen).length;
+    badge.textContent = count > 9 ? '9+' : String(count);
+    badge.style.display = count > 0 ? 'flex' : 'none';
+  } catch (e) { console.warn('[YallaFood Seller] gagal hitung badge pesanan masuk:', e.message); }
+}
+let _yfSellerInboxChannel = null;
+function _yfSellerInboxSubscribeGlobal() {
+  const uid = window._S?.user?.uid;
+  if (!uid || !window.supabase) return;
+  if (_yfSellerInboxChannel) { try { window.supabase.removeChannel(_yfSellerInboxChannel); } catch (e) {} }
+  // Order baru 'masuk' ke seller terjadi via UPDATE (courier mengklaim pesanan,
+  // status menunggu_kurir -> diterima), bukan INSERT baris baru.
+  _yfSellerInboxChannel = window.supabase.channel('food_orders_seller_inbox_' + uid)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'food_orders', filter: 'status=eq.diterima' }, () => { _yfSellerInboxRefreshBadge(); })
+    .subscribe((status, err) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[YallaFood Seller] channel badge pesanan masuk bermasalah:', status, err?.message || '');
     });
 }
 
@@ -23652,8 +23979,10 @@ document.addEventListener('visibilitychange', () => {
   _yfOrderQueueSubscribeGlobal();
   _yfOrderPoolBroadcastSubscribe();
   _yfChatSubscribeGlobalUnread();
+  _yfSellerInboxSubscribeGlobal();
   _yfOrderQueueRefreshBadge();
   _yfChatRefreshUnreadBadge();
+  _yfSellerInboxRefreshBadge();
   const dash = document.getElementById('kurirDashboard');
   if (dash && dash.style.display === 'flex') { _kurirLoadWaitingRoom(); _kurirLoadMyDeliveries(); }
 });
@@ -23670,6 +23999,8 @@ document.addEventListener('visibilitychange', () => {
     _yfOrderQueueRefreshBadge();
     _yfOrderQueueSubscribeGlobal();
     _yfOrderPoolBroadcastSubscribe();
+    _yfSellerInboxRefreshBadge();
+    _yfSellerInboxSubscribeGlobal();
     return result;
   };
 })();
@@ -23680,6 +24011,8 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   _yfOrderQueueRefreshBadge();
   _yfOrderQueueSubscribeGlobal();
   _yfOrderPoolBroadcastSubscribe();
+  _yfSellerInboxRefreshBadge();
+  _yfSellerInboxSubscribeGlobal();
 }, 1500));
 </script>
 
