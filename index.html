@@ -51,6 +51,9 @@ html { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/>
+<!-- Leaflet (peta pin-lokasi manual, fallback GPS gagal — gratis, OpenStreetMap, tanpa API key) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <!-- Lucide Icons (untuk icon premium) -->
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
@@ -22313,6 +22316,24 @@ window.closeKelolaToko = function() {
 </div>
 
 <!-- YALLAFOOD: Ringkasan & Konfirmasi Pesanan -->
+<!-- YALLAFOOD: Fallback pin lokasi manual — dipakai kalau GPS gagal/timeout
+     (khususnya PWA iOS yang tidak bisa akses geolocation sama sekali).
+     Tidak memanggil navigator.geolocation sedikit pun, murni user geser pin
+     sendiri di peta, jadi tidak kena batasan izin lokasi PWA iOS. -->
+<div id="yfManualPinModal" style="display:none;position:fixed;inset:0;z-index:62;background:#fff;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="_yfCloseManualPinFallback()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <div class="flex-1 min-w-0">
+      <h2 class="font-bold text-base">Tandai Lokasi Kamu</h2>
+      <p class="text-xs text-gray-500">Geser pin ke posisi kamu sebenarnya</p>
+    </div>
+  </div>
+  <div id="yfManualPinMap" style="flex:1;min-height:0"></div>
+  <div class="bg-white px-4 py-3" style="flex-shrink:0;box-shadow:0 -4px 16px rgba(0,0,0,.06);padding-bottom:max(1.25rem,env(safe-area-inset-bottom,1.25rem))">
+    <button onclick="_yfConfirmManualPin()" class="w-full bg-primary text-white font-bold rounded-2xl py-3">Gunakan Lokasi Ini</button>
+  </div>
+</div>
+
 <div id="yfOrderSummaryModal" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.4);align-items:flex-end;justify-content:center">
   <div class="bg-white w-full rounded-t-3xl p-5" style="max-width:480px">
     <h3 class="font-bold text-base mb-3">Konfirmasi Pesanan</h3>
@@ -22931,8 +22952,8 @@ function _yfProceedToOrder() {
   const _yfGeoSafetyTimer = setTimeout(() => {
     if (_yfGeoSettled) return;
     _yfGeoSettled = true;
-    showToast('Gagal mendeteksi lokasi. Pastikan GPS/Lokasi di HP kamu aktif, lalu coba lagi.', 'red');
-    if (btn) { btn.disabled = false; btn.textContent = 'Pesan Sekarang'; }
+    showToast('Gagal mendeteksi lokasi otomatis, tandai lokasi kamu manual di peta ya.', 'red');
+    _yfOpenManualPinFallback(ad);
   }, 20000);
 
   navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -22948,9 +22969,60 @@ function _yfProceedToOrder() {
     if (_yfGeoSettled) return;
     _yfGeoSettled = true;
     clearTimeout(_yfGeoSafetyTimer);
-    showToast('Gagal mendapat lokasi GPS: ' + err.message, 'red');
-    if (btn) { btn.disabled = false; btn.textContent = 'Pesan Sekarang'; }
+    // Fallback: GPS gagal/ditolak (umum terjadi di PWA iOS yang tidak bisa
+    // akses navigator.geolocation sama sekali) — biarkan user tandai lokasi
+    // manual di peta, bukan cuma toast error yang bikin buntu.
+    showToast('Gagal mendapat lokasi GPS, tandai lokasi kamu manual di peta ya.', 'red');
+    _yfOpenManualPinFallback(ad);
   }, { enableHighAccuracy: true, timeout: 15000 });
+};
+
+// ── Fallback: pin lokasi manual di peta (tidak pakai navigator.geolocation
+// sama sekali, jadi tidak kena batasan izin lokasi PWA iOS) ──
+window._yfManualPinState = { map: null, marker: null, ad: null };
+async function _yfOpenManualPinFallback(ad) {
+  window._yfManualPinState.ad = ad;
+  document.getElementById('yfManualPinModal').style.display = 'flex';
+
+  // Center awal: lokasi toko (kalau ada) biar user tidak perlu cari dari peta dunia
+  let centerLat = 30.0444, centerLng = 31.2357; // fallback: pusat Kairo
+  try {
+    const shopRes = await window._supaFetch(`/rest/v1/shops?user_id=eq.${encodeURIComponent(ad.seller_uid)}&select=lat,lng&limit=1`);
+    const shopRows = shopRes.ok ? await shopRes.json() : [];
+    const shop = shopRows[0];
+    if (shop && shop.lat != null && shop.lng != null) { centerLat = Number(shop.lat); centerLng = Number(shop.lng); }
+  } catch (e) {}
+
+  setTimeout(() => {
+    const mapEl = document.getElementById('yfManualPinMap');
+    if (window._yfManualPinState.map) { window._yfManualPinState.map.remove(); window._yfManualPinState.map = null; }
+    const map = L.map(mapEl).setView([centerLat, centerLng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+    }).addTo(map);
+    const marker = L.marker([centerLat, centerLng], { draggable: true }).addTo(map);
+    window._yfManualPinState.map = map;
+    window._yfManualPinState.marker = marker;
+    map.invalidateSize();
+  }, 50);
+}
+window._yfCloseManualPinFallback = function() {
+  document.getElementById('yfManualPinModal').style.display = 'none';
+  const btn = document.getElementById('yfPesanBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Pesan Sekarang'; }
+};
+window._yfConfirmManualPin = async function() {
+  const st = window._yfManualPinState;
+  if (!st.marker || !st.ad) return;
+  const pos = st.marker.getLatLng();
+  document.getElementById('yfManualPinModal').style.display = 'none';
+  const btn = document.getElementById('yfPesanBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Memproses...'; }
+  try {
+    await _yfComputeAndShowSummary(st.ad, pos.lat, pos.lng);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Pesan Sekarang'; }
+  }
 };
 
 async function _yfComputeAndShowSummary(ad, buyerLat, buyerLng) {
