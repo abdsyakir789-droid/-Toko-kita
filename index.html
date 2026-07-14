@@ -2597,7 +2597,7 @@ h3.text-sm.font-bold.text-gray-800 {
       </div>
     </div>
     <!-- Komentar -->
-    <div>
+    <div id="reviewCommentSection">
       <p style="font-size:13px;font-weight:700;color:#374151;margin:0 0 8px">Komentar <span style="color:#9ca3af;font-weight:400">(opsional)</span></p>
       <textarea id="reviewComment" placeholder="Ceritakan pengalaman kamu dengan produk ini..." style="width:100%;border:1.5px solid #e5e7eb;border-radius:14px;padding:12px;font-size:13px;font-family:'Inter',sans-serif;resize:none;outline:none;min-height:100px;box-sizing:border-box;color:#374151" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
     </div>
@@ -7347,6 +7347,9 @@ window.openReviewWrite = function(adId, adTitle, adImg, sellerUid, type) {
   // Reset UI
   document.getElementById('reviewComment').value = '';
   setReviewRating(0);
+  // Ulasan kurir cukup bintang — sembunyikan kolom komentar khusus untuk type ini
+  const _commentSection = document.getElementById('reviewCommentSection');
+  if (_commentSection) _commentSection.style.display = (type === 'kurir') ? 'none' : 'block';
 
   // Pastikan tombol kirim selalu dalam keadaan normal saat form dibuka
   const _btnReset = document.getElementById('btnSubmitReview');
@@ -7401,7 +7404,7 @@ window.submitReview = async function() {
   const _chkData = _chkRes.ok ? await _chkRes.json() : [];
   const _existingReviewId = _chkData.length ? _chkData[0].id : null;
 
-  const comment = document.getElementById('reviewComment').value.trim();
+  const comment = _reviewType === 'kurir' ? '' : document.getElementById('reviewComment').value.trim();
   const _payload = {
     ad_id: _reviewAdId,
     ad_title: _reviewAdTitle,
@@ -22465,6 +22468,24 @@ async function _yfGetOngkirConfig() {
 }
 
 function _yfFmtPrice(n) { return 'LE ' + Number(n || 0).toLocaleString('en-EG'); }
+
+// Waktu relatif sederhana untuk kartu pesanan Dashboard Kurir ("1 menit lalu", "5 menit lalu", "1 hari lalu")
+// — murni tampilan, dihitung dari food_orders.created_at yang sudah ada, tidak menyentuh data apapun.
+function _yfTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+  if (diffSec < 60) return diffSec + ' detik lalu';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return diffMin + ' menit lalu';
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return diffHour + ' jam lalu';
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 30) return diffDay + ' hari lalu';
+  const diffMonth = Math.floor(diffDay / 30);
+  if (diffMonth < 12) return diffMonth + ' bulan lalu';
+  return Math.floor(diffMonth / 12) + ' tahun lalu';
+}
 function _yfValidVariants(ad) {
   return Array.isArray(ad.variants) ? ad.variants.filter(v => v && v.name) : [];
 }
@@ -22787,7 +22808,7 @@ async function _yfInjectSellerInfo(ad) {
     }
   } catch (e) {}
   try {
-    const r = await window._supaFetch(`/rest/v1/reviews?seller_uid=eq.${encodeURIComponent(ad.seller_uid)}&select=rating`);
+    const r = await window._supaFetch(`/rest/v1/reviews?seller_uid=eq.${encodeURIComponent(ad.seller_uid)}&review_type=eq.food&select=rating`);
     const rows = r.ok ? await r.json() : [];
     const avg = rows.length ? rows.reduce((s, rv) => s + (rv.rating || 0), 0) / rows.length : 0;
     const ratingEl = document.getElementById('yfSellerRatingVal');
@@ -23210,7 +23231,7 @@ async function _yfLoadTracking() {
         </div>
         ${o.courier_id ? `
         <div class="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-100">
-          <div class="flex items-center gap-2 min-w-0">
+          <div class="flex items-center gap-2 min-w-0 cursor-pointer" onclick="_yfOpenKurirProfile('${o.courier_id}','${o.id}','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')">
             <div class="w-8 h-8 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
               ${courierPhotoMap[o.courier_id] ? `<img src="${courierPhotoMap[o.courier_id]}" class="w-full h-full object-cover"/>` : `<i class="fa-solid fa-motorcycle text-gray-400 text-xs"></i>`}
             </div>
@@ -23219,7 +23240,11 @@ async function _yfLoadTracking() {
           <button onclick="openYfChat('${o.id}','buyer_kurir','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-shrink-0 text-xs font-bold text-gray-700 border border-gray-200 rounded-xl py-2 px-3"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir${_yfBtnBadge(unreadMap[o.id] || 0)}</button>
         </div>
         ` : ''}
-        ${o.status === 'selesai' ? `<button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="w-full mt-2 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan</button>` : ''}
+        ${o.status === 'selesai' ? `
+        <div class="flex gap-2 mt-2">
+          <button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="flex-1 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan</button>
+          ${o.courier_id ? `<button onclick="openReviewWrite('${o.ad_id}','${('Kurir: '+(o.courier_name||'Kurir')).replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.courier_id}','kurir')" class="flex-1 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan Kurir</button>` : ''}
+        </div>` : ''}
       </div>
     `).join('');
   } catch (e) {
@@ -23251,6 +23276,67 @@ window.yfCancelFoodOrder = async function(orderId) {
   } catch (e) {
     showToast('Gagal membatalkan: ' + e.message, 'red');
   }
+};
+
+// ── Detail Profil Kurir (dibuka dari klik nama/foto kurir di Pesanan Saya) ──
+// Fokus layout & navigasi saja — tombol Chat masih murni visual, belum
+// disambungkan ke fungsi apapun sesuai batasan tugas ini.
+window._yfOpenKurirProfile = async function(kurirId, orderId, courierName) {
+  if (!kurirId) return;
+  window._yfKurirProfileCtx = { orderId: orderId || null, courierName: courierName || 'Kurir' };
+  const sheet = document.getElementById('yfKurirProfileSheet');
+  const inner = document.getElementById('yfKurirProfileSheetInner');
+  sheet.style.display = 'flex';
+  inner.style.transform = 'translateY(100%)';
+  // Double rAF: pastikan browser sempat 'melukis' posisi awal (di bawah)
+  // dulu sebelum transisi ke posisi akhir, supaya animasi slide-up jalan mulus.
+  requestAnimationFrame(() => { requestAnimationFrame(() => { inner.style.transform = 'translateY(0)'; }); });
+  const avEl = document.getElementById('yfKurirProfileAvatar');
+  avEl.innerHTML = 'K';
+  document.getElementById('yfKurirProfileName').textContent = 'Memuat...';
+  document.getElementById('yfKurirProfileDeliveries').textContent = '0';
+  document.getElementById('yfKurirProfileRating').textContent = '0.0';
+
+  try {
+    const uRes = await window._supaFetch(`/rest/v1/users?uid=eq.${encodeURIComponent(kurirId)}&select=name,photo_url&limit=1`);
+    const uRows = uRes.ok ? await uRes.json() : [];
+    const u = uRows[0];
+    document.getElementById('yfKurirProfileName').textContent = u?.name || 'Kurir';
+    if (u?.photo_url) avEl.innerHTML = `<img src="${u.photo_url}" class="w-full h-full object-cover"/>`;
+    else avEl.textContent = (u?.name || 'K').charAt(0).toUpperCase();
+  } catch (e) {}
+
+  // Jumlah Pengantaran = hitung langsung dari food_orders berstatus 'selesai' —
+  // otomatis bertambah begitu status pesanan diubah jadi Selesai, tanpa perlu
+  // counter terpisah yang bisa 'nyasar'/tidak sinkron.
+  try {
+    const cRes = await window._supaFetch(`/rest/v1/food_orders?courier_id=eq.${encodeURIComponent(kurirId)}&status=eq.selesai&select=id`);
+    const cRows = cRes.ok ? await cRes.json() : [];
+    document.getElementById('yfKurirProfileDeliveries').textContent = String(cRows.length);
+  } catch (e) {}
+
+  // Rating kurir: dihitung dari reviews (seller_uid dipakai sbg id kurir
+  // khusus utk review_type='kurir', dibedakan dari ulasan seller/produk).
+  try {
+    const rRes = await window._supaFetch(`/rest/v1/reviews?seller_uid=eq.${encodeURIComponent(kurirId)}&review_type=eq.kurir&select=rating`);
+    const rRows = rRes.ok ? await rRes.json() : [];
+    const avg = rRows.length ? rRows.reduce((s, rv) => s + (rv.rating || 0), 0) / rRows.length : 0;
+    document.getElementById('yfKurirProfileRating').textContent = fmtRating(avg);
+  } catch (e) {}
+};
+window._yfOpenKurirProfileChat = function() {
+  const ctx = window._yfKurirProfileCtx;
+  if (!ctx || !ctx.orderId) return;
+  window._yfCloseKurirProfile();
+  // Tunggu animasi tutup sheet (300ms) kelar dulu baru buka chat, supaya
+  // tidak tabrakan z-index dengan sheet profil yang masih tampil.
+  setTimeout(() => { window.openYfChat(ctx.orderId, 'buyer_kurir', ctx.courierName); }, 300);
+};
+window._yfCloseKurirProfile = function() {
+  const sheet = document.getElementById('yfKurirProfileSheet');
+  const inner = document.getElementById('yfKurirProfileSheetInner');
+  inner.style.transform = 'translateY(100%)';
+  setTimeout(() => { sheet.style.display = 'none'; }, 300);
 };
 
 let _yfBuyerChannel = null;
@@ -23581,7 +23667,7 @@ async function _kurirLoadWaitingRoom() {
   const box = document.getElementById('kurirWaitingRoomList');
   box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
   try {
-    const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir&select=*&order=created_at.asc');
+    const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir&select=*&order=created_at.desc');
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan menunggu kurir.</p>'; return; }
     box.innerHTML = rows.map(o => `
@@ -23608,6 +23694,9 @@ async function _kurirLoadWaitingRoom() {
           </div>
         </div>
         ` : ''}
+        <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+          <span style="font-size:10px;font-weight:600;color:#111827">${_yfTimeAgo(o.created_at)}</span>
+        </div>
         <button onclick="yfKurirClaimOrder('${o.id}')" class="w-full bg-primary text-white text-xs font-bold rounded-xl py-2">Ambil Pesanan</button>
       </div>
     `).join('');
@@ -23678,6 +23767,9 @@ async function _kurirLoadMyDeliveries() {
         <div style="display:flex;gap:8px;margin-top:8px">
           <button onclick="openYfChat('${o.id}','buyer_kurir','${(o.buyer_name||'Buyer').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Buyer${_yfBtnBadge(buyerUnread)}</button>
           <button onclick="openYfChat('${o.id}','kurir_seller','${(o.seller_name||'Seller').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Seller${_yfBtnBadge(sellerUnread)}</button>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:6px">
+          <span style="font-size:10px;font-weight:600;color:#111827">${_yfTimeAgo(o.created_at)}</span>
         </div>
       </div>
     `;
@@ -23777,6 +23869,25 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
      chats/chat_messages barang fisik). Auto-buka saat kurir klaim,
      auto-terkunci saat pesanan selesai/dibatalkan.
      ============================================================ -->
+<!-- YALLAFOOD: Detail Profil Kurir — bottom sheet (setengah layar), muncul
+     menimpa halaman sebelumnya dengan overlay dim. Layout reuse
+     .stat-strip/.stat-item milik halaman Etalase Toko supaya 3 elemen
+     (Pengantaran/Rating/Chat) sejajar rapi tanpa bikin sistem grid baru. -->
+<div id="yfKurirProfileSheet" style="display:none;position:fixed;inset:0;z-index:57;background:rgba(0,0,0,.4);align-items:flex-end;justify-content:center" onclick="if(event.target===this) _yfCloseKurirProfile()">
+  <div id="yfKurirProfileSheetInner" class="bg-white w-full" style="max-width:480px;max-height:50vh;overflow-y:auto;border-radius:24px 24px 0 0;position:relative;padding:24px 20px;transform:translateY(100%);transition:transform .3s ease-out">
+    <button onclick="_yfCloseKurirProfile()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100" style="position:absolute;top:12px;right:12px"><i class="fa-solid fa-xmark text-gray-500"></i></button>
+    <div style="display:flex;flex-direction:column;align-items:center;padding-top:8px">
+      <div id="yfKurirProfileAvatar" class="rounded-full bg-primary text-white font-black flex items-center justify-center overflow-hidden flex-shrink-0" style="width:80px;height:80px;font-size:28px">K</div>
+      <h3 id="yfKurirProfileName" class="font-bold text-lg mt-3 text-center" style="color:#111827"></h3>
+      <div class="stat-strip mt-4" style="max-width:320px;width:100%">
+        <div class="stat-item"><p class="stat-num colored" id="yfKurirProfileDeliveries">0</p><p class="stat-label">Pengantaran</p></div>
+        <div class="stat-item"><p class="stat-num"><i class="fa-solid fa-star text-amber-400" style="font-size:14px"></i> <span id="yfKurirProfileRating">0.0</span></p><p class="stat-label">Rating</p></div>
+        <div class="stat-item" style="cursor:pointer" onclick="_yfOpenKurirProfileChat()"><p class="stat-num"><i class="fa-regular fa-comment-dots"></i></p><p class="stat-label">Chat</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="yfChatModal" style="display:none;position:fixed;inset:0;z-index:56;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
     <button onclick="closeYfChat()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
