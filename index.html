@@ -3224,15 +3224,23 @@ h3.text-sm.font-bold.text-gray-800 {
     </button>
   </div>
 
-  <!-- ══ IKLAN SAYA + KELOLA TOKO — Row baru di bawah quick actions (MOBILE ONLY) ══ -->
-  <div id="iklanSayaRowMob" class="flex md:hidden mb-4 justify-start gap-3" style="display:none">
-    <button onclick="openIklanSaya()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 px-2 transition-all text-center w-1/4">
+  <!-- ══ IKLAN SAYA + KELOLA TOKO + KIRIM BARANG — Row baru di bawah quick actions (MOBILE ONLY) ══ -->
+  <!-- Row ini SEKARANG selalu tampil (dulu display:none, cuma muncul kalau punya toko) supaya
+       tombol 'Kirim Barang' bisa diakses semua user. Iklan Saya & Kelola Toko tetap disembunyikan
+       individual lewat _applyShopGate() kalau user belum buka toko — perilaku 2 tombol itu TIDAK berubah. -->
+  <div id="iklanSayaRowMob" class="flex md:hidden mb-4 justify-start gap-3">
+    <button id="btnIklanSayaMob" onclick="openIklanSaya()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 px-2 transition-all text-center w-1/4" style="display:none">
       <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17h7"/><path d="M17 14v7"/></svg></span>
       <p style="font-size:10px;font-weight:700;color:#111827;margin:0;line-height:1.3">Iklan Saya</p>
     </button>
-    <button id="btnKelolaToko" onclick="openKelolaToko()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 px-2 transition-all text-center w-1/4">
+    <button id="btnKelolaToko" onclick="openKelolaToko()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 px-2 transition-all text-center w-1/4" style="display:none">
       <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"/><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"/><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"/></svg></span>
       <p style="font-size:10px;font-weight:700;color:#111827;margin:0;line-height:1.3">Kelola Toko</p>
+    </button>
+    <!-- Kirim Barang (YallaKurir, sisi pengirim) — SELALU tampil, tidak digate status toko sama sekali. -->
+    <button id="btnKirimBarangMob" onclick="window.openKirimBarangYallaKurir ? openKirimBarangYallaKurir() : showToast('Fitur Kirim Barang segera hadir!','green')" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 px-2 transition-all text-center w-1/4">
+      <span class="lucide-icon" id="btnKirimBarangIconMob"></span>
+      <p style="font-size:10px;font-weight:700;color:#111827;margin:0;line-height:1.3">Kirim Barang</p>
     </button>
     <!-- Pengaturan (khusus mobile Admin — Top Bar penuh, dipindah ke sini via JS di renderUserState) -->
     <button id="btnPengaturanMobAdmin" onclick="openSettings()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 px-2 transition-all text-center w-1/4" style="display:none">
@@ -3241,19 +3249,27 @@ h3.text-sm.font-bold.text-gray-800 {
     </button>
   </div>
 
-  <!-- ══ KURIR YALLAFOOD — menu baru, murni tambahan, tidak mengubah row lain (MOBILE ONLY) ══ -->
-  <div class="md:hidden mb-4">
-    <button id="menuKurirBtnMob" onclick="openDaftarKurir()" class="w-full flex items-center gap-3 bg-white rounded-2xl py-4 px-4 transition-all text-left">
-      <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0" style="position:relative">
+  <!-- ══ KURIR YALLAFOOD + YALLAKURIR — menu baru, murni tambahan, tidak mengubah row lain (MOBILE ONLY) ══ -->
+  <div class="md:hidden mb-4 flex gap-2">
+    <button id="menuKurirBtnMob" onclick="openDaftarKurir()" class="flex-1 min-w-0 flex items-center gap-1.5 bg-white rounded-2xl py-4 pl-3 pr-1.5 transition-all text-left">
+      <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center flex-shrink-0" style="position:relative">
         <span class="lucide-icon" id="menuKurirIconMob"></span>
         <span id="yfChatBadgeKurirMob" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center">0</span>
         <span id="yfOrderBadgeKurirMob" style="display:none;position:absolute;top:-4px;left:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center">0</span>
       </div>
-      <div class="flex-1">
-        <p id="menuKurirLabelMob" style="font-size:13px;font-weight:700;color:#111827;margin:0">Daftar Kurir YallaFood</p>
-        <p style="font-size:10px;color:#6b7280;margin:0">Jadi mitra pengantar makanan</p>
+      <div class="flex-1 min-w-0">
+        <p id="menuKurirLabelMob" class="lc1" style="font-size:11.5px;font-weight:700;color:#111827;margin:0">Daftar Kurir YallaFood</p>
+        <p class="lc1" style="font-size:9px;color:#6b7280;margin:0">Jadi mitra pengantar makanan</p>
       </div>
-      <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
+    </button>
+    <button id="menuYallaKurirBtnMob" onclick="showToast('Fitur YallaKurir segera hadir!','green')" class="flex-1 min-w-0 flex items-center gap-1.5 bg-white rounded-2xl py-4 pl-1.5 pr-3 transition-all text-left">
+      <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center flex-shrink-0">
+        <span class="lucide-icon" id="menuYallaKurirIconMob"></span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p id="menuYallaKurirLabelMob" class="lc1" style="font-size:11.5px;font-weight:700;color:#111827;margin:0">Daftar YallaKurir</p>
+        <p class="lc1" style="font-size:9px;color:#6b7280;margin:0">Jadi mitra antar barang</p>
+      </div>
     </button>
   </div>
 
@@ -3325,17 +3341,27 @@ h3.text-sm.font-bold.text-gray-800 {
     </button>
   </div>
 
-  <!-- ══ KURIR YALLAFOOD — Desktop, menu baru murni tambahan ══ -->
-  <div class="hidden md:block mb-4">
-    <button id="menuKurirBtnDesktop" onclick="openDaftarKurir()" class="w-full flex items-center gap-3 bg-white rounded-2xl py-4 px-5 transition-all hover:shadow-md text-left">
+  <!-- ══ KURIR YALLAFOOD + YALLAKURIR — Desktop, menu baru murni tambahan ══ -->
+  <div class="hidden md:flex gap-2 mb-4">
+    <button id="menuKurirBtnDesktop" onclick="openDaftarKurir()" class="flex-1 min-w-0 flex items-center gap-3 bg-white rounded-2xl py-4 pl-5 pr-3 transition-all hover:shadow-md text-left">
       <div class="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0" style="position:relative">
         <span class="lucide-icon" id="menuKurirIconDesktop"></span>
         <span id="yfChatBadgeKurirDesktop" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center">0</span>
         <span id="yfOrderBadgeKurirDesktop" style="display:none;position:absolute;top:-4px;left:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center">0</span>
       </div>
-      <div class="flex-1">
-        <p id="menuKurirLabelDesktop" class="text-sm font-bold text-gray-900">Daftar Kurir YallaFood</p>
-        <p class="text-xs text-gray-500">Jadi mitra pengantar makanan</p>
+      <div class="flex-1 min-w-0">
+        <p id="menuKurirLabelDesktop" class="text-sm font-bold text-gray-900 lc1">Daftar Kurir YallaFood</p>
+        <p class="text-xs text-gray-500 lc1">Jadi mitra pengantar makanan</p>
+      </div>
+      <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
+    </button>
+    <button id="menuYallaKurirBtnDesktop" onclick="showToast('Fitur YallaKurir segera hadir!','green')" class="flex-1 min-w-0 flex items-center gap-3 bg-white rounded-2xl py-4 pl-3 pr-5 transition-all hover:shadow-md text-left">
+      <div class="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0">
+        <span class="lucide-icon" id="menuYallaKurirIconDesktop"></span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p id="menuYallaKurirLabelDesktop" class="text-sm font-bold text-gray-900 lc1">Daftar YallaKurir</p>
+        <p class="text-xs text-gray-500 lc1">Jadi mitra antar barang</p>
       </div>
       <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
     </button>
@@ -21564,7 +21590,10 @@ window.checkShopStatus = async function() {
 // ── Toggle tampilan tombol berdasarkan status toko ─────────────
 function _applyShopGate(punyaToko) {
   // Tombol yang hanya tampil jika SUDAH punya toko
-  ['btnPasangIklan', 'btnPasangIklanDesk', 'iklanSayaRowMob', 'iklanSayaRowDesk'].forEach(id => {
+  // (iklanSayaRowMob sendiri TIDAK digate lagi — row-nya selalu tampil supaya
+  // tombol 'Kirim Barang' di dalamnya bisa diakses semua user; Iklan Saya &
+  // Kelola Toko digate langsung per-tombol supaya perilakunya tetap sama persis.)
+  ['btnPasangIklan', 'btnPasangIklanDesk', 'btnIklanSayaMob', 'btnKelolaToko', 'iklanSayaRowDesk'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.style.display = punyaToko ? '' : 'none';
@@ -24395,6 +24424,225 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   _yfSellerInboxRefreshBadge();
   _yfSellerInboxSubscribeGlobal();
 }, 1500));
+</script>
+
+<!-- ============================================================
+     📦 YALLAKURIR — pendaftaran & verifikasi mitra antar barang.
+     Modul baru, terpisah TOTAL dari courier_profiles/food_orders
+     (kurir YallaFood). Tabel sendiri: yallakurir_profiles.
+     ============================================================ -->
+
+<!-- YALLAKURIR: status / form pendaftaran (verifikasi identitas) -->
+<div id="yallaKurirStatusOverlay" style="display:none;position:fixed;inset:0;z-index:55;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeDaftarYallaKurir()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">YallaKurir</h2>
+  </div>
+  <div id="yallaKurirStatusBody" class="flex-1 overflow-y-auto px-4 py-4"></div>
+</div>
+
+<script>
+// ============================================================
+// 📦 YALLAKURIR MODULE — pendaftaran mitra antar barang.
+// Tabel: yallakurir_profiles (uid, name, phone, ktp/paspor/selfie
+// photo url, status pending/active/rejected). Mirror pola modul
+// Kurir YallaFood (openDaftarKurir dkk) tapi TIDAK memanggil atau
+// menyentuh satupun fungsi/tabel YallaFood — dua modul independen.
+// ============================================================
+
+window._ykState = { profile: null };
+
+async function _ykFetchOwnProfile(uid) {
+  const r = await window._supaFetch(`/rest/v1/yallakurir_profiles?uid=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc&limit=1`);
+  const rows = r.ok ? await r.json() : [];
+  return rows[0] || null;
+}
+
+// Preview generik untuk 3 slot foto (KTP/Paspor/Selfie) — pola sama seperti
+// previewPhoto() di form pasang iklan, cuma target elemen preview beda-beda.
+window._ykPreviewPhoto = function(input, previewId) {
+  const f = input.files[0]; if (!f) return;
+  const show = src => { document.getElementById(previewId).innerHTML = `<img src="${src}" class="w-full h-full object-cover rounded-xl"/>`; };
+  const useObjUrl = () => { try { show(URL.createObjectURL(f)); } catch (e) { showToast('Gagal menampilkan preview foto', 'red'); } };
+  if (typeof FileReader === 'undefined') { useObjUrl(); return; }
+  try {
+    const r = new FileReader();
+    r.onerror = () => useObjUrl();
+    r.onload = e => show(e.target.result);
+    r.readAsDataURL(f);
+  } catch (e) { useObjUrl(); }
+};
+
+window.openDaftarYallaKurir = async function() {
+  const overlay = document.getElementById('yallaKurirStatusOverlay');
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  const body = document.getElementById('yallaKurirStatusBody');
+  const user = window._S?.user;
+  if (!user?.uid) {
+    body.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Silakan login dulu.</p>';
+    return;
+  }
+  body.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat...</p>';
+  const profile = await _ykFetchOwnProfile(user.uid);
+  window._ykState.profile = profile;
+
+  if (!profile) {
+    body.innerHTML = `
+      <p class="text-sm text-gray-500 mb-4">Isi data berikut untuk mendaftar sebagai mitra pengantar barang YallaKurir. Karena membawa titipan barang orang lain, identitas kamu wajib diverifikasi dulu — akun akan berstatus <b>Menunggu Verifikasi</b> sampai disetujui admin.</p>
+      <label class="text-xs font-semibold text-gray-600">Nama Lengkap</label>
+      <input id="ykRegName" type="text" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-3 text-sm" value="${user.name || ''}" placeholder="Nama lengkap"/>
+      <label class="text-xs font-semibold text-gray-600">Nomor WhatsApp Aktif</label>
+      <input id="ykRegPhone" type="tel" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-4 text-sm" placeholder="Contoh: 01012345678"/>
+
+      <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Foto KTP</label>
+      <label for="ykKtpInput" class="block cursor-pointer mb-3">
+        <div id="ykKtpPreview" class="w-full h-28 rounded-xl border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-1 text-primary/60 bg-pl/30 overflow-hidden">
+          <i class="fa-solid fa-id-card text-2xl"></i>
+          <span class="text-xs font-semibold">Ketuk untuk upload KTP</span>
+        </div>
+        <input id="ykKtpInput" type="file" accept="image/*" class="hidden" onchange="_ykPreviewPhoto(this,'ykKtpPreview')"/>
+      </label>
+
+      <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Foto Paspor</label>
+      <label for="ykPasporInput" class="block cursor-pointer mb-1">
+        <div id="ykPasporPreview" class="w-full h-28 rounded-xl border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-1 text-primary/60 bg-pl/30 overflow-hidden">
+          <i class="fa-solid fa-passport text-2xl"></i>
+          <span class="text-xs font-semibold">Ketuk untuk upload Paspor</span>
+        </div>
+        <input id="ykPasporInput" type="file" accept="image/*" class="hidden" onchange="_ykPreviewPhoto(this,'ykPasporPreview')"/>
+      </label>
+      <p class="text-[10px] text-gray-600 mb-3">*Minimal isi salah satu: KTP atau Paspor.</p>
+
+      <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Foto Selfie (wajah jelas)</label>
+      <label for="ykSelfieInput" class="block cursor-pointer mb-4">
+        <div id="ykSelfiePreview" class="w-full h-28 rounded-xl border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-1 text-primary/60 bg-pl/30 overflow-hidden">
+          <i class="fa-solid fa-camera-retro text-2xl"></i>
+          <span class="text-xs font-semibold">Ketuk untuk upload Selfie</span>
+        </div>
+        <input id="ykSelfieInput" type="file" accept="image/*" class="hidden" onchange="_ykPreviewPhoto(this,'ykSelfiePreview')"/>
+      </label>
+
+      <button id="ykSubmitBtn" onclick="submitDaftarYallaKurir()" class="w-full bg-primary text-white font-bold rounded-2xl py-3">Daftar Sekarang</button>
+    `;
+    return;
+  }
+
+  if (profile.status === 'active') {
+    body.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fa-solid fa-circle-check text-primary text-4xl mb-3"></i>
+        <p class="font-bold text-base mb-1">Kamu mitra YallaKurir aktif!</p>
+        <p class="text-sm text-gray-500">Terima kasih sudah terverifikasi.</p>
+      </div>
+    `;
+  } else if (profile.status === 'rejected') {
+    body.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fa-solid fa-circle-xmark text-red-400 text-4xl mb-3"></i>
+        <p class="font-bold text-base mb-1">Pendaftaran ditolak</p>
+        <p class="text-sm text-gray-500">Hubungi admin YallaCare untuk info lebih lanjut.</p>
+      </div>
+    `;
+  } else {
+    body.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fa-solid fa-clock text-amber-400 text-4xl mb-3"></i>
+        <p class="font-bold text-base mb-1">Menunggu Verifikasi Admin</p>
+        <p class="text-sm text-gray-500">Nama: ${profile.name}<br/>Dokumen kamu sedang direview tim YallaMart.</p>
+      </div>
+    `;
+  }
+};
+window.closeDaftarYallaKurir = function() {
+  document.getElementById('yallaKurirStatusOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+};
+
+window.submitDaftarYallaKurir = async function() {
+  const user = window._S?.user;
+  if (!user?.uid) { showToast('Login dulu', 'red'); return; }
+  const name = document.getElementById('ykRegName').value.trim();
+  const phone = document.getElementById('ykRegPhone').value.trim();
+  const ktpFile = document.getElementById('ykKtpInput').files[0];
+  const pasporFile = document.getElementById('ykPasporInput').files[0];
+  const selfieFile = document.getElementById('ykSelfieInput').files[0];
+  if (!name) { showToast('Nama wajib diisi', 'red'); return; }
+  if (!ktpFile && !pasporFile) { showToast('Upload minimal KTP atau Paspor', 'red'); return; }
+  if (!selfieFile) { showToast('Foto selfie wajib diisi', 'red'); return; }
+
+  const btn = document.getElementById('ykSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Mengupload...'; }
+  try {
+    const [ktpUp, pasporUp, selfieUp] = await Promise.all([
+      ktpFile ? uploadToCloudinary(ktpFile) : Promise.resolve(null),
+      pasporFile ? uploadToCloudinary(pasporFile) : Promise.resolve(null),
+      uploadToCloudinary(selfieFile)
+    ]);
+    const res = await window._supaFetch('/rest/v1/yallakurir_profiles', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify({
+        uid: user.uid, name, phone,
+        ktp_photo_url: ktpUp?.secure_url || '',
+        paspor_photo_url: pasporUp?.secure_url || '',
+        selfie_photo_url: selfieUp.secure_url,
+        status: 'pending'
+      })
+    });
+    if (!res.ok) throw new Error('Gagal mendaftar');
+    showToast('Pendaftaran terkirim, menunggu verifikasi admin!', 'green');
+    openDaftarYallaKurir();
+  } catch (e) {
+    showToast('Gagal mendaftar: ' + e.message, 'red');
+    if (btn) { btn.disabled = false; btn.textContent = 'Daftar Sekarang'; }
+  }
+};
+
+// ── Menu 'YallaKurir' di profil — icon + label dinamis, mirror pola menu Kurir YallaFood ──
+function _ykRenderMenuIcon() {
+  ['menuYallaKurirIconMob', 'menuYallaKurirIconDesktop', 'btnKirimBarangIconMob'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el || !window.lucide || el.dataset.rendered) return;
+    const svg = lucide.createElement(lucide.Package);
+    svg.setAttribute('width', 22); svg.setAttribute('height', 22);
+    svg.setAttribute('stroke', '#111827'); svg.setAttribute('stroke-width', '2.5');
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+    el.innerHTML = ''; el.appendChild(svg);
+    el.dataset.rendered = '1';
+  });
+}
+async function _ykRefreshMenuLabel() {
+  _ykRenderMenuIcon();
+  const mobBtn = document.getElementById('menuYallaKurirBtnMob');
+  const deskBtn = document.getElementById('menuYallaKurirBtnDesktop');
+  if (!mobBtn && !deskBtn) return;
+  const user = window._S?.user;
+  let status = null;
+  if (user?.uid) {
+    try {
+      const r = await window._supaFetch(`/rest/v1/yallakurir_profiles?uid=eq.${encodeURIComponent(user.uid)}&select=status&limit=1`);
+      const rows = r.ok ? await r.json() : [];
+      status = rows[0]?.status || null;
+    } catch (e) { /* fail-open ke label default */ }
+  }
+  const label = status === 'active' ? 'YallaKurir Aktif' : status === 'pending' ? 'Menunggu Verifikasi' : 'Daftar YallaKurir';
+  const mobLabel = document.getElementById('menuYallaKurirLabelMob');
+  const deskLabel = document.getElementById('menuYallaKurirLabelDesktop');
+  if (mobLabel) mobLabel.textContent = label;
+  if (deskLabel) deskLabel.textContent = label;
+}
+
+// Ikut jalan tiap kali renderUserState() dipanggil — dibungkus dari luar LAGI,
+// menumpuk di atas wrapper YallaFood yang sudah ada, tidak menimpa satupun.
+(function() {
+  const _origRenderUserState3 = window.renderUserState;
+  window.renderUserState = function(...args) {
+    const result = _origRenderUserState3.apply(this, args);
+    _ykRefreshMenuLabel();
+    return result;
+  };
+})();
+document.addEventListener('DOMContentLoaded', () => setTimeout(() => { _ykRefreshMenuLabel(); }, 1500));
 </script>
 
 </body>
