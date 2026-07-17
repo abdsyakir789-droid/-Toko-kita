@@ -22469,6 +22469,25 @@ async function _yfGetOngkirConfig() {
 
 function _yfFmtPrice(n) { return 'LE ' + Number(n || 0).toLocaleString('en-EG'); }
 
+// Blok 'Alamat Pembeli' pada kartu kurir (waiting room & my deliveries).
+// Kalau food_orders.buyer_lat/buyer_lng ada (tersimpan sejak checkout), seluruh
+// blok jadi clickable -> buka Google Maps tab baru. Kalau tidak ada koordinat,
+// tampil apa adanya seperti sebelumnya (tidak clickable).
+function _yfBuyerAddressBlock(o) {
+  if (!o.buyer_address) return '';
+  const hasLoc = o.buyer_lat != null && o.buyer_lng != null;
+  const mapAttr = hasLoc ? `onclick="window.open('https://www.google.com/maps?q=${o.buyer_lat},${o.buyer_lng}','_blank')" style="display:flex;align-items:flex-start;gap:6px;cursor:pointer"` : `style="display:flex;align-items:flex-start;gap:6px"`;
+  const color = hasLoc ? '#059669' : '#111827';
+  return `
+        <div style="background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
+          <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0 0 4px;word-break:break-word">Nama Pembeli: ${_sadEscHtml(o.buyer_name || '')}</p>
+          <div ${mapAttr}>
+            <i class="fa-solid fa-location-dot" style="color:${color};font-size:13px;margin-top:2px;flex-shrink:0"></i>
+            <p style="font-size:12px;font-weight:600;color:${color};line-height:1.5;margin:0;word-break:break-word;min-width:0">Alamat Pembeli: ${_sadEscHtml(o.buyer_address)}</p>
+          </div>
+        </div>`;
+}
+
 // Waktu relatif sederhana untuk kartu pesanan Dashboard Kurir ("1 menit lalu", "5 menit lalu", "1 hari lalu")
 // — murni tampilan, dihitung dari food_orders.created_at yang sudah ada, tidak menyentuh data apapun.
 function _yfTimeAgo(dateStr) {
@@ -23245,6 +23264,7 @@ async function _yfLoadTracking() {
           <button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="flex-1 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan</button>
           ${o.courier_id ? `<button onclick="openReviewWrite('${o.ad_id}','${('Kurir: '+(o.courier_name||'Kurir')).replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.courier_id}','kurir')" class="flex-1 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan Kurir</button>` : ''}
         </div>` : ''}
+        <p class="text-[10px] text-gray-600 text-right mt-1.5">${_yfTimeAgo(o.created_at)}</p>
       </div>
     `).join('');
   } catch (e) {
@@ -23685,15 +23705,7 @@ async function _kurirLoadWaitingRoom() {
             <p class="text-xs font-semibold mt-1"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${_yfFmtPrice(o.ongkir || 0)}</span></p>
           </div>
         </div>
-        ${o.buyer_address ? `
-        <div style="background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
-          <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0 0 4px;word-break:break-word">Nama Pembeli: ${_sadEscHtml(o.buyer_name || '')}</p>
-          <div style="display:flex;align-items:flex-start;gap:6px">
-            <i class="fa-solid fa-location-dot" style="color:#111827;font-size:13px;margin-top:2px;flex-shrink:0"></i>
-            <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Alamat Pembeli: ${_sadEscHtml(o.buyer_address)}</p>
-          </div>
-        </div>
-        ` : ''}
+        ${_yfBuyerAddressBlock(o)}
         <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
           <span style="font-size:10px;font-weight:600;color:#111827">${_yfTimeAgo(o.created_at)}</span>
         </div>
@@ -23755,15 +23767,7 @@ async function _kurirLoadMyDeliveries() {
             <p class="text-xs font-semibold mt-1"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${_yfFmtPrice(o.ongkir || 0)}</span></p>
           </div>
         </div>
-        ${o.buyer_address ? `
-        <div style="background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
-          <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0 0 4px;word-break:break-word">Nama Pembeli: ${_sadEscHtml(o.buyer_name || '')}</p>
-          <div style="display:flex;align-items:flex-start;gap:6px">
-            <i class="fa-solid fa-location-dot" style="color:#111827;font-size:13px;margin-top:2px;flex-shrink:0"></i>
-            <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Alamat Pembeli: ${_sadEscHtml(o.buyer_address)}</p>
-          </div>
-        </div>
-        ` : ''}
+        ${_yfBuyerAddressBlock(o)}
         <div style="display:flex;gap:8px;margin-top:8px">
           <button onclick="openYfChat('${o.id}','buyer_kurir','${(o.buyer_name||'Buyer').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Buyer${_yfBtnBadge(buyerUnread)}</button>
           <button onclick="openYfChat('${o.id}','kurir_seller','${(o.seller_name||'Seller').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Seller${_yfBtnBadge(sellerUnread)}</button>
