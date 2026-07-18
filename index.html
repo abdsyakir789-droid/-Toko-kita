@@ -4281,13 +4281,17 @@ h3.text-sm.font-bold.text-gray-800 {
         </div>
       </div>
 
-      <!-- Nama Varian + Ukuran sejajar -->
+      <!-- Nama Varian + Stok + Ukuran sejajar -->
       <div class="flex gap-2 mb-3.5">
         <div class="flex-1 min-w-0">
-          <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Nama Varian <span class="text-gray-400 font-normal">(opsional)</span></label>
+          <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Nama Varian *</label>
           <input id="adVarName" type="text" placeholder="Contoh: Hitam, Original" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"/>
         </div>
-        <div style="width:120px;flex-shrink:0">
+        <div style="width:90px;flex-shrink:0">
+          <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Stok <span class="text-gray-400 font-normal">(opsional)</span></label>
+          <input id="adStock" type="number" min="0" placeholder="10" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"/>
+        </div>
+        <div style="width:100px;flex-shrink:0">
           <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Ukuran <span class="text-gray-400 font-normal">(opsional)</span></label>
           <input id="adSize" type="text" placeholder="M, L, XL" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"/>
         </div>
@@ -5691,7 +5695,7 @@ window._FB = {
   },
 
   // ── Post Ad ───────────────────────────────────────────────────
-  async postAd(title, price, cat, desc, siapTaushil, file, location, variants, size, varName, isYallaFood) {
+  async postAd(title, price, cat, desc, siapTaushil, file, location, variants, size, varName, isYallaFood, stock) {
     const wrap=document.getElementById('uploadProgressWrap');
     const bar=document.getElementById('uploadBar');
     const pct=document.getElementById('uploadPct');
@@ -5716,6 +5720,7 @@ window._FB = {
           variants: (variants && variants.length > 0) ? variants : [],
           size: size||'',
           var_name: varName||'',
+          stock: (stock !== undefined && stock !== null && stock !== '') ? Number(stock) : null,
           likes:0, dislikes:0, liked_by:[], disliked_by:[],
           seller_name:window._S.user.name, seller_uid:window._S.user.uid,
           seller_email:window._S.user.email, seller_photo:window._S.user.photoUrl||'',
@@ -5736,8 +5741,10 @@ window._FB = {
       showToast('Iklan berhasil dipasang!', 'green');
       trackEvent('post_ad', { item_id: newAdId, item_category: cat, price: Number(price)||0 });
       closePostModal();
-      // Reload iklan manual karena realtime mungkin belum aktif
-      setTimeout(() => { if(window.startAdsListener) startAdsListener(); }, 1000);
+      // Reload iklan manual karena realtime mungkin belum aktif — hapus cache dulu +
+      // force=true, supaya iklan baru (termasuk stok yang baru diisi) langsung kepakai.
+      if(window._clearAdsCache) window._clearAdsCache().catch(()=>{});
+      setTimeout(() => { if(window.startAdsListener) startAdsListener(true); }, 1000);
       // Kirim notifikasi ke semua follower via _supaFetch
       try {
         const sellerUid = window._S.user.uid;
@@ -13981,6 +13988,8 @@ window.submitAd=async()=>{
   if(title.length>600){showToast('Judul maksimal 600 karakter','red');return;}
   if(!file){showToast('Pilih foto produk dari galeri','red');return;}
   if(desc.length>800){showToast('Deskripsi maksimal 800 karakter','red');return;}
+  const varNameCheck=document.getElementById('adVarName')?document.getElementById('adVarName').value.trim():'';
+  if(!varNameCheck){showToast('Nama Varian wajib diisi','red');document.getElementById('adVarName').focus();return;}
 
   // ── Cek blacklist kata terlarang sebelum upload ──
   const _blHit = await window._checkBlacklistBeforeSubmit(title, desc);
@@ -14038,7 +14047,8 @@ window.submitAd=async()=>{
       : [];
     const size=document.getElementById('adSize')?document.getElementById('adSize').value.trim():'';
     const varName=document.getElementById('adVarName')?document.getElementById('adVarName').value.trim():'';
-    await window._FB.postAd(title,price,cat,desc,siapTaushil,file,location,variants,size,varName,isYallaFood);
+    const stock=document.getElementById('adStock')?document.getElementById('adStock').value.trim():'';
+    await window._FB.postAd(title,price,cat,desc,siapTaushil,file,location,variants,size,varName,isYallaFood,stock);
   }
   catch(e){
     if((e.message||'').includes('EXPLICIT_CONTENT')) { showExplicitContentModal(); }
@@ -16111,13 +16121,17 @@ window.removeVerification = async function() {
         </div>
       </div>
 
-      <!-- Nama Varian + Ukuran sejajar -->
+      <!-- Nama Varian + Stok + Ukuran sejajar -->
       <div class="flex gap-2 mb-3.5">
         <div class="flex-1 min-w-0">
           <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Nama Varian <span class="text-gray-400 font-normal">(opsional)</span></label>
           <input id="editAdVarName" type="text" placeholder="Contoh: Hitam, Original" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"/>
         </div>
-        <div style="width:120px;flex-shrink:0">
+        <div style="width:90px;flex-shrink:0">
+          <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Stok <span class="text-gray-400 font-normal">(opsional)</span></label>
+          <input id="editAdStock" type="number" min="0" placeholder="10" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"/>
+        </div>
+        <div style="width:100px;flex-shrink:0">
           <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Ukuran <span class="text-gray-400 font-normal">(opsional)</span></label>
           <input id="editAdSize" type="text" placeholder="M, L, XL" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"/>
         </div>
@@ -16242,14 +16256,15 @@ window.openEditAd = function(adId) {
   window._updateDescCounter('editAdDesc','editAdDescCounter');
   document.getElementById('editAdLocation').value = ad.location || '';
   document.getElementById('editAdVarName').value = ad.varName || ad.var_name || '';
+  document.getElementById('editAdStock').value = (ad.stock !== undefined && ad.stock !== null) ? ad.stock : '';
   document.getElementById('editAdSize').value = ad.size || '';
   // Load varian yang sudah ada
   window._editVarianData = (ad.variants||[]).map(v => ({
-    name: v.name||'', price: v.price||'', size: v.size||'',
+    name: v.name||'', price: v.price||'', size: v.size||'', stock: (v.stock!==undefined&&v.stock!==null)?v.stock:'',
     imgFile: null, imgPreview: v.img_url||null
   }));
   // Tambah slot kosong sampai 7
-  while(window._editVarianData.length < 7) window._editVarianData.push({name:'',price:'',size:'',imgFile:null,imgPreview:null});
+  while(window._editVarianData.length < 7) window._editVarianData.push({name:'',price:'',size:'',stock:'',imgFile:null,imgPreview:null});
   const filled = (ad.variants||[]).filter(v=>v.name||v.img_url).length;
   const elbl = document.getElementById('editVarianCountLabel');
   if(elbl) elbl.textContent = filled > 0 ? filled+' varian ditambahkan ✅' : 'Opsional · warna, ukuran, dll';
@@ -16358,6 +16373,7 @@ window.submitEditAd = async function() {
     // Ambil size, varName, varian
     const size = document.getElementById('editAdSize') ? document.getElementById('editAdSize').value.trim() : '';
     const varName = document.getElementById('editAdVarName') ? document.getElementById('editAdVarName').value.trim() : '';
+    const stockVal = document.getElementById('editAdStock') ? document.getElementById('editAdStock').value.trim() : '';
     // Upload foto varian baru jika ada
     let variants = [];
     if(window._editVarianData) {
@@ -16368,7 +16384,7 @@ window.submitEditAd = async function() {
           const res2 = await uploadToR2(v.imgFile, ()=>{});
           imgUrl2 = res2?.secure_url || null;
         }
-        variants.push({ name:v.name, price:v.price?Number(v.price):null, size:v.size, img_url:imgUrl2||'' });
+        variants.push({ name:v.name, price:v.price?Number(v.price):null, size:v.size, stock:(v.stock!==undefined&&v.stock!==null&&String(v.stock).trim()!=='')?Number(v.stock):null, img_url:imgUrl2||'' });
       }
     }
     // Update ke Supabase
@@ -16384,6 +16400,7 @@ window.submitEditAd = async function() {
         img_public_id: imgPublicId,
         size: size,
         var_name: varName,
+        stock: (stockVal !== '') ? Number(stockVal) : null,
         variants: variants
       })
     });
@@ -16404,8 +16421,10 @@ window.submitEditAd = async function() {
     showToast('✅ Iklan berhasil diupdate!', 'green');
     closeEditAd();
 
-    // Refresh iklan
-    if(window.startAdsListener) setTimeout(() => startAdsListener(), 500);
+    // Refresh iklan — hapus cache dulu + force=true, supaya perubahan (misal stok
+    // yang baru diisi) langsung kepakai, tidak ketutup cache 10 menit yang masih fresh.
+    if(window._clearAdsCache) window._clearAdsCache().catch(()=>{});
+    if(window.startAdsListener) setTimeout(() => startAdsListener(true), 500);
 
   } catch(e) {
     showToast('Gagal update iklan: ' + (e.message||e), 'red');
@@ -16415,11 +16434,11 @@ window.submitEditAd = async function() {
 };
 
 // Varian Modal untuk Edit Iklan
-window._editVarianData = Array.from({length:7}, ()=>({name:'',price:'',size:'',imgFile:null,imgPreview:null}));
+window._editVarianData = Array.from({length:7}, ()=>({name:'',price:'',size:'',stock:'',imgFile:null,imgPreview:null}));
 
 window.openVarianModalEdit = function(){
   // Sync dari _varianData ke _editVarianData kalau belum ada
-  if(!window._editVarianData) window._editVarianData = Array.from({length:7}, ()=>({name:'',price:'',size:'',imgFile:null,imgPreview:null}));
+  if(!window._editVarianData) window._editVarianData = Array.from({length:7}, ()=>({name:'',price:'',size:'',stock:'',imgFile:null,imgPreview:null}));
   // Pakai varianOverlay yang sama, tapi pakai _editVarianData
   window._activeVarianData = window._editVarianData;
   window._activeVarianLabelId = 'editVarianCountLabel';
@@ -16447,9 +16466,14 @@ function renderVarianListGeneric(){
         <input type="number" placeholder="Harga varian" value="${v.price}"
           oninput="window._activeVarianData[${i}].price=this.value"
           class="inp w-full px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50"/>
-        <input type="text" placeholder="Ukuran (cth: XL, M, S)" value="${v.size}"
-          oninput="window._activeVarianData[${i}].size=this.value"
-          class="inp w-full px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50"/>
+        <div class="flex gap-2">
+          <input type="text" placeholder="Ukuran (cth: XL, M, S)" value="${v.size}"
+            oninput="window._activeVarianData[${i}].size=this.value"
+            class="inp flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50"/>
+          <input type="number" min="0" placeholder="Stok" value="${v.stock}"
+            oninput="window._activeVarianData[${i}].stock=this.value"
+            style="width:70px;flex-shrink:0" class="inp px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50"/>
+        </div>
       </div>
     </div>
   `).join('');
@@ -18849,9 +18873,9 @@ window.requirePin = function(callback) {
 <script>
 (function() {
   const TOTAL_VARIAN = 7;
-  // Array simpan data varian: { name, price, size, imgFile, imgPreview }
+  // Array simpan data varian: { name, price, size, stock, imgFile, imgPreview }
   window._varianData = Array.from({length: TOTAL_VARIAN}, () => ({
-    name: '', price: '', size: '', imgFile: null, imgPreview: null
+    name: '', price: '', size: '', stock: '', imgFile: null, imgPreview: null
   }));
 
   // Render semua slot varian
@@ -18880,10 +18904,16 @@ window.requirePin = function(callback) {
             value="${v.price}"
             oninput="window._varianData[${i}].price=this.value"
             class="inp w-full px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50"/>
-          <input type="text" placeholder="Ukuran (cth: XL, M, S)"
-            value="${v.size}"
-            oninput="window._varianData[${i}].size=this.value"
-            class="inp w-full px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50"/>
+          <div class="flex gap-2">
+            <input type="text" placeholder="Ukuran (cth: XL, M, S)"
+              value="${v.size}"
+              oninput="window._varianData[${i}].size=this.value"
+              class="inp flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50"/>
+            <input type="number" min="0" placeholder="Stok"
+              value="${v.stock}"
+              oninput="window._varianData[${i}].stock=this.value"
+              style="width:70px;flex-shrink:0" class="inp px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50"/>
+          </div>
         </div>
       </div>
     `).join('');
@@ -18955,6 +18985,7 @@ window.requirePin = function(callback) {
         name: v.name.trim(),
         price: v.price ? Number(v.price) : null,
         size: v.size.trim(),
+        stock: (v.stock !== undefined && v.stock !== null && String(v.stock).trim() !== '') ? Number(v.stock) : null,
         img_url: imgUrl || ''
       });
     }
@@ -18964,7 +18995,7 @@ window.requirePin = function(callback) {
   // Reset varian saat modal Pasang Iklan ditutup
   window._resetVarianData = function() {
     window._varianData = Array.from({length: TOTAL_VARIAN}, () => ({
-      name: '', price: '', size: '', imgFile: null, imgPreview: null
+      name: '', price: '', size: '', stock: '', imgFile: null, imgPreview: null
     }));
     const lbl = document.getElementById('varianCountLabel');
     if (lbl) lbl.textContent = 'Opsional · warna, ukuran, dll';
@@ -19049,8 +19080,12 @@ window.requirePin = function(callback) {
     if(!grid) return;
     grid.innerHTML = _vsVariants.map((v, i) => {
       const size = v.size ? v.size.split(/[,，\s]+/)[0].trim() : '';
+      // Stok per varian — cuma ditampilkan di sini (pemilihan varian saat checkout), bukan di tempat lain.
+      const stockNum = (v.stock !== undefined && v.stock !== null && v.stock !== '') ? Number(v.stock) : null;
+      const stockLabel = stockNum !== null ? (stockNum > 0 ? `Stok: ${stockNum}` : 'Stok habis') : '';
+      const stockColor = stockNum !== null && stockNum <= 0 ? '#EF4444' : '#111827';
       return `
-      <div style="position:relative;display:inline-flex">
+      <div style="position:relative;display:inline-flex;flex-direction:column;align-items:flex-start;gap:3px">
         <button id="vsCard_${i}" onclick="vsToggleVarian(${i})"
           style="display:flex;align-items:center;gap:6px;padding:6px 10px 6px 6px;border-radius:99px;border:2px solid #e5e7eb;background:#fff;cursor:pointer;transition:border-color .2s">
           ${v.img_url
@@ -19065,6 +19100,7 @@ window.requirePin = function(callback) {
           <span class="vs-qty-num" style="font-size:11px;font-weight:900;color:#111827;min-width:12px;text-align:center">1</span>
           <button onclick="event.stopPropagation();vsCardQty(${i},1)" style="border:none;background:none;cursor:pointer;font-size:13px;font-weight:900;color:#10B981;padding:0;line-height:1;width:16px">+</button>
         </div>
+        ${stockLabel ? `<span style="font-size:9.5px;font-weight:600;color:${stockColor};padding-left:6px">${stockLabel}</span>` : ''}
       </div>`;
     }).join('');
   }
@@ -19136,7 +19172,8 @@ window.requirePin = function(callback) {
       name: p.varName||p.title||'',
       img_url: p.imgUrl||p.img||'',
       price: p.price||0,
-      size: p.size||''
+      size: p.size||'',
+      stock: (p.stock!==undefined&&p.stock!==null) ? p.stock : ''
     };
     _vsVariants = [mainSlot, ...variants.filter(v => v.img_url || v.name)];
     _vsQtys      = {};
@@ -19203,7 +19240,8 @@ window.requirePin = function(callback) {
       name: p.varName||p.title||'',
       img_url: p.imgUrl||p.img||'',
       price: p.price||0,
-      size: p.size||''
+      size: p.size||'',
+      stock: (p.stock!==undefined&&p.stock!==null) ? p.stock : ''
     };
     _vsVariants = [mainSlot, ...variants.filter(v => v.img_url || v.name)];
     _vsQtys      = {};
@@ -19889,6 +19927,10 @@ window.updateOrderStatus = async function(newStatus, chatId, buyerId, msgId, own
           }
         }
       } catch(_se) { console.warn('[sold increment] error:', _se.message); }
+      // Trigger DB sudah nambah sold & kurangi stok. Hapus cache ads (IndexedDB + KV)
+      // supaya Terjual/Stok di Beranda ikut sinkron — sama seperti pesanan YallaFood
+      // yang selesai (lihat yfAdvanceOrderStatus), tidak nunggu TTL cache 10 menit habis.
+      if (window._clearAdsCache) { window._clearAdsCache().catch(function(){}); }
     }
 
     // Update warna tombol: tombol yang diklik jadi biru, yang lain balik abu-abu
@@ -22959,11 +23001,23 @@ function _yfOpenVariantConfirmModal() {
     // generik "Original"), supaya konsisten dengan penamaan yang seller pilih.
     const baseLabel = (ad?.var_name || ad?.title || 'Utama') + (ad?.size ? ' (' + ad.size + ')' : '');
     const basePrice = Number(ad?.price || 0);
-    let html = `<button onclick="_yfModalToggleVariant(0,'','${baseLabel.replace(/'/g,"\\'")}',${basePrice})" data-vname="" data-label="${baseLabel.replace(/"/g,'&quot;')}" class="text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 bg-white text-gray-700 border-gray-200">${baseLabel}</button>`;
+    // Stok — cuma ditampilkan di sini (pemilihan varian saat checkout), bukan di tempat lain.
+    const _yfStockLabel = (s) => {
+      const n = (s !== undefined && s !== null && s !== '') ? Number(s) : null;
+      if (n === null) return '';
+      return `<span style="font-size:9px;font-weight:600;color:${n <= 0 ? '#EF4444' : '#111827'};padding-left:6px">${n > 0 ? 'Stok: ' + n : 'Stok habis'}</span>`;
+    };
+    let html = `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
+      <button onclick="_yfModalToggleVariant(0,'','${baseLabel.replace(/'/g,"\\'")}',${basePrice})" data-vname="" data-label="${baseLabel.replace(/"/g,'&quot;')}" class="text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 bg-white text-gray-700 border-gray-200">${baseLabel}</button>
+      ${_yfStockLabel(ad?.stock)}
+    </div>`;
     html += variants.map((v, i) => {
       const label = v.name + (v.size ? ' (' + v.size + ')' : '');
       const price = Number(v.price || ad?.price || 0);
-      return `<button onclick="_yfModalToggleVariant(${i + 1},'${(v.name||'').replace(/'/g,"\\'")}','${label.replace(/'/g,"\\'")}',${price})" data-vname="${(v.name||'').replace(/"/g,'&quot;')}" data-label="${label.replace(/"/g,'&quot;')}" class="text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 bg-white text-gray-700 border-gray-200">${label}</button>`;
+      return `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
+        <button onclick="_yfModalToggleVariant(${i + 1},'${(v.name||'').replace(/'/g,"\\'")}','${label.replace(/'/g,"\\'")}',${price})" data-vname="${(v.name||'').replace(/"/g,'&quot;')}" data-label="${label.replace(/"/g,'&quot;')}" class="text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 bg-white text-gray-700 border-gray-200">${label}</button>
+        ${_yfStockLabel(v.stock)}
+      </div>`;
     }).join('');
     list.innerHTML = html;
   }
