@@ -129,6 +129,7 @@ tailwind.config={theme:{extend:{colors:{
 
 .lc2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .lc1{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+#terlaristTabBtn.active-terlaris{color:#F59E0B}
 
 /* ══════════════════════════════════════════════════════
    PREMIUM TYPOGRAPHY SYSTEM — YallaMart
@@ -3041,6 +3042,9 @@ h3.text-sm.font-bold.text-gray-800 {
         <span id="catLabel" class="bg-pl text-primary text-[10px] font-semibold px-2.5 py-1 rounded-full">Semua</span>
         <span id="prodCount" class="hidden"></span>
       </div>
+      <button id="terlaristTabBtn" onclick="filterCat('terlaris')" class="flex items-center gap-1 text-gray-900 text-xs font-bold flex-shrink-0">
+        Terlaris <i class="fa-solid fa-fire text-amber-500 text-[10px]"></i>
+      </button>
     </div>
     <div id="productGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5"></div>
     <script>
@@ -8970,13 +8974,16 @@ function getFiltered(){
   // ── Tahap 1: filter visibilitas + kategori (logic sama seperti sebelumnya) ──
   const byCategory = getAllAds().filter(p=>{
     if (!isAdVisible(p)) return false;
-    const mc=window._S.curCat==='semua'||p.cat===window._S.curCat||
+    const mc=window._S.curCat==='semua'||window._S.curCat==='terlaris'||p.cat===window._S.curCat||
       (window._S.curCat==='gratis-ongkir'&&p.siapTaushil)||
       (window._S.curCat==='promo'&&(p.disc>0||p.badge==='Promo'))||
       // ── PATCH: official filter sertakan partner_silver ──
       (window._S.curCat==='official'&&(p.badge==='Official'||p._partnerSilver===true));
     return mc;
   });
+
+  // Terlaris: semua kategori, tapi diurut dari yang paling banyak terjual (ads.sold)
+  if (window._S.curCat==='terlaris') byCategory.sort((a,b)=>(b.sold||0)-(a.sold||0));
 
   if(window._S.searchQ==='') return byCategory;
 
@@ -9375,7 +9382,9 @@ window.filterCat = c => {
     const a=b.dataset.nav===c;
     b.className=`ntab text-xs px-3 py-2.5 font-${a?'bold':'medium'} ${a?'active text-primary':'text-gray-500 hover:text-primary'} transition-colors`;
   });
-  const L={semua:'Semua',elektronik:'Elektronik',fashion:'Fashion',kecantikan:'Kecantikan',makanan:'Makanan',olahraga:'Olahraga','gratis-ongkir':'Gratis Ongkir',promo:'Promo',official:'Official Store',buku:'Buku',gaming:'Gaming',rumah:'Rumah','barang-bekas':'Barang Bekas'};
+  const terlaristBtn=document.getElementById('terlaristTabBtn');
+  if(terlaristBtn) terlaristBtn.classList.toggle('active-terlaris', c==='terlaris');
+  const L={semua:'Semua',elektronik:'Elektronik',fashion:'Fashion',kecantikan:'Kecantikan',makanan:'Makanan',olahraga:'Olahraga','gratis-ongkir':'Gratis Ongkir',promo:'Promo',official:'Official Store',buku:'Buku',gaming:'Gaming',rumah:'Rumah','barang-bekas':'Barang Bekas',terlaris:'🔥 Terlaris'};
   document.getElementById('catLabel').textContent=L[c]||c;
   renderProducts();
 };
@@ -21787,17 +21796,24 @@ async function _loadRiwayatPenjualan() {
   body.innerHTML = '<div style="text-align:center;padding:40px 0;color:#9ca3af;font-size:13px">Memuat data...</div>';
   if (footer) footer.style.display = 'none';
   try {
-    const res = await window._supaFetch('/rest/v1/orders?seller_id=eq.' + uid + '&order=created_at.desc&limit=200&select=*');
+    // Riwayat gabungan: barang fisik (orders) + YallaFood (food_orders) — dua tabel
+    // terpisah, di-fetch paralel lalu digabung jadi satu daftar riwayat penjualan.
+    const [res, foodRes] = await Promise.all([
+      window._supaFetch('/rest/v1/orders?seller_id=eq.' + uid + '&order=created_at.desc&limit=200&select=*'),
+      window._supaFetch('/rest/v1/food_orders?seller_id=eq.' + uid + '&order=created_at.desc&limit=200&select=*')
+    ]);
     if (!res.ok) throw new Error(await res.text());
     const orders = await res.json();
+    const foodOrders = foodRes.ok ? await foodRes.json() : [];
 
-    if (!Array.isArray(orders) || orders.length === 0) {
+    if ((!Array.isArray(orders) || orders.length === 0) && (!Array.isArray(foodOrders) || foodOrders.length === 0)) {
       body.innerHTML = '<div style="text-align:center;padding:40px 0;color:#9ca3af;font-size:13px">Belum ada transaksi masuk</div>';
       if (footer) footer.style.display = 'none';
       return;
     }
 
-    // Ambil nama pembeli dari tabel users (orders cuma simpan buyer_id)
+    // Ambil nama pembeli dari tabel users (orders cuma simpan buyer_id) —
+    // food_orders TIDAK perlu lookup ini karena buyer_name sudah tersimpan langsung di row-nya.
     const buyerIds = [...new Set(orders.map(o => o.buyer_id).filter(Boolean))];
     let buyerMap = {};
     if (buyerIds.length) {
@@ -21823,6 +21839,14 @@ async function _loadRiwayatPenjualan() {
           total: itemTotal,
           created_at: o.created_at
         });
+      });
+    });
+    (Array.isArray(foodOrders) ? foodOrders : []).forEach(o => {
+      rows.push({
+        terjual: o.ad_title || 'Menu YallaFood',
+        pembeli: o.buyer_name || 'Pembeli',
+        total: o.total || 0,
+        created_at: o.created_at
       });
     });
 
@@ -23536,6 +23560,11 @@ window.yfAdvanceOrderStatus = async function(orderId, newStatus) {
     // Chat sementara YallaFood wajib terkunci begitu pesanan selesai/dibatalkan
     if (newStatus === 'selesai' || newStatus === 'dibatalkan') {
       _yfChatCloseRoomsForOrder(orderId).catch(() => {});
+    }
+    // Pesanan selesai → trigger DB sudah nambah ads.sold. Hapus cache ads (IndexedDB + KV)
+    // supaya angka Terjual di Beranda ikut ter-update, tidak nunggu TTL cache 10 menit habis.
+    if (newStatus === 'selesai' && window._clearAdsCache) {
+      window._clearAdsCache().catch(() => {});
     }
     const buyerMsg = _YF_BUYER_STATUS_NOTIF[newStatus];
     if (buyerMsg && order?.buyer_id) {
