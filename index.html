@@ -3413,6 +3413,14 @@ h3.text-sm.font-bold.text-gray-800 {
         <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Billboard Manager</p>
       </div>
 
+      <!-- 6. Popup Promosi -->
+      <div onclick="openPopupPromoManager()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 flex-1 transition-all hover:shadow-md hover:-translate-y-0.5 text-center cursor-pointer group">
+        <div class="w-10 h-10 rounded-xl bg-rose-50 group-hover:bg-rose-100 flex items-center justify-center flex-shrink-0 transition-colors">
+          <i class="fa-solid fa-rectangle-ad text-rose-600"></i>
+        </div>
+        <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Popup Promosi</p>
+      </div>
+
       <!-- 5. Dashboard Toko Baru -->
       <div onclick="openShopsAdminDashboard()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 flex-1 transition-all hover:shadow-md hover:-translate-y-0.5 text-center cursor-pointer group">
         <div class="w-10 h-10 rounded-xl bg-emerald-50 group-hover:bg-emerald-100 flex items-center justify-center flex-shrink-0 transition-colors">
@@ -24784,6 +24792,311 @@ async function _ykRefreshMenuLabel() {
   };
 })();
 document.addEventListener('DOMContentLoaded', () => setTimeout(() => { _ykRefreshMenuLabel(); }, 1500));
+</script>
+
+<!-- ============================================================
+     🎯 POPUP PROMOSI (Custom Ads) — modul admin-controlled marketing
+     popup. Berdiri sendiri, BUKAN bagian dari Panel Admin
+     (#adminPanelOverlay) sesuai permintaan. Entry point: card
+     "Popup Promosi" di Menu Developer (Akun, admin only).
+     Tabel: popup_promo. Gate admin di sisi UI (ADMIN_ADS_EMAIL),
+     RLS permisif — mirror pola billboards persis.
+     ============================================================ -->
+
+<!-- ADMIN: daftar popup promosi -->
+<div id="popupPromoOverlay" style="display:none;position:fixed;inset:0;z-index:850;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closePopupPromoManager()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Popup Promosi</h2>
+    <button onclick="openPopupPromoForm(null)" class="bg-primary text-white text-xs font-bold px-3 py-2 rounded-xl flex-shrink-0"><i class="fa-solid fa-plus mr-1"></i>Tambah</button>
+  </div>
+  <div id="popupPromoList" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:10px"></div>
+</div>
+
+<!-- ADMIN: form tambah/edit popup promosi -->
+<div id="popupPromoFormModal" style="display:none;position:fixed;inset:0;z-index:860;background:rgba(0,0,0,.5);align-items:flex-end;justify-content:center" onclick="if(event.target===this) closePopupPromoForm()">
+  <div class="bg-white w-full rounded-t-3xl p-5" style="max-width:480px;max-height:90vh;overflow-y:auto">
+    <div class="flex items-center justify-between mb-4">
+      <h3 id="popupPromoFormTitle" class="font-bold text-base">Tambah Popup Promosi</h3>
+      <button onclick="closePopupPromoForm()" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100"><i class="fa-solid fa-xmark text-gray-500 text-xs"></i></button>
+    </div>
+
+    <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Gambar Iklan *</label>
+    <label for="popupPromoPhotoInput" class="block cursor-pointer mb-3.5">
+      <div id="popupPromoPhotoPreview" class="w-full rounded-2xl border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-2 text-primary/60 bg-pl/20 overflow-hidden" style="min-height:160px">
+        <i class="fa-solid fa-image text-3xl"></i>
+        <span class="text-xs font-semibold">Ketuk untuk upload gambar</span>
+      </div>
+      <input type="file" id="popupPromoPhotoInput" accept="image/*" class="hidden" onchange="_previewPopupPromoPhoto(this)"/>
+    </label>
+
+    <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Judul Promo *</label>
+    <input id="popupPromoTitleInput" type="text" placeholder="Contoh: Flash Sale Akhir Pekan" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-3.5"/>
+
+    <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Link Tujuan *</label>
+    <input id="popupPromoUrlInput" type="text" placeholder="https://... atau ID produk YallaMart" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-1.5"/>
+    <p class="text-[10px] text-gray-400 mb-3.5">Isi link luar (https://...) atau ID produk YallaMart supaya buka halaman detail produk.</p>
+
+    <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Teks Tombol *</label>
+    <input id="popupPromoBtnTextInput" type="text" placeholder="Lihat Promo" value="Lihat Promo" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-3.5"/>
+
+    <div class="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3 mb-4">
+      <div>
+        <p class="text-sm font-bold text-gray-800">Status Aktif</p>
+        <p class="text-[10px] text-gray-500 mt-0.5">Tampilkan popup ini ke user</p>
+      </div>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
+        <input type="checkbox" id="popupPromoActiveToggle" style="opacity:0;width:0;height:0" onchange="_syncPopupPromoToggleUI()">
+        <span id="popupPromoToggleTrack" style="position:absolute;inset:0;background:#d1d5db;border-radius:99px;transition:.2s;pointer-events:none">
+          <span id="popupPromoToggleDot" style="position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s"></span>
+        </span>
+      </label>
+    </div>
+
+    <button id="popupPromoSaveBtn" onclick="savePopupPromo()" class="w-full bg-gradient-to-r from-primary to-pd text-white font-bold py-3.5 rounded-2xl text-sm">
+      <i class="fa-solid fa-floppy-disk mr-1"></i> Simpan
+    </button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 🎯 POPUP PROMOSI MODULE
+// ============================================================
+window._popupPromoState = { editId: null, photoFile: null, photoUrl: '' };
+window._popupPromoListCache = [];
+
+window.openPopupPromoManager = async function() {
+  const u = window._S?.user;
+  if (!u || (u.email||'').toLowerCase() !== ADMIN_ADS_EMAIL) { showToast('Akses ditolak', 'red'); return; }
+  document.getElementById('popupPromoOverlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  await _loadPopupPromoList();
+};
+window.closePopupPromoManager = function() {
+  document.getElementById('popupPromoOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+};
+
+async function _loadPopupPromoList() {
+  const box = document.getElementById('popupPromoList');
+  box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat...</p>';
+  try {
+    const r = await window._supaFetch('/rest/v1/popup_promo?select=*&order=created_at.desc');
+    const rows = r.ok ? await r.json() : [];
+    window._popupPromoListCache = rows;
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada popup promosi. Klik "Tambah" untuk buat baru.</p>'; return; }
+    box.innerHTML = rows.map(p => `
+      <div class="bg-white rounded-2xl p-3 border border-gray-100 flex gap-3 items-center">
+        <img src="${p.img_url || ''}" class="w-16 h-16 rounded-xl object-cover flex-shrink-0 bg-gray-100"/>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-sm lc1">${_sadEscHtml(p.title || '(Tanpa judul)')}</p>
+          <p class="text-xs text-gray-400 lc1 mt-0.5">${_sadEscHtml(p.action_url || '-')}</p>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 inline-block ${p.is_active ? 'bg-pl text-primary' : 'bg-gray-100 text-gray-400'}">${p.is_active ? 'Aktif' : 'Nonaktif'}</span>
+        </div>
+        <div class="flex flex-col gap-1.5 flex-shrink-0">
+          <button onclick="_togglePopupPromoActive('${p.id}', ${!p.is_active})" class="w-8 h-8 flex items-center justify-center rounded-full ${p.is_active ? 'bg-amber-50 text-amber-500' : 'bg-primary/10 text-primary'}" title="${p.is_active ? 'Nonaktifkan' : 'Aktifkan'}"><i class="fa-solid ${p.is_active ? 'fa-toggle-on' : 'fa-toggle-off'} text-sm"></i></button>
+          <button onclick="openPopupPromoFormById('${p.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-600" title="Edit"><i class="fa-solid fa-pen text-xs"></i></button>
+          <button onclick="_deletePopupPromo('${p.id}')" class="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-500" title="Hapus"><i class="fa-solid fa-trash text-xs"></i></button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat data.</p>';
+  }
+}
+
+function _syncPopupPromoToggleUI() {
+  const checked = document.getElementById('popupPromoActiveToggle').checked;
+  const track = document.getElementById('popupPromoToggleTrack');
+  const dot = document.getElementById('popupPromoToggleDot');
+  track.style.background = checked ? '#10B981' : '#d1d5db';
+  dot.style.left = checked ? '23px' : '3px';
+}
+
+window.openPopupPromoFormById = function(id) {
+  const p = window._popupPromoListCache.find(x => x.id === id);
+  if (p) window.openPopupPromoForm(p);
+};
+
+window.openPopupPromoForm = function(existing) {
+  window._popupPromoState = { editId: existing?.id || null, photoFile: null, photoUrl: existing?.img_url || '' };
+  document.getElementById('popupPromoFormTitle').textContent = existing ? 'Edit Popup Promosi' : 'Tambah Popup Promosi';
+  document.getElementById('popupPromoTitleInput').value = existing?.title || '';
+  document.getElementById('popupPromoUrlInput').value = existing?.action_url || '';
+  document.getElementById('popupPromoBtnTextInput').value = existing?.button_text || 'Lihat Promo';
+  const preview = document.getElementById('popupPromoPhotoPreview');
+  preview.innerHTML = existing?.img_url
+    ? `<img src="${existing.img_url}" class="w-full object-cover rounded-2xl" style="max-height:220px"/>`
+    : `<i class="fa-solid fa-image text-3xl"></i><span class="text-xs font-semibold">Ketuk untuk upload gambar</span>`;
+  document.getElementById('popupPromoActiveToggle').checked = existing?.is_active || false;
+  _syncPopupPromoToggleUI();
+  document.getElementById('popupPromoFormModal').style.display = 'flex';
+};
+window.closePopupPromoForm = function() {
+  document.getElementById('popupPromoFormModal').style.display = 'none';
+};
+
+window._previewPopupPromoPhoto = function(input) {
+  const f = input.files[0]; if (!f) return;
+  window._popupPromoState.photoFile = f;
+  const show = src => { document.getElementById('popupPromoPhotoPreview').innerHTML = `<img src="${src}" class="w-full object-cover rounded-2xl" style="max-height:220px"/>`; };
+  const useObjUrl = () => { try { show(URL.createObjectURL(f)); } catch(e) { showToast('Gagal menampilkan preview','red'); } };
+  if (typeof FileReader === 'undefined') { useObjUrl(); return; }
+  try {
+    const r = new FileReader();
+    r.onerror = () => useObjUrl();
+    r.onload = e => show(e.target.result);
+    r.readAsDataURL(f);
+  } catch(e) { useObjUrl(); }
+};
+
+window.savePopupPromo = async function() {
+  const title = document.getElementById('popupPromoTitleInput').value.trim();
+  const actionUrl = document.getElementById('popupPromoUrlInput').value.trim();
+  const btnText = document.getElementById('popupPromoBtnTextInput').value.trim() || 'Lihat Promo';
+  const isActive = document.getElementById('popupPromoActiveToggle').checked;
+  const st = window._popupPromoState;
+
+  if (!title) { showToast('Judul Promo wajib diisi', 'red'); return; }
+  if (!actionUrl) { showToast('Link Tujuan wajib diisi', 'red'); return; }
+  if (!st.photoFile && !st.photoUrl) { showToast('Gambar Iklan wajib diupload', 'red'); return; }
+
+  const btn = document.getElementById('popupPromoSaveBtn');
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Menyimpan...';
+  try {
+    let imgUrl = st.photoUrl;
+    let imgPublicId = '';
+    if (st.photoFile) {
+      const result = await uploadToR2(st.photoFile, null, 'popups');
+      imgUrl = (result && typeof result === 'object') ? result.secure_url : result;
+      imgPublicId = (result && typeof result === 'object') ? (result.public_id||'') : '';
+      if (!imgUrl || !imgUrl.startsWith('http')) throw new Error('URL gambar tidak valid');
+    }
+    const payload = {
+      title, img_url: imgUrl, action_url: actionUrl, button_text: btnText,
+      is_active: isActive, updated_at: new Date().toISOString()
+    };
+    if (imgPublicId) payload.img_public_id = imgPublicId;
+
+    // Invarian: cuma boleh 1 popup aktif dalam satu waktu. Kalau baris ini mau
+    // diaktifkan, matikan SEMUA yang lain DULU — sebelum insert/update baris
+    // ini. Urutan ini penting: kalau dibalik (matikan-lain SETELAH insert),
+    // baris yang BARU dibuat belum punya id untuk dikecualikan saat insert,
+    // jadi ikut kematiin dirinya sendiri (bug yang sempat kejadian).
+    if (isActive) {
+      const _offFilter = '/rest/v1/popup_promo?is_active=eq.true' + (st.editId ? '&id=neq.' + st.editId : '');
+      await window._supaFetch(_offFilter, {
+        method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ is_active: false, updated_at: new Date().toISOString() })
+      });
+    }
+    if (st.editId) {
+      await window._supaFetch('/rest/v1/popup_promo?id=eq.' + st.editId, {
+        method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify(payload)
+      });
+    } else {
+      await window._supaFetch('/rest/v1/popup_promo', {
+        method: 'POST', prefer: 'return=minimal', body: JSON.stringify(payload)
+      });
+    }
+    showToast('Popup promosi berhasil disimpan!', 'green');
+    closePopupPromoForm();
+    await _loadPopupPromoList();
+  } catch (e) {
+    showToast('Gagal menyimpan: ' + (e.message||e), 'red');
+  } finally {
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i> Simpan';
+  }
+};
+
+window._togglePopupPromoActive = async function(id, newVal) {
+  try {
+    if (newVal) {
+      // Matikan semua dulu, baru aktifkan yang ini — jaga invarian 1 aktif.
+      await window._supaFetch('/rest/v1/popup_promo?is_active=eq.true', {
+        method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ is_active: false, updated_at: new Date().toISOString() })
+      });
+    }
+    await window._supaFetch('/rest/v1/popup_promo?id=eq.' + id, {
+      method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ is_active: newVal, updated_at: new Date().toISOString() })
+    });
+    showToast(newVal ? 'Popup diaktifkan' : 'Popup dinonaktifkan', 'green');
+    await _loadPopupPromoList();
+  } catch (e) {
+    showToast('Gagal update status: ' + (e.message||e), 'red');
+  }
+};
+
+window._deletePopupPromo = async function(id) {
+  if (!confirm('Hapus popup promosi ini?')) return;
+  try {
+    await window._supaFetch('/rest/v1/popup_promo?id=eq.' + id, { method: 'DELETE' });
+    showToast('Popup dihapus', 'green');
+    await _loadPopupPromoList();
+  } catch (e) {
+    showToast('Gagal menghapus: ' + (e.message||e), 'red');
+  }
+};
+
+// ── SISI USER: tampilkan popup aktif sekali per sesi app dibuka ──
+// Reuse pola billboardClick() persis: kalau action_url berupa http(s), buka
+// tab baru; kalau bukan, anggap ID produk YallaMart & buka detail produknya.
+window._showPopupPromoAction = function(url) {
+  if (!url) return;
+  if (/^https?:\/\//i.test(url)) {
+    window.open(url, '_blank');
+  } else if (window.openDetail) {
+    window.openDetail(url);
+  }
+};
+
+async function _checkAndShowPopupPromo() {
+  try {
+    if (sessionStorage.getItem('ym_popup_promo_shown')) return;
+    const r = await window._supaFetch('/rest/v1/popup_promo?is_active=eq.true&select=*&order=updated_at.desc&limit=1');
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) return;
+    const p = rows[0];
+    if (!p.img_url) return;
+    sessionStorage.setItem('ym_popup_promo_shown', '1');
+    _renderPopupPromoCard(p);
+  } catch (e) { console.warn('[popupPromo]', e.message); }
+}
+
+function _renderPopupPromoCard(p) {
+  const overlay = document.createElement('div');
+  overlay.id = 'popupPromoUserOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999997;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.5);opacity:0;transition:opacity .25s ease;';
+  const safeTitle = (p.title||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const safeBtnText = (p.button_text||'Lihat Promo').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const safeActionUrl = (p.action_url||'').replace(/'/g,"\\'");
+  overlay.innerHTML = `
+    <div id="popupPromoCard" style="background:#fff;border-radius:24px;max-width:360px;width:100%;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.25);transform:scale(.88);opacity:0;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .25s ease;position:relative">
+      <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.45);border:none;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;z-index:2">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <img src="${p.img_url}" style="width:100%;max-height:420px;object-fit:cover;display:block"/>
+      <div style="padding:18px 20px 20px">
+        ${safeTitle ? `<p style="font-size:16px;font-weight:900;color:#111827;margin:0 0 12px;line-height:1.3">${safeTitle}</p>` : ''}
+        <button onclick="_showPopupPromoAction('${safeActionUrl}');document.getElementById('popupPromoUserOverlay').remove()" style="width:100%;background:linear-gradient(to right,#10B981,#059669);color:#fff;font-weight:800;font-size:14px;padding:13px;border:none;border-radius:14px;cursor:pointer">
+          ${safeBtnText}
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => {
+    overlay.style.opacity = '1';
+    const card = document.getElementById('popupPromoCard');
+    if (card) { card.style.transform = 'scale(1)'; card.style.opacity = '1'; }
+  });
+}
+
+// Boot hook — IIFE/listener sendiri, TIDAK menyentuh renderUserState atau
+// init lain sama sekali. Nunggu ~2 detik (selaras stagger billboard) supaya
+// tidak rebutan sama fetch awal ads/billboard.
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => { _checkAndShowPopupPromo(); }, 2000);
+});
 </script>
 
 </body>
