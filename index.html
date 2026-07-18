@@ -24840,6 +24840,9 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => { _ykRefres
     <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Teks Tombol *</label>
     <input id="popupPromoBtnTextInput" type="text" placeholder="Lihat Promo" value="Lihat Promo" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-3.5"/>
 
+    <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Teks Badge <span class="text-gray-400 font-normal">(opsional)</span></label>
+    <input id="popupPromoBadgeTextInput" type="text" placeholder="🎉 PROMO SPESIAL" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-3.5"/>
+
     <div class="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3 mb-4">
       <div>
         <p class="text-sm font-bold text-gray-800">Status Aktif</p>
@@ -24925,6 +24928,7 @@ window.openPopupPromoForm = function(existing) {
   document.getElementById('popupPromoTitleInput').value = existing?.title || '';
   document.getElementById('popupPromoUrlInput').value = existing?.action_url || '';
   document.getElementById('popupPromoBtnTextInput').value = existing?.button_text || 'Lihat Promo';
+  document.getElementById('popupPromoBadgeTextInput').value = existing?.badge_text || '';
   const preview = document.getElementById('popupPromoPhotoPreview');
   preview.innerHTML = existing?.img_url
     ? `<img src="${existing.img_url}" class="w-full object-cover rounded-2xl" style="max-height:220px"/>`
@@ -24955,6 +24959,7 @@ window.savePopupPromo = async function() {
   const title = document.getElementById('popupPromoTitleInput').value.trim();
   const actionUrl = document.getElementById('popupPromoUrlInput').value.trim();
   const btnText = document.getElementById('popupPromoBtnTextInput').value.trim() || 'Lihat Promo';
+  const badgeText = document.getElementById('popupPromoBadgeTextInput').value.trim() || '🎉 PROMO SPESIAL';
   const isActive = document.getElementById('popupPromoActiveToggle').checked;
   const st = window._popupPromoState;
 
@@ -24974,7 +24979,7 @@ window.savePopupPromo = async function() {
       if (!imgUrl || !imgUrl.startsWith('http')) throw new Error('URL gambar tidak valid');
     }
     const payload = {
-      title, img_url: imgUrl, action_url: actionUrl, button_text: btnText,
+      title, img_url: imgUrl, action_url: actionUrl, button_text: btnText, badge_text: badgeText,
       is_active: isActive, updated_at: new Date().toISOString()
     };
     if (imgPublicId) payload.img_public_id = imgPublicId;
@@ -25063,24 +25068,74 @@ async function _checkAndShowPopupPromo() {
   } catch (e) { console.warn('[popupPromo]', e.message); }
 }
 
+// Palet ribbon/confetti dirotasi tiap popup tampil — ini bagian "variasi"-nya:
+// tiap kali popup muncul (beda promo, atau reload sesi baru), kombinasi warna
+// aksen & bentuk confetti bisa beda, jadi tidak monoton itu-itu saja walau
+// strukturnya sama.
+const _POPUP_PROMO_THEMES = [
+  { grad: 'linear-gradient(135deg,#F59E0B,#EF4444)', ribbon: '#EF4444', glow: 'rgba(239,68,68,.35)' },
+  { grad: 'linear-gradient(135deg,#10B981,#059669)', ribbon: '#059669', glow: 'rgba(16,185,129,.35)' },
+  { grad: 'linear-gradient(135deg,#8B5CF6,#EC4899)', ribbon: '#EC4899', glow: 'rgba(236,72,153,.35)' },
+  { grad: 'linear-gradient(135deg,#3B82F6,#06B6D4)', ribbon: '#3B82F6', glow: 'rgba(59,130,246,.35)' }
+];
+
 function _renderPopupPromoCard(p) {
+  const theme = _POPUP_PROMO_THEMES[Math.floor(Math.random() * _POPUP_PROMO_THEMES.length)];
   const overlay = document.createElement('div');
   overlay.id = 'popupPromoUserOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:999997;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.5);opacity:0;transition:opacity .25s ease;';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999997;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.6);opacity:0;transition:opacity .25s ease;';
   const safeTitle = (p.title||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const safeBtnText = (p.button_text||'Lihat Promo').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const safeBadgeText = (p.badge_text||'🎉 PROMO SPESIAL').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const safeActionUrl = (p.action_url||'').replace(/'/g,"\\'");
+
+  // Confetti — bentuk & posisi acak tiap kali dipanggil, jadi tidak identik terus.
+  const confettiShapes = ['●','▲','■','★','◆'];
+  let confettiHtml = '';
+  for (let i = 0; i < 10; i++) {
+    const shape = confettiShapes[Math.floor(Math.random() * confettiShapes.length)];
+    const size = 8 + Math.random() * 10;
+    const top = Math.random() * 100;
+    const left = Math.random() * 100;
+    const hue = ['#F59E0B','#10B981','#EC4899','#3B82F6','#EF4444','#8B5CF6'][Math.floor(Math.random()*6)];
+    const delay = (Math.random() * 2).toFixed(2);
+    confettiHtml += `<span class="ppm-confetti" style="top:${top}%;left:${left}%;font-size:${size}px;color:${hue};animation-delay:${delay}s">${shape}</span>`;
+  }
+
   overlay.innerHTML = `
-    <div id="popupPromoCard" style="background:#fff;border-radius:24px;max-width:360px;width:100%;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.25);transform:scale(.88);opacity:0;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .25s ease;position:relative">
-      <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.45);border:none;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;z-index:2">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <img src="${p.img_url}" style="width:100%;max-height:420px;object-fit:cover;display:block"/>
-      <div style="padding:18px 20px 20px">
-        ${safeTitle ? `<p style="font-size:16px;font-weight:900;color:#111827;margin:0 0 12px;line-height:1.3">${safeTitle}</p>` : ''}
-        <button onclick="_showPopupPromoAction('${safeActionUrl}');document.getElementById('popupPromoUserOverlay').remove()" style="width:100%;background:linear-gradient(to right,#10B981,#059669);color:#fff;font-weight:800;font-size:14px;padding:13px;border:none;border-radius:14px;cursor:pointer">
-          ${safeBtnText}
+    <style>
+      @keyframes ppmFloat { 0%,100%{ transform:translateY(0) rotate(0deg); opacity:.85 } 50%{ transform:translateY(-10px) rotate(15deg); opacity:1 } }
+      @keyframes ppmPulse { 0%,100%{ box-shadow:0 0 0 0 ${theme.glow} } 50%{ box-shadow:0 0 0 10px rgba(0,0,0,0) } }
+      .ppm-confetti{ position:absolute; animation:ppmFloat 2.4s ease-in-out infinite; pointer-events:none; user-select:none; text-shadow:0 2px 6px rgba(0,0,0,.25) }
+      #popupPromoCard{ animation:none }
+      #popupPromoBtn{ animation:ppmPulse 1.8s ease-out infinite }
+      .ppm-ribbon-tail{ position:absolute; width:26px; height:100px; z-index:0; border-radius:3px; clip-path:polygon(0 0,100% 0,100% 88%,50% 100%,0 88%); box-shadow:0 4px 10px rgba(0,0,0,.25) }
+    </style>
+    <div style="position:relative;max-width:360px;width:100%;padding-top:34px">
+      ${confettiHtml}
+      <!-- 🎀 Tali pita — DI LUAR kartu, seolah kartu diikat/dibungkus kado -->
+      <div class="ppm-ribbon-tail" style="top:20px;left:6px;background:${theme.grad};transform:rotate(-30deg)"></div>
+      <div class="ppm-ribbon-tail" style="top:20px;right:6px;background:${theme.grad};transform:rotate(30deg)"></div>
+      <div style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);font-size:52px;z-index:1;filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))">🎀</div>
+      <div id="popupPromoCard" style="background:#fff;border-radius:28px;overflow:hidden;box-shadow:0 25px 60px ${theme.glow},0 8px 20px rgba(0,0,0,.2);transform:scale(.85);opacity:0;transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .3s ease;position:relative;z-index:1">
+        <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.9);border:none;cursor:pointer;color:#374151;display:flex;align-items:center;justify-content:center;z-index:3;box-shadow:0 2px 8px rgba(0,0,0,.2)">
+          <i class="fa-solid fa-xmark"></i>
         </button>
+        <div style="position:absolute;top:14px;left:-8px;z-index:2;background:${theme.ribbon};color:#fff;font-size:10px;font-weight:900;letter-spacing:.5px;padding:5px 14px 5px 20px;border-radius:0 99px 99px 0;box-shadow:0 4px 10px rgba(0,0,0,.25)">
+          ${safeBadgeText}
+        </div>
+        <div style="position:relative;background:${theme.grad}">
+          <img src="${p.img_url}" style="width:100%;max-height:400px;object-fit:cover;display:block;opacity:.98"/>
+        </div>
+        <div style="padding:20px 22px 24px;text-align:center">
+          ${safeTitle ? `<p style="font-size:18px;font-weight:900;color:#111827;margin:0 0 14px;line-height:1.35">${safeTitle}</p>` : ''}
+          <button id="popupPromoBtn" onclick="_showPopupPromoAction('${safeActionUrl}');document.getElementById('popupPromoUserOverlay').remove()" style="width:100%;background:${theme.grad};color:#fff;font-weight:800;font-size:15px;padding:14px;border:none;border-radius:99px;cursor:pointer;box-shadow:0 8px 20px ${theme.glow};display:flex;align-items:center;justify-content:center;gap:8px">
+            ${safeBtnText} <i class="fa-solid fa-arrow-right" style="font-size:12px"></i>
+          </button>
+          <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="margin-top:12px;background:none;border:none;color:#9ca3af;font-size:12px;font-weight:600;cursor:pointer">
+            Nanti saja
+          </button>
+        </div>
       </div>
     </div>`;
   document.body.appendChild(overlay);
