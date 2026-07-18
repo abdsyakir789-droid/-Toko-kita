@@ -4288,7 +4288,7 @@ h3.text-sm.font-bold.text-gray-800 {
           <input id="adVarName" type="text" placeholder="Contoh: Hitam, Original" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"/>
         </div>
         <div style="width:90px;flex-shrink:0">
-          <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Stok <span class="text-gray-400 font-normal">(opsional)</span></label>
+          <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Stok *</label>
           <input id="adStock" type="number" min="0" placeholder="10" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"/>
         </div>
         <div style="width:100px;flex-shrink:0">
@@ -5918,6 +5918,10 @@ window._FB = {
     ).then(r => r.ok ? r.json() : [])
      .then(data => callback((data||[]).map(d => ({ id: d.id, ...d }))));
 
+    // Expose loadMsgs supaya pemanggil (mis. setelah kirim pesan) bisa paksa
+    // refresh manual — realtime channel di bawah kadang telat/gagal connect.
+    window._S._activeChatReload = loadMsgs;
+
     loadMsgs();
 
     // Realtime subscription tetap pakai Supabase channel (tidak butuh auth khusus)
@@ -5930,7 +5934,7 @@ window._FB = {
       }, payload => { loadMsgs(); })
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => { supabase.removeChannel(channel); if(window._S._activeChatReload === loadMsgs) window._S._activeChatReload = null; };
   },
 
   async initChat(adId, sellerId, sellerName, sellerPhoto, adTitle, adImg, adPrice) {
@@ -5942,7 +5946,7 @@ window._FB = {
     const r = await window._supaFetch('/rest/v1/chats?chat_id=eq.' + chatId + '&select=chat_id');
     const existing = r.ok ? await r.json() : [];
     if(!existing.length) {
-      await window._supaFetch('/rest/v1/chats', {
+      const _createRes = await window._supaFetch('/rest/v1/chats', {
         method: 'POST',
         prefer: 'return=minimal',
         body: JSON.stringify({
@@ -5955,6 +5959,18 @@ window._FB = {
           unread_counts: { [window._S.user.uid]: 0, [sellerId]: 0 }
         })
       });
+      // Kalau gagal bikin chat room, JANGAN pura-pura berhasil — kalau tidak,
+      // pesan pertama akan gagal terkirim (foreign key ke chats yang sebenarnya
+      // tak pernah kebuat). Cek dulu apakah row-nya ternyata sudah ada (race
+      // condition, aman) sebelum benar-benar dianggap gagal.
+      if(!_createRes.ok) {
+        const _recheck = await window._supaFetch('/rest/v1/chats?chat_id=eq.' + chatId + '&select=chat_id');
+        const _recheckRows = _recheck.ok ? await _recheck.json() : [];
+        if(!_recheckRows.length) {
+          showToast('Gagal membuka chat, coba lagi','red');
+          return null;
+        }
+      }
     }
     return chatId;
   },
@@ -9858,8 +9874,19 @@ window.sendPushToUser = async function(userId, title, body, url) {
       },
       body: JSON.stringify({ user_id: userId, title, body, url: url || '/' })
     });
-    return await r.json().catch(()=>({}));
-  } catch(e) { console.warn('[push]', e.message); return {}; }
+    const _rj = await r.json().catch(()=>({}));
+    // ── DEBUG SEMENTARA: sama seperti sendPushToReceiver, hapus/nonaktifkan
+    // setelah selesai verifikasi sebelum pindah ke production. ──
+    if (window._PUSH_DEBUG) {
+      if (r.ok) showToast('🔔 Push API OK: ' + JSON.stringify(_rj).slice(0,80), 'green');
+      else showToast('🔔 Push API gagal (HTTP ' + r.status + '): ' + JSON.stringify(_rj).slice(0,80), 'red');
+    }
+    return _rj;
+  } catch(e) {
+    console.warn('[push]', e.message);
+    if (window._PUSH_DEBUG) showToast('🔔 Push API error: ' + e.message, 'red');
+    return {};
+  }
 };
 
 window.toggleDetailFollow = async function() {
@@ -10227,8 +10254,15 @@ async function sendPushToReceiver(receiverUid, senderName, msgText) {
       })
     });
     const _rj = await _r.json().catch(()=>({}));
+    // ── DEBUG SEMENTARA: toast konfirmasi hasil panggilan push, buat verifikasi
+    // sebelum pindah ke production. Hapus/nonaktifkan blok ini setelah selesai testing. ──
+    if (window._PUSH_DEBUG) {
+      if (_r.ok) showToast('🔔 Push API OK: ' + JSON.stringify(_rj).slice(0,80), 'green');
+      else showToast('🔔 Push API gagal (HTTP ' + _r.status + '): ' + JSON.stringify(_rj).slice(0,80), 'red');
+    }
   } catch(e) {
-    console.warn('[push chat]', e.message); 
+    console.warn('[push chat]', e.message);
+    if (window._PUSH_DEBUG) showToast('🔔 Push API error: ' + e.message, 'red');
   }
 }
 
@@ -10373,6 +10407,10 @@ window.sendChatMsg = async () => {
     } else {
       await window._FB.sendChatMessage(window._S.activeChatId, txt);
     }
+    // Refresh manual daftar pesan — realtime channel kadang telat/gagal connect,
+    // jadi jangan cuma andalkan itu supaya pesan yang baru terkirim langsung
+    // kelihatan tanpa harus keluar-masuk chat room dulu.
+    if(window._S._activeChatReload) window._S._activeChatReload();
     if(window._S.activeChatOther) sendPushToReceiver(window._S.activeChatOther, window._S.user.name||'Seseorang', txt);
     // ── Selalu dismiss product context bar setelah pesan terkirim ─
     const _barAfter = document.getElementById('chatProductContext');
@@ -10424,6 +10462,7 @@ window.sendChatPhoto = async function(input) {
     const ld = document.getElementById('chatPhotoLoading');
     if(ld) ld.remove();
     await window._FB.sendChatMessage(window._S.activeChatId, imgUrl, 'image');
+    if(window._S._activeChatReload) window._S._activeChatReload();
     if(window._S.activeChatOther && window._S.user)
       sendPushToReceiver(window._S.activeChatOther, window._S.user.name||'Seseorang', '📷 Foto');
   } catch(e) {
@@ -13990,6 +14029,10 @@ window.submitAd=async()=>{
   if(desc.length>800){showToast('Deskripsi maksimal 800 karakter','red');return;}
   const varNameCheck=document.getElementById('adVarName')?document.getElementById('adVarName').value.trim():'';
   if(!varNameCheck){showToast('Nama Varian wajib diisi','red');document.getElementById('adVarName').focus();return;}
+  const stockCheck=document.getElementById('adStock')?document.getElementById('adStock').value.trim():'';
+  if(!stockCheck){showToast('Stok wajib diisi','red');document.getElementById('adStock').focus();return;}
+  const missingVarStock=window._varianStockMissing ? window._varianStockMissing(window._varianData) : null;
+  if(missingVarStock){showToast('Stok untuk varian "'+missingVarStock+'" wajib diisi','red');return;}
 
   // ── Cek blacklist kata terlarang sebelum upload ──
   const _blHit = await window._checkBlacklistBeforeSubmit(title, desc);
@@ -16128,7 +16171,7 @@ window.removeVerification = async function() {
           <input id="editAdVarName" type="text" placeholder="Contoh: Hitam, Original" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"/>
         </div>
         <div style="width:90px;flex-shrink:0">
-          <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Stok <span class="text-gray-400 font-normal">(opsional)</span></label>
+          <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Stok *</label>
           <input id="editAdStock" type="number" min="0" placeholder="10" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"/>
         </div>
         <div style="width:100px;flex-shrink:0">
@@ -16344,6 +16387,10 @@ window.submitEditAd = async function() {
   if(!price) { showToast('Harga wajib diisi','red'); return; }
   if(!cat) { showToast('Kategori wajib dipilih','red'); return; }
   if(desc.length>800) { showToast('Deskripsi maksimal 800 karakter','red'); return; }
+  const editStockCheck = document.getElementById('editAdStock') ? document.getElementById('editAdStock').value.trim() : '';
+  if(!editStockCheck) { showToast('Stok wajib diisi','red'); document.getElementById('editAdStock').focus(); return; }
+  const missingVarStockEdit = window._varianStockMissing ? window._varianStockMissing(window._editVarianData) : null;
+  if(missingVarStockEdit) { showToast('Stok untuk varian "'+missingVarStockEdit+'" wajib diisi','red'); return; }
 
   // ── Cek blacklist kata terlarang sebelum simpan ──
   const _blHitEdit = await window._checkBlacklistBeforeSubmit(title, desc);
@@ -18973,6 +19020,17 @@ window.requirePin = function(callback) {
       return null;
     }
   }
+
+  // Validasi: setiap slot varian yang sudah diisi namanya WAJIB punya stok juga.
+  // Dipakai bareng oleh submitAd (window._varianData) & submitEditAd (window._editVarianData).
+  window._varianStockMissing = function(dataArr) {
+    for (const v of (dataArr||[])) {
+      if (v.name && v.name.trim() && (v.stock === undefined || v.stock === null || String(v.stock).trim() === '')) {
+        return v.name.trim();
+      }
+    }
+    return null;
+  };
 
   // Fungsi dipanggil dari submitAd — upload semua foto varian & kembalikan array bersih
   window.buildVarianPayload = async function() {
