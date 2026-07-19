@@ -25155,6 +25155,12 @@ function _renderPopupPromoCard(p) {
       ${confettiHtml}
       <!-- Semburan pita tipis statis — mengelilingi kartu, tidak menempel -->
       ${streamerHtml}
+      <!-- Label "Promo Spesial" — kolom sendiri, DI LUAR/DI ATAS kartu iklan,
+           tidak menyatu/menempel ke kartu (beda dengan sebelumnya yang
+           overlap di sudut foto). -->
+      <div style="position:relative;z-index:3;text-align:center;margin-bottom:10px">
+        <span style="display:inline-block;background:${theme.ribbon};color:#fff;font-size:11px;font-weight:900;letter-spacing:.5px;padding:7px 18px;border-radius:99px;box-shadow:0 4px 12px rgba(0,0,0,.3)">${safeBadgeText}</span>
+      </div>
       <!-- Bingkai dinamis: wrapper luar warnanya sama persis dengan background
            tombol "Lihat Promo" di bawah (satu variabel JS yang sama, theme.grad,
            jadi dijamin identik, bukan cuma mirip). Border-radius lebih besar
@@ -25162,27 +25168,34 @@ function _renderPopupPromoCard(p) {
            yang rapi (trik ini dipakai karena properti border CSS biasa tidak
            bisa gradient+rounded-corner dengan baik). -->
       <div id="popupPromoFrame" style="padding:3px;border-radius:31px;background:${theme.grad};box-shadow:0 25px 60px ${theme.glow},0 8px 20px rgba(0,0,0,.2);transform:scale(.85);opacity:0;transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .3s ease;position:relative;z-index:1">
-        <div id="popupPromoCard" style="background:#111827;border-radius:28px;overflow:hidden;position:relative">
+        <div id="popupPromoCard" style="background:#fff;border-radius:28px;overflow:hidden;position:relative">
           <!-- Tombol X — putih solid + bayangan, tetap kontras di atas gambar apapun -->
           <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;background:#fff;border:none;cursor:pointer;color:#374151;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:0 2px 10px rgba(0,0,0,.35)">
             <i class="fa-solid fa-xmark"></i>
           </button>
-          <div style="position:absolute;top:14px;left:-8px;z-index:8;background:${theme.ribbon};color:#fff;font-size:10px;font-weight:900;letter-spacing:.5px;padding:5px 14px 5px 20px;border-radius:0 99px 99px 0;box-shadow:0 4px 10px rgba(0,0,0,.25)">
-            ${safeBadgeText}
-          </div>
-          <!-- Foto full-bleed — memenuhi seluruh area popup, tanpa kotak putih pemisah.
-               Portrait/vertikal didukung: height:auto ikut rasio asli, dibatasi 70vh. -->
-          <img src="${p.img_url}" style="width:100%;height:auto;max-height:70vh;min-height:320px;object-fit:cover;display:block"/>
-          <!-- Teks & tombol overlay DI ATAS gambar (bukan box terpisah) — gradient
-               gelap transparan di bawah supaya tulisan tetap terbaca di atas foto apapun. -->
-          <div style="position:absolute;left:0;right:0;bottom:0;z-index:5;background:linear-gradient(to top, rgba(0,0,0,.88) 0%, rgba(0,0,0,.65) 45%, rgba(0,0,0,0) 100%);padding:56px 20px 20px;text-align:center">
-            ${safeTitle ? `<p style="font-size:18px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.35;text-shadow:0 2px 10px rgba(0,0,0,.6)">${safeTitle}</p>` : ''}
-            <button id="popupPromoBtn" onclick="_showPopupPromoAction('${safeActionUrl}');document.getElementById('popupPromoUserOverlay').remove()" style="width:100%;background:${theme.grad};color:#fff;font-weight:800;font-size:15px;padding:14px;border:none;border-radius:99px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;gap:8px;position:relative;z-index:6">
-              ${safeBtnText} <i class="fa-solid fa-arrow-right" style="font-size:12px"></i>
-            </button>
-            <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="margin-top:12px;background:none;border:none;color:rgba(255,255,255,.8);font-size:12px;font-weight:600;cursor:pointer;text-shadow:0 1px 4px rgba(0,0,0,.5);position:relative;z-index:6">
-              Nanti saja
-            </button>
+          <!-- Wrapper relative: tinggi wrapper ini ngikutin tinggi FOTO asli
+               (img height:auto, tidak di-crop) — supaya tombol/teks yang
+               absolute di bawah ini nempel persis di ujung bawah foto,
+               bukan di kolom terpisah. -->
+          <div style="position:relative">
+            <!-- Foto utuh, TIDAK di-crop (bukan object-fit:cover) — width:100%
+                 height:auto artinya seluruh gambar ikut rasio aslinya, tidak
+                 ada bagian yang kepotong/ketutup. -->
+            <img src="${p.img_url}" style="width:100%;height:auto;display:block"/>
+            <!-- Tombol & teks menumpuk DI ATAS foto. Judul dibungkus kolom
+                 kecil (background putih + teks hitam) supaya tetap kebaca
+                 walau fotonya putih polos. "Nanti saja" teks hitam polos
+                 (tanpa kolom). Hanya tombol "Lihat Promo" yang punya
+                 background sendiri (gradient tema). -->
+            <div style="position:absolute;left:0;right:0;bottom:16px;z-index:5;padding:0 16px;display:flex;flex-direction:column;align-items:center;gap:10px">
+              ${safeTitle ? `<span style="display:inline-block;background:#fff;color:#111827;font-family:'Plus Jakarta Sans',sans-serif;font-weight:900;font-size:15px;letter-spacing:-.02em;line-height:1.3;text-align:center;padding:9px 18px;border-radius:14px;box-shadow:0 4px 14px rgba(0,0,0,.25)">${safeTitle}</span>` : ''}
+              <button id="popupPromoBtn" onclick="_showPopupPromoAction('${safeActionUrl}');document.getElementById('popupPromoUserOverlay').remove()" style="width:100%;background:${theme.grad};color:#fff;font-weight:800;font-size:15px;padding:14px;border:none;border-radius:99px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;gap:8px">
+                ${safeBtnText} <i class="fa-solid fa-arrow-right" style="font-size:12px"></i>
+              </button>
+              <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="background:none;border:none;color:#111827;font-size:11px;font-weight:700;cursor:pointer">
+                Nanti saja
+              </button>
+            </div>
           </div>
         </div>
       </div>
