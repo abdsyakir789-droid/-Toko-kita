@@ -25095,7 +25095,10 @@ function _renderPopupPromoCard(p) {
   // makanya dulu banyak yang ketutup kartu). radiusX>150 (separuh lebar
   // kartu) & radiusY>270 (kira-kira separuh tinggi kartu) menjamin selalu
   // clear dari kotak kartu di segala sudut.
-  const confettiShapes = ['●','▲','■','★','◆'];
+  // Bentuk confetti pakai CSS murni (bukan karakter emoji/unicode) — lingkaran,
+  // kotak, diamond — supaya renderingnya konsisten di semua device & terlihat
+  // rapi, bukan glyph font yang bisa beda-beda tampilannya.
+  const confettiShapeTypes = ['circle','square','diamond'];
   let confettiHtml = '';
   for (let i = 0; i < 14; i++) {
     const angle = Math.random() * 360;
@@ -25104,11 +25107,18 @@ function _renderPopupPromoCard(p) {
     const radiusY = 290 + Math.random() * 60;
     const x = Math.cos(rad) * radiusX;
     const y = Math.sin(rad) * radiusY;
-    const shape = confettiShapes[Math.floor(Math.random() * confettiShapes.length)];
-    const size = 8 + Math.random() * 10;
+    const shapeType = confettiShapeTypes[Math.floor(Math.random() * confettiShapeTypes.length)];
+    const size = 7 + Math.random() * 7;
     const hue = ['#F59E0B','#10B981','#EC4899','#3B82F6','#EF4444','#8B5CF6'][Math.floor(Math.random()*6)];
     const delay = (Math.random() * 2).toFixed(2);
-    confettiHtml += `<span class="ppm-confetti" style="left:calc(50% + ${x.toFixed(1)}px);top:calc(50% + ${y.toFixed(1)}px);font-size:${size}px;color:${hue};animation-delay:${delay}s">${shape}</span>`;
+    const radius = shapeType === 'circle' ? '50%' : '2px';
+    const baseRotate = shapeType === 'diamond' ? 'rotate(45deg)' : '';
+    // Pembungkus luar STATIS (posisi + rotasi dasar buat diamond), pembungkus
+    // dalam pegang animasi float — dipisah supaya rotasi dasar & rotasi
+    // animasi tidak saling menimpa satu sama lain.
+    confettiHtml += `<span style="position:absolute;left:calc(50% + ${x.toFixed(1)}px);top:calc(50% + ${y.toFixed(1)}px);z-index:2;${baseRotate}">
+      <span class="ppm-confetti" style="width:${size.toFixed(0)}px;height:${size.toFixed(0)}px;background:${hue};border-radius:${radius};animation-delay:${delay}s"></span>
+    </span>`;
   }
 
   // Semburan pita tipis (party-popper burst) — STATIS, tidak nempel ke kartu.
@@ -25129,74 +25139,59 @@ function _renderPopupPromoCard(p) {
     streamerHtml += `<div class="ppm-streamer" style="left:calc(50% + ${x.toFixed(1)}px);top:calc(50% + ${y.toFixed(1)}px);height:${len.toFixed(0)}px;background:${color};transform:translate(-50%,-50%) rotate(${(angle + 90).toFixed(1)}deg)"></div>`;
   }
 
-  // Ikon "menari" — dekorasi kiri & kanan kartu (petir, keranjang, dll), tiap
-  // ikon punya animasi bounce+wiggle dengan delay acak biar keliatan hidup
-  // (tidak serempak). ⚡ selalu ada (diminta eksplisit), sisanya acak & beda
-  // tiap render biar bervariasi.
-  const danceIconPool = ['🛒','🎁','🏷️','💰','🔥','✨','🛍️','💸','⭐'];
-  function _pickRandomIcons(n) {
-    const pool = danceIconPool.slice();
-    const picked = [];
-    for (let i = 0; i < n && pool.length; i++) picked.push(pool.splice(Math.floor(Math.random()*pool.length), 1)[0]);
-    return picked;
-  }
-  let danceIconHtml = '';
-  [['⚡', ..._pickRandomIcons(2)], _pickRandomIcons(3)].forEach((icons, side) => {
-    icons.forEach((icon, i) => {
-      const topPct = 12 + i * 34 + (Math.random()*6 - 3);
-      const delay = (Math.random() * 1.2).toFixed(2);
-      const size = (22 + Math.random() * 8).toFixed(0);
-      const sidePos = side === 0 ? 'left:-22px' : 'right:-22px';
-      danceIconHtml += `<span class="ppm-dance-icon" style="${sidePos};top:${topPct.toFixed(0)}%;font-size:${size}px;animation-delay:${delay}s">${icon}</span>`;
-    });
-  });
-
   overlay.innerHTML = `
     <style>
       @keyframes ppmFloat { 0%,100%{ transform:translateY(0) rotate(0deg); opacity:.85 } 50%{ transform:translateY(-10px) rotate(15deg); opacity:1 } }
       @keyframes ppmPulse { 0%,100%{ box-shadow:0 0 0 0 ${theme.glow} } 50%{ box-shadow:0 0 0 10px rgba(0,0,0,0) } }
-      /* Semua dekorasi (confetti/pita/ikon) WAJIB z-index lebih tinggi dari
-         kartu (#popupPromoCard pakai z-index:1) — kemarin sempat sama/lebih
-         rendah jadi ketutup kartu meski posisinya sudah di luar. */
-      .ppm-confetti{ position:absolute; animation:ppmFloat 2.4s ease-in-out infinite; pointer-events:none; user-select:none; text-shadow:0 2px 6px rgba(0,0,0,.25); z-index:2 }
+      /* Dekorasi (confetti/pita) WAJIB z-index lebih tinggi dari kartu
+         (#popupPromoCard pakai z-index:1) — kalau tidak, ketutup kartu
+         meski posisinya sudah di luar. */
+      .ppm-confetti{ display:block; animation:ppmFloat 2.4s ease-in-out infinite; pointer-events:none; user-select:none; box-shadow:0 2px 4px rgba(0,0,0,.2) }
       #popupPromoCard{ animation:none }
       #popupPromoBtn{ animation:ppmPulse 1.8s ease-out infinite }
       .ppm-streamer{ position:absolute; width:5px; border-radius:3px; opacity:.9; box-shadow:0 2px 4px rgba(0,0,0,.15); z-index:2 }
-      @keyframes ppmDance { 0%,100%{ transform:translateY(0) rotate(-10deg) } 25%{ transform:translateY(-8px) rotate(10deg) } 50%{ transform:translateY(0) rotate(-6deg) } 75%{ transform:translateY(-5px) rotate(8deg) } }
-      .ppm-dance-icon{ position:absolute; animation:ppmDance 1.5s ease-in-out infinite; filter:drop-shadow(0 3px 5px rgba(0,0,0,.3)); z-index:2; pointer-events:none; user-select:none }
     </style>
     <div style="position:relative;max-width:300px;width:100%;padding-top:34px">
       ${confettiHtml}
       <!-- Semburan pita tipis statis — mengelilingi kartu, tidak menempel -->
       ${streamerHtml}
-      <!-- Ikon menari — dekorasi kiri-kanan kartu -->
-      ${danceIconHtml}
-      <div id="popupPromoCard" style="background:#fff;border-radius:28px;overflow:hidden;box-shadow:0 25px 60px ${theme.glow},0 8px 20px rgba(0,0,0,.2);transform:scale(.85);opacity:0;transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .3s ease;position:relative;z-index:1">
-        <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.9);border:none;cursor:pointer;color:#374151;display:flex;align-items:center;justify-content:center;z-index:3;box-shadow:0 2px 8px rgba(0,0,0,.2)">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-        <div style="position:absolute;top:14px;left:-8px;z-index:2;background:${theme.ribbon};color:#fff;font-size:10px;font-weight:900;letter-spacing:.5px;padding:5px 14px 5px 20px;border-radius:0 99px 99px 0;box-shadow:0 4px 10px rgba(0,0,0,.25)">
-          ${safeBadgeText}
-        </div>
-        <div style="position:relative;background:${theme.grad}">
-          <img src="${p.img_url}" style="width:100%;max-height:400px;object-fit:cover;display:block;opacity:.98"/>
-        </div>
-        <div style="padding:20px 22px 24px;text-align:center">
-          ${safeTitle ? `<p style="font-size:18px;font-weight:900;color:#111827;margin:0 0 14px;line-height:1.35">${safeTitle}</p>` : ''}
-          <button id="popupPromoBtn" onclick="_showPopupPromoAction('${safeActionUrl}');document.getElementById('popupPromoUserOverlay').remove()" style="width:100%;background:${theme.grad};color:#fff;font-weight:800;font-size:15px;padding:14px;border:none;border-radius:99px;cursor:pointer;box-shadow:0 8px 20px ${theme.glow};display:flex;align-items:center;justify-content:center;gap:8px">
-            ${safeBtnText} <i class="fa-solid fa-arrow-right" style="font-size:12px"></i>
+      <!-- Bingkai dinamis: wrapper luar warnanya sama persis dengan background
+           tombol "Lihat Promo" di bawah (satu variabel JS yang sama, theme.grad,
+           jadi dijamin identik, bukan cuma mirip). Border-radius lebih besar
+           dikit dari kartu di dalamnya + padding tipis = efek bingkai rounded
+           yang rapi (trik ini dipakai karena properti border CSS biasa tidak
+           bisa gradient+rounded-corner dengan baik). -->
+      <div id="popupPromoFrame" style="padding:3px;border-radius:31px;background:${theme.grad};box-shadow:0 25px 60px ${theme.glow},0 8px 20px rgba(0,0,0,.2);transform:scale(.85);opacity:0;transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .3s ease;position:relative;z-index:1">
+        <div id="popupPromoCard" style="background:#111827;border-radius:28px;overflow:hidden;position:relative">
+          <!-- Tombol X — putih solid + bayangan, tetap kontras di atas gambar apapun -->
+          <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;background:#fff;border:none;cursor:pointer;color:#374151;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:0 2px 10px rgba(0,0,0,.35)">
+            <i class="fa-solid fa-xmark"></i>
           </button>
-          <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="margin-top:12px;background:none;border:none;color:#9ca3af;font-size:12px;font-weight:600;cursor:pointer">
-            Nanti saja
-          </button>
+          <div style="position:absolute;top:14px;left:-8px;z-index:8;background:${theme.ribbon};color:#fff;font-size:10px;font-weight:900;letter-spacing:.5px;padding:5px 14px 5px 20px;border-radius:0 99px 99px 0;box-shadow:0 4px 10px rgba(0,0,0,.25)">
+            ${safeBadgeText}
+          </div>
+          <!-- Foto full-bleed — memenuhi seluruh area popup, tanpa kotak putih pemisah.
+               Portrait/vertikal didukung: height:auto ikut rasio asli, dibatasi 70vh. -->
+          <img src="${p.img_url}" style="width:100%;height:auto;max-height:70vh;min-height:320px;object-fit:cover;display:block"/>
+          <!-- Teks & tombol overlay DI ATAS gambar (bukan box terpisah) — gradient
+               gelap transparan di bawah supaya tulisan tetap terbaca di atas foto apapun. -->
+          <div style="position:absolute;left:0;right:0;bottom:0;z-index:5;background:linear-gradient(to top, rgba(0,0,0,.88) 0%, rgba(0,0,0,.65) 45%, rgba(0,0,0,0) 100%);padding:56px 20px 20px;text-align:center">
+            ${safeTitle ? `<p style="font-size:18px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.35;text-shadow:0 2px 10px rgba(0,0,0,.6)">${safeTitle}</p>` : ''}
+            <button id="popupPromoBtn" onclick="_showPopupPromoAction('${safeActionUrl}');document.getElementById('popupPromoUserOverlay').remove()" style="width:100%;background:${theme.grad};color:#fff;font-weight:800;font-size:15px;padding:14px;border:none;border-radius:99px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;gap:8px;position:relative;z-index:6">
+              ${safeBtnText} <i class="fa-solid fa-arrow-right" style="font-size:12px"></i>
+            </button>
+            <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="margin-top:12px;background:none;border:none;color:rgba(255,255,255,.8);font-size:12px;font-weight:600;cursor:pointer;text-shadow:0 1px 4px rgba(0,0,0,.5);position:relative;z-index:6">
+              Nanti saja
+            </button>
+          </div>
         </div>
       </div>
     </div>`;
   document.body.appendChild(overlay);
   requestAnimationFrame(() => {
     overlay.style.opacity = '1';
-    const card = document.getElementById('popupPromoCard');
-    if (card) { card.style.transform = 'scale(1)'; card.style.opacity = '1'; }
+    const frame = document.getElementById('popupPromoFrame');
+    if (frame) { frame.style.transform = 'scale(1)'; frame.style.opacity = '1'; }
   });
 }
 
