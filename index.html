@@ -22507,7 +22507,7 @@ window.closeKelolaToko = function() {
       <span style="font-size:9px;font-weight:600;color:#111827;line-height:1;white-space:nowrap">Pesanan Masuk</span>
     </button>
   </div>
-  <div id="yallaFoodList" class="flex-1 overflow-y-auto px-3 py-3" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-content:start"></div>
+  <div id="yallaFoodList" class="flex-1 overflow-y-auto px-3 py-3" style="column-count:2;column-gap:12px"></div>
 </div>
 
 <!-- YALLAFOOD DETAIL + PESAN SEKARANG -->
@@ -22854,13 +22854,13 @@ async function _yfLoadList() {
       box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada menu YallaFood tersedia.</p>';
       return;
     }
-    box.style.display = 'grid';
+    box.style.display = 'block';
     box.innerHTML = rows.map(ad => {
       // Alamat kartu diambil dari yang seller tulis sendiri saat upload iklan (ads.location) —
       // BUKAN alamat toko umum. Kalau saat upload tidak diisi, tidak ditampilkan sama sekali.
       const alamat = ad.location || '';
       return `
-      <div class="bg-[#f8fafc] rounded-2xl overflow-hidden cursor-pointer flex flex-col" onclick="openFoodDetail('${ad.id}')">
+      <div class="bg-[#f8fafc] rounded-2xl overflow-hidden cursor-pointer flex flex-col" style="break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:12px" onclick="openFoodDetail('${ad.id}')">
         <div class="relative w-full" style="aspect-ratio:1/1;background:#f3f4f6">
           <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0" onerror="this.style.background='#eee'"/>
         </div>
@@ -23910,7 +23910,7 @@ async function _kurirLoadWaitingRoom() {
       <div class="bg-white rounded-2xl p-3 border border-gray-100">
         <div class="flex items-center gap-1.5 mb-2 min-w-0">
           <i class="fa-solid fa-store" style="font-size:12px;line-height:1;color:#111827;flex-shrink:0"></i>
-          <p class="text-xs font-semibold lc1" style="color:#111827;line-height:1">${o.seller_name || ''}</p>
+          <p class="text-xs font-semibold lc1" style="color:#111827;line-height:1${o.seller_id ? ';cursor:pointer' : ''}"${o.seller_id ? ` onclick="closeKurirDashboard();viewSellerStore('${o.seller_id}')"` : ''}>${o.seller_name || ''}</p>
         </div>
         <div class="flex gap-3 mb-2">
           <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
@@ -23967,7 +23967,7 @@ async function _kurirLoadMyDeliveries() {
         <div class="flex items-center justify-between gap-1.5 mb-2 min-w-0">
           <div class="flex items-center gap-1.5 min-w-0">
             <i class="fa-solid fa-store" style="font-size:12px;line-height:1;color:#111827;flex-shrink:0"></i>
-            <p class="text-xs font-semibold lc1" style="color:#111827;line-height:1">${o.seller_name || ''}</p>
+            <p class="text-xs font-semibold lc1" style="color:#111827;line-height:1${o.seller_id ? ';cursor:pointer' : ''}"${o.seller_id ? ` onclick="closeKurirDashboard();viewSellerStore('${o.seller_id}')"` : ''}>${o.seller_name || ''}</p>
           </div>
           <div class="flex items-center gap-1.5 flex-shrink-0">
             ${(o.status === 'dijemput' || o.status === 'menuju') ? `<button onclick="yfAdvanceOrderStatus('${o.id}','selesai').then(()=>_kurirLoadMyDeliveries())" class="text-[10px] font-bold px-2 py-1 rounded-full bg-primary text-white" style="white-space:nowrap">Selesai</button>` : ''}
