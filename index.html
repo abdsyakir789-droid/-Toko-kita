@@ -25089,34 +25089,88 @@ function _renderPopupPromoCard(p) {
   const safeBadgeText = (p.badge_text||'🎉 PROMO SPESIAL').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const safeActionUrl = (p.action_url||'').replace(/'/g,"\\'");
 
-  // Confetti — bentuk & posisi acak tiap kali dipanggil, jadi tidak identik terus.
+  // Confetti — disebar radial pakai ELIPS (radiusX/radiusY beda) supaya
+  // benar-benar jatuh DI LUAR persegi panjang kartu (kartu tinggi ~500px,
+  // lebih tinggi dari lebar, jadi radius lingkaran biasa tidak cukup —
+  // makanya dulu banyak yang ketutup kartu). radiusX>150 (separuh lebar
+  // kartu) & radiusY>270 (kira-kira separuh tinggi kartu) menjamin selalu
+  // clear dari kotak kartu di segala sudut.
   const confettiShapes = ['●','▲','■','★','◆'];
   let confettiHtml = '';
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 14; i++) {
+    const angle = Math.random() * 360;
+    const rad = angle * Math.PI / 180;
+    const radiusX = 190 + Math.random() * 50;
+    const radiusY = 290 + Math.random() * 60;
+    const x = Math.cos(rad) * radiusX;
+    const y = Math.sin(rad) * radiusY;
     const shape = confettiShapes[Math.floor(Math.random() * confettiShapes.length)];
     const size = 8 + Math.random() * 10;
-    const top = Math.random() * 100;
-    const left = Math.random() * 100;
     const hue = ['#F59E0B','#10B981','#EC4899','#3B82F6','#EF4444','#8B5CF6'][Math.floor(Math.random()*6)];
     const delay = (Math.random() * 2).toFixed(2);
-    confettiHtml += `<span class="ppm-confetti" style="top:${top}%;left:${left}%;font-size:${size}px;color:${hue};animation-delay:${delay}s">${shape}</span>`;
+    confettiHtml += `<span class="ppm-confetti" style="left:calc(50% + ${x.toFixed(1)}px);top:calc(50% + ${y.toFixed(1)}px);font-size:${size}px;color:${hue};animation-delay:${delay}s">${shape}</span>`;
   }
+
+  // Semburan pita tipis (party-popper burst) — STATIS, tidak nempel ke kartu.
+  // Elips sedikit lebih lebar dari confetti supaya jadi cincin luar,
+  // tetap dijamin clear dari kotak kartu (lihat catatan elips di atas).
+  const burstColors = ['#F59E0B','#10B981','#EC4899','#3B82F6','#EF4444','#8B5CF6','#FBBF24'];
+  let streamerHtml = '';
+  const streamerCount = 14;
+  for (let i = 0; i < streamerCount; i++) {
+    const angle = (360 / streamerCount) * i + (Math.random() * 10 - 5);
+    const rad = angle * Math.PI / 180;
+    const radiusX = 215 + Math.random() * 45;
+    const radiusY = 330 + Math.random() * 60;
+    const x = Math.cos(rad) * radiusX;
+    const y = Math.sin(rad) * radiusY;
+    const len = 26 + Math.random() * 20;
+    const color = burstColors[Math.floor(Math.random() * burstColors.length)];
+    streamerHtml += `<div class="ppm-streamer" style="left:calc(50% + ${x.toFixed(1)}px);top:calc(50% + ${y.toFixed(1)}px);height:${len.toFixed(0)}px;background:${color};transform:translate(-50%,-50%) rotate(${(angle + 90).toFixed(1)}deg)"></div>`;
+  }
+
+  // Ikon "menari" — dekorasi kiri & kanan kartu (petir, keranjang, dll), tiap
+  // ikon punya animasi bounce+wiggle dengan delay acak biar keliatan hidup
+  // (tidak serempak). ⚡ selalu ada (diminta eksplisit), sisanya acak & beda
+  // tiap render biar bervariasi.
+  const danceIconPool = ['🛒','🎁','🏷️','💰','🔥','✨','🛍️','💸','⭐'];
+  function _pickRandomIcons(n) {
+    const pool = danceIconPool.slice();
+    const picked = [];
+    for (let i = 0; i < n && pool.length; i++) picked.push(pool.splice(Math.floor(Math.random()*pool.length), 1)[0]);
+    return picked;
+  }
+  let danceIconHtml = '';
+  [['⚡', ..._pickRandomIcons(2)], _pickRandomIcons(3)].forEach((icons, side) => {
+    icons.forEach((icon, i) => {
+      const topPct = 12 + i * 34 + (Math.random()*6 - 3);
+      const delay = (Math.random() * 1.2).toFixed(2);
+      const size = (22 + Math.random() * 8).toFixed(0);
+      const sidePos = side === 0 ? 'left:-22px' : 'right:-22px';
+      danceIconHtml += `<span class="ppm-dance-icon" style="${sidePos};top:${topPct.toFixed(0)}%;font-size:${size}px;animation-delay:${delay}s">${icon}</span>`;
+    });
+  });
 
   overlay.innerHTML = `
     <style>
       @keyframes ppmFloat { 0%,100%{ transform:translateY(0) rotate(0deg); opacity:.85 } 50%{ transform:translateY(-10px) rotate(15deg); opacity:1 } }
       @keyframes ppmPulse { 0%,100%{ box-shadow:0 0 0 0 ${theme.glow} } 50%{ box-shadow:0 0 0 10px rgba(0,0,0,0) } }
-      .ppm-confetti{ position:absolute; animation:ppmFloat 2.4s ease-in-out infinite; pointer-events:none; user-select:none; text-shadow:0 2px 6px rgba(0,0,0,.25) }
+      /* Semua dekorasi (confetti/pita/ikon) WAJIB z-index lebih tinggi dari
+         kartu (#popupPromoCard pakai z-index:1) — kemarin sempat sama/lebih
+         rendah jadi ketutup kartu meski posisinya sudah di luar. */
+      .ppm-confetti{ position:absolute; animation:ppmFloat 2.4s ease-in-out infinite; pointer-events:none; user-select:none; text-shadow:0 2px 6px rgba(0,0,0,.25); z-index:2 }
       #popupPromoCard{ animation:none }
       #popupPromoBtn{ animation:ppmPulse 1.8s ease-out infinite }
-      .ppm-ribbon-tail{ position:absolute; width:26px; height:100px; z-index:0; border-radius:3px; clip-path:polygon(0 0,100% 0,100% 88%,50% 100%,0 88%); box-shadow:0 4px 10px rgba(0,0,0,.25) }
+      .ppm-streamer{ position:absolute; width:5px; border-radius:3px; opacity:.9; box-shadow:0 2px 4px rgba(0,0,0,.15); z-index:2 }
+      @keyframes ppmDance { 0%,100%{ transform:translateY(0) rotate(-10deg) } 25%{ transform:translateY(-8px) rotate(10deg) } 50%{ transform:translateY(0) rotate(-6deg) } 75%{ transform:translateY(-5px) rotate(8deg) } }
+      .ppm-dance-icon{ position:absolute; animation:ppmDance 1.5s ease-in-out infinite; filter:drop-shadow(0 3px 5px rgba(0,0,0,.3)); z-index:2; pointer-events:none; user-select:none }
     </style>
-    <div style="position:relative;max-width:360px;width:100%;padding-top:34px">
+    <div style="position:relative;max-width:300px;width:100%;padding-top:34px">
       ${confettiHtml}
-      <!-- 🎀 Tali pita — DI LUAR kartu, seolah kartu diikat/dibungkus kado -->
-      <div class="ppm-ribbon-tail" style="top:20px;left:6px;background:${theme.grad};transform:rotate(-30deg)"></div>
-      <div class="ppm-ribbon-tail" style="top:20px;right:6px;background:${theme.grad};transform:rotate(30deg)"></div>
-      <div style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);font-size:52px;z-index:1;filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))">🎀</div>
+      <!-- Semburan pita tipis statis — mengelilingi kartu, tidak menempel -->
+      ${streamerHtml}
+      <!-- Ikon menari — dekorasi kiri-kanan kartu -->
+      ${danceIconHtml}
       <div id="popupPromoCard" style="background:#fff;border-radius:28px;overflow:hidden;box-shadow:0 25px 60px ${theme.glow},0 8px 20px rgba(0,0,0,.2);transform:scale(.85);opacity:0;transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .3s ease;position:relative;z-index:1">
         <button onclick="document.getElementById('popupPromoUserOverlay').remove()" style="position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.9);border:none;cursor:pointer;color:#374151;display:flex;align-items:center;justify-content:center;z-index:3;box-shadow:0 2px 8px rgba(0,0,0,.2)">
           <i class="fa-solid fa-xmark"></i>
