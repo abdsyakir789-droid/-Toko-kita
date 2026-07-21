@@ -109,6 +109,25 @@ html { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
   .lucide-icon svg {
     display: block;
   }
+  /* ── Fallback avatar global (ikon Lucide User) ──────────────────
+     Dipakai di SEMUA komponen avatar saat user belum punya foto profil.
+     Lingkaran abu-abu muda + ikon User abu-abu gelap, ikon selalu di tengah. */
+  .ym-avatar-fb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #E5E7EB;   /* neutral light gray */
+    color: #4B5563;        /* neutral dark gray  */
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .ym-avatar-fb svg {
+    width: 60%;
+    height: 60%;
+    stroke: currentColor;
+    fill: none;
+    display: block;
+  }
 </style>
 
 <script>
@@ -2855,7 +2874,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <div id="userMenuBtn" style="display:none" class="flex items-center">
         <button onclick="showPage('profile')" class="flex items-center hover:opacity-90 transition-opacity rounded-full" title="Profil Saya">
           <div id="hAvatarWrap" class="profile-photo-ring flex-shrink-0">
-            <div id="hAvatar" class="w-8 h-8 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center overflow-hidden">U</div>
+            <div id="hAvatar" class="w-8 h-8 rounded-full ym-avatar-fb overflow-hidden"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
           </div>
           <!-- Nama & gold badge disembunyikan secara visual agar navbar lebih bersih -->
           <span id="hName" class="sr-only"></span>
@@ -4527,7 +4546,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <div class="flex items-center gap-4 mb-4">
         <!-- Avatar besar — lingkaran bersih tanpa border hijau -->
         <button onclick="openDetailStore()" class="flex-shrink-0 hover:opacity-80 transition-opacity">
-          <div id="detailAvatar" class="w-16 h-16 rounded-full bg-primary text-white text-xl font-black flex items-center justify-center overflow-hidden shadow-md" style="border:none;outline:none">P</div>
+          <div id="detailAvatar" class="w-16 h-16 rounded-full ym-avatar-fb overflow-hidden shadow-md" style="border:none;outline:none"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
         </button>
         <!-- Nama + badge + link etalase -->
         <div class="flex-1 min-w-0">
@@ -4741,7 +4760,7 @@ h3.text-sm.font-bold.text-gray-800 {
       </button>
       <button onclick="viewSellerStore(window._S.activeChatOther)" class="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:opacity-75 transition-opacity">
         <div id="chatRoomAvatarWrap" class="flex-shrink-0 relative">
-          <div id="chatRoomAvatar" class="w-9 h-9 rounded-full bg-primary text-white text-sm font-black flex items-center justify-center overflow-hidden">?</div>
+          <div id="chatRoomAvatar" class="w-9 h-9 rounded-full ym-avatar-fb overflow-hidden"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
           <span id="chatOnlineDot" class="online-dot absolute -bottom-0.5 -right-0.5" style="display:none"></span>
         </div>
         <div class="flex-1 min-w-0">
@@ -5699,10 +5718,19 @@ window._FB = {
     const _exRes = await window._supaFetch('/rest/v1/users?uid=eq.' + uid + '&select=id&limit=1');
     const _exRows = _exRes.ok ? await _exRes.json() : [];
     if (_exRows.length > 0) {
-      await window._supaFetch('/rest/v1/users?uid=eq.' + uid, {
-        method: 'PATCH', prefer: 'return=minimal',
+      // return=representation supaya bisa DIVERIFIKASI baris benar-benar ter-update.
+      // Kalau 0 baris (mis. RLS menolak / uid tak match), foto profil TIDAK tersimpan
+      // ke users.photo_url → user lain lihat ikon lonceng, bukan foto. Dulu pakai
+      // return=minimal jadi kegagalan ini tak terdeteksi (gagal senyap).
+      const _pRes = await window._supaFetch('/rest/v1/users?uid=eq.' + uid, {
+        method: 'PATCH', prefer: 'return=representation',
         body: JSON.stringify({ photo_url: imgUrl })
       });
+      const _pRows = _pRes.ok ? await _pRes.json().catch(() => []) : [];
+      if (!Array.isArray(_pRows) || _pRows.length === 0) {
+        console.warn('[uploadProfilePhoto] PATCH photo_url 0 baris — foto TIDAK tersimpan ke users. uid=' + uid);
+        showToast('Foto gagal tersimpan ke akun (coba lagi / hubungi admin)', 'red');
+      }
       window._S.user.docId = _exRows[0].id;
     } else {
       const _insRes = await window._supaFetch('/rest/v1/users', {
@@ -5872,7 +5900,7 @@ window._FB = {
       ? '<p class="text-[11px] text-gray-400 text-center py-2">Belum ada komentar.</p>'
       : (list||[]).map(c=>`
           <div class="flex gap-2 items-start">
-            <div class="w-6 h-6 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">${(c.author||'?').charAt(0).toUpperCase()}</div>
+            ${window.ymAvatarFallback('w-6 h-6 flex-shrink-0')}
             <div class="bg-gray-50 rounded-xl px-3 py-2 flex-1">
               <p class="text-[10px] font-bold text-gray-700">${c.author}</p>
               <p class="text-[11px] text-gray-600 mt-0.5">${c.text}</p>
@@ -7149,8 +7177,8 @@ function _renderReviewItem(r) {
     <div style="padding:10px 0">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         ${r.buyer_photo
-          ? `<img src="${r.buyer_photo}" loading="lazy" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">`
-          : `<div style="width:32px;height:32px;border-radius:50%;background:#10B981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${initials}</div>`}
+          ? `<img src="${r.buyer_photo}" loading="lazy" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.outerHTML=window.ymAvatarFallback('','width:32px;height:32px;flex-shrink:0')">`
+          : window.ymAvatarFallback('', 'width:32px;height:32px;flex-shrink:0')}
         <div style="flex:1;min-width:0">
           <p data-buyer-uid="${r.buyer_uid||''}" style="font-size:12px;font-weight:600;color:#111827;margin:0">${r.buyer_name||'Pembeli'}</p>
           <div style="display:flex;align-items:center;gap:4px">
@@ -7805,10 +7833,33 @@ function _verifiedBlueSVG(size=16) {
   </svg>`;
 }
 
-// ── Avatar helper ──────────────────────────────────────────────
+// ── Avatar helper GLOBAL (fallback ikon Lucide User) ───────────
+// Aturan global YallaMart: setiap avatar tanpa foto profil menampilkan ikon
+// User dari Lucide di lingkaran abu-abu (kelas .ym-avatar-fb), bukan inisial.
+// SVG di-inline (bukan lucide.createIcons) supaya langsung tampil tanpa nunggu
+// re-scan DOM, dan aman dipakai di string HTML mana pun.
+window.YM_USER_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+
+// Markup fallback: lingkaran abu-abu + ikon User di tengah. `classes` = ukuran
+// (Tailwind mis. 'w-8 h-8' atau kelas apa pun). `extraStyle` opsional (inline).
+window.ymAvatarFallback = function(classes = 'w-8 h-8', extraStyle = '') {
+  return `<div class="${classes} ym-avatar-fb"${extraStyle ? ` style="${extraStyle}"` : ''}>${window.YM_USER_ICON_SVG}</div>`;
+};
+
+// Versi untuk ELEMEN yang sudah ada (mis. placeholder statis #hAvatar, atau
+// container yang tadinya diisi inisial). Ubah jadi lingkaran abu-abu + ikon User.
+// Inline style menimpa kelas bg-primary/text-white bawaan container.
+window.ymSetAvatarFallback = function(el) {
+  if (!el) return;
+  el.classList.add('ym-avatar-fb');
+  el.style.background = '#E5E7EB';
+  el.style.color = '#4B5563';
+  el.innerHTML = window.YM_USER_ICON_SVG;
+};
+
 function avatarHtml(photoUrl, name, classes='w-8 h-8') {
-  if (photoUrl) return `<img src="${photoUrl}" class="${classes} rounded-full object-cover"/>`;
-  return `<div class="${classes} rounded-full bg-primary text-white font-black text-sm flex items-center justify-center">${(name||'U').charAt(0).toUpperCase()}</div>`;
+  if (photoUrl) return `<img src="${photoUrl}" class="${classes} rounded-full object-cover" onerror="this.outerHTML=window.ymAvatarFallback('${classes}')"/>`;
+  return window.ymAvatarFallback(classes);
 }
 
 // ── Pages ──────────────────────────────────────────────────────
@@ -7910,9 +7961,9 @@ window.renderUserState = () => {
     const hAv = document.getElementById('hAvatar');
     // FIX 3: Always use photoUrl from state — never fall back if URL exists
     if (u.photoUrl && u.photoUrl.length > 0) {
-      hAv.innerHTML = `<img src="${u.photoUrl}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='${init}'"/>`;
+      hAv.innerHTML = `<img src="${u.photoUrl}" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>`;
     } else {
-      hAv.innerHTML = init;
+      window.ymSetAvatarFallback(hAv);
     }
     document.getElementById('hName').textContent = u.name || u.email;
     // Start real-time unread listener saat user login
@@ -8286,11 +8337,13 @@ window.renderNotifFull = function(notifs) {
       // dipaksa selalu 2 baris. Tombol ada di kolom terpisah jadi aman.
       const middleContentHtml = `<p style="font-size:13px;line-height:1.45;color:#374151;font-weight:400;word-break:break-word;overflow-wrap:break-word;margin:0">${senderBold}${msgHtml}${timeInline}</p>`;
 
-      return `<div class="notif-act-item ${isUnread?'unread-act':''}" data-notif-id="${n.id}" data-ad-id="${resolvedAdId}">
+      return `<div class="notif-act-item ${isUnread?'unread-act':''}" data-notif-id="${n.id}" data-ad-id="${resolvedAdId}" data-notif-type="${n.type||''}">
         <div class="notif-act-icon ${iconBg}" ${profileNavAttr} style="width:44px;height:44px;border-radius:50%;flex-shrink:0;overflow:hidden;position:relative;${n.senderUid?'cursor:pointer':''}">
           ${avatarHtml}
           <div class="w-full h-full flex items-center justify-center" style="${iconFallbackStyle}">
-            <i class="fa-solid ${icon} text-sm"></i>
+            ${n.senderUid
+              ? `<span class="ym-avatar-fb" style="width:100%;height:100%">${window.YM_USER_ICON_SVG}</span>`
+              : `<i class="fa-solid ${icon} text-sm"></i>`}
           </div>
         </div>
         <div style="flex:1;min-width:0;max-width:100%">
@@ -8340,9 +8393,23 @@ function _runNotifActionEl(actionEl) {
 function _runNotifCardDefault(card) {
   const notifId = card.getAttribute('data-notif-id');
   const adId = card.getAttribute('data-ad-id');
+  const type = card.getAttribute('data-notif-type') || '';
   if (!notifId) return;
   markNotifRead(notifId, false);
   card.classList.remove('unread-act');
+  // Navigasi berdasarkan TIPE notif — dijalankan di jalur click MAUPUN touchend,
+  // supaya berfungsi di mobile. (Dulu navigasi YallaFood ada di listener 'click'
+  // level document yang ke-suppress oleh preventDefault touchend di mobile → tak jalan.)
+  if (type === 'yallafood_kurir') {
+    closeNotifFullScreen();
+    setTimeout(() => { if (window.openKurirDashboard) openKurirDashboard(); }, 150);
+    return;
+  }
+  if (type === 'yallafood_seller_order') {
+    closeNotifFullScreen();
+    setTimeout(() => { if (window.openKelolaPesananYallaFood) openKelolaPesananYallaFood(); }, 150);
+    return;
+  }
   if (adId) {
     closeNotifFullScreen();
     setTimeout(() => openDetail(adId), 150);
@@ -8842,9 +8909,9 @@ function renderProfilePage() {
   const av = document.getElementById('profileAvatar');
   const initChar = (u.name||'U').charAt(0).toUpperCase();
   if (u.photoUrl && u.photoUrl.length > 0) {
-    av.innerHTML = `<img src="${u.photoUrl}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='${initChar}'"/>`;
+    av.innerHTML = `<img src="${u.photoUrl}" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>`;
   } else {
-    av.innerHTML = initChar;
+    window.ymSetAvatarFallback(av);
   }
   // Name + gold badge
   document.getElementById('profileName').textContent = u.name || u.email;
@@ -9700,8 +9767,8 @@ window.openDetail = async id => {
 
   // Avatar
   const dav=document.getElementById('detailAvatar');
-  if(p.sellerPhoto) dav.innerHTML=`<img src="${p.sellerPhoto}" class="w-full h-full object-cover"/>`;
-  else dav.innerHTML=(p.sellerName||'P').charAt(0).toUpperCase();
+  if(p.sellerPhoto) dav.innerHTML=`<img src="${p.sellerPhoto}" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>`;
+  else window.ymSetAvatarFallback(dav);
 
   // Badge on image
   const bi=document.getElementById('detailBadgeImg');
@@ -10068,7 +10135,7 @@ window.sendComment=()=>{
     if(!window._S.user){showToast('Login dulu','red');return;}
     const el=document.getElementById('commentsList');
     const div=document.createElement('div');div.className='flex gap-2 items-start';
-    div.innerHTML=`<div class="w-6 h-6 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">${(window._S.user.name||'U').charAt(0).toUpperCase()}</div>
+    div.innerHTML=`${window.ymAvatarFallback('w-6 h-6 flex-shrink-0')}
       <div class="bg-gray-50 rounded-xl px-3 py-2 flex-1"><p class="text-[10px] font-bold text-gray-700">${window._S.user.name}</p><p class="text-[11px] text-gray-600 mt-0.5">${txt.trim()}</p></div>`;
     const empty=el.querySelector('p');if(empty)empty.remove();
     el.appendChild(div);document.getElementById('commentInput').value='';
@@ -10100,8 +10167,8 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
   if(window._S.user.uid===sellerId){showToast('Ini iklan kamu sendiri','red');return;}
   // Set header
   const cra=document.getElementById('chatRoomAvatar');
-  if(sellerPhoto) cra.innerHTML=`<img src="${sellerPhoto}" class="w-full h-full object-cover"/>`;
-  else cra.innerHTML=(sellerName||'P').charAt(0).toUpperCase();
+  if(sellerPhoto) cra.innerHTML=`<img src="${sellerPhoto}" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>`;
+  else window.ymSetAvatarFallback(cra);
   document.getElementById('chatRoomName').textContent=sellerName;
   const cg=document.getElementById('chatRoomGold'); if(cg) cg.innerHTML=_embossBadgeSVG('gold');
   cg.style.display=isAdmin(window._S.activeAdData?.sellerEmail||'')?'inline':'none';
@@ -11092,8 +11159,8 @@ function renderChatListUI(chats, query='') {
       const avatarHtml = otherPhoto
         ? `<img src="${otherPhoto}" class="w-12 h-12 rounded-full object-cover"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
-           /><div class="w-12 h-12 rounded-full bg-primary text-white font-black text-base items-center justify-center" style="display:none">${initials}</div>`
-        : `<div class="w-12 h-12 rounded-full bg-primary text-white font-black text-base flex items-center justify-center">${initials}</div>`;
+           />${window.ymAvatarFallback('w-12 h-12', 'display:none')}`
+        : window.ymAvatarFallback('w-12 h-12');
 
       // Deteksi apakah pesan terakhir dikirim oleh saya
       const lastSenderId = ch.last_sender_id || ch.lastSenderId || '';
@@ -11258,8 +11325,8 @@ window.viewSellerStore = async function(sellerUid) {
   const sellerEmail = userRow?.email     || (sellerAds[0]?.sellerEmail) || '';
   const adminSeller = isAdmin(sellerEmail);
   // Set etalase header
-  if(sellerPhoto) eav.innerHTML = `<img src="${sellerPhoto}" class="w-full h-full object-cover"/>`;
-  else eav.innerHTML = (sellerName||'P').charAt(0).toUpperCase();
+  if(sellerPhoto) eav.innerHTML = `<img src="${sellerPhoto}" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>`;
+  else window.ymSetAvatarFallback(eav);
   document.getElementById('etalaseName').textContent = sellerName;
   const _eg=document.getElementById('etalaseGold'); if(_eg){_eg.style.display=adminSeller?'inline-flex':'none'; if(adminSeller)_eg.innerHTML=_embossBadgeSVG('gold');}
   // ── Inject verification badge di nama store ──
@@ -17478,8 +17545,8 @@ function renderYcUserList() {
       ? `<img src="${photoUrl}" alt="${initial}" loading="lazy"
            style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0"
            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
-         /><div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#10B981,#059669);align-items:center;justify-content:center;flex-shrink:0;display:none"><span style="color:#fff;font-weight:900;font-size:18px">${initial}</span></div>`
-      : `<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#10B981,#059669);display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-weight:900;font-size:18px">${initial}</span></div>`;
+         />${window.ymAvatarFallback('', 'width:48px;height:48px;flex-shrink:0;display:none')}`
+      : window.ymAvatarFallback('', 'width:48px;height:48px;flex-shrink:0');
     return `<div onclick="openYcAdminChat('${uid}','${safeName}')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #f3f4f6;cursor:pointer;background:${showBadge?'#f0fdf4':'#fff'}" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='${showBadge?'#f0fdf4':'#fff'}'">
       <div style="position:relative;flex-shrink:0;display:flex;align-items:center;justify-content:center">${avatarHtml}</div>
       <div style="flex:1;min-width:0">
@@ -23157,7 +23224,7 @@ window.openFoodDetail = async function(adId) {
     <div class="px-4 pt-6 pb-8">
       <h4 class="font-bold text-sm text-gray-800 mb-3">Info Penjual</h4>
       <button onclick="_yfOpenSellerStore('${ad.seller_uid}')" class="flex items-center gap-3 w-full text-left hover:opacity-80 transition-opacity">
-        <div id="yfSellerAvatar" class="w-12 h-12 rounded-full bg-primary text-white text-base font-black flex items-center justify-center overflow-hidden flex-shrink-0">${ad.seller_photo ? `<img src="${ad.seller_photo}" class="w-full h-full object-cover"/>` : (ad.seller_name || 'P').charAt(0).toUpperCase()}</div>
+        <div id="yfSellerAvatar" class="w-12 h-12 rounded-full ym-avatar-fb overflow-hidden flex-shrink-0">${ad.seller_photo ? `<img src="${ad.seller_photo}" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>` : window.YM_USER_ICON_SVG}</div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1 flex-wrap">
             <p id="yfSellerName" class="font-semibold text-sm lc1" style="color:#111827">${ad.seller_name || ''}</p>
@@ -23670,8 +23737,8 @@ async function _yfLoadTracking() {
         ${o.courier_id ? `
         <div class="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-100">
           <div class="flex items-center gap-2 min-w-0 cursor-pointer" onclick="_yfOpenKurirProfile('${o.courier_id}','${o.id}','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')">
-            <div class="w-8 h-8 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
-              ${courierPhotoMap[o.courier_id] ? `<img src="${courierPhotoMap[o.courier_id]}" class="w-full h-full object-cover"/>` : `<i class="fa-solid fa-motorcycle text-gray-400 text-xs"></i>`}
+            <div class="w-8 h-8 rounded-full ym-avatar-fb overflow-hidden flex-shrink-0">
+              ${courierPhotoMap[o.courier_id] ? `<img src="${courierPhotoMap[o.courier_id]}" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>` : window.YM_USER_ICON_SVG}
             </div>
             <p class="text-sm font-semibold truncate" style="color:#111827">${o.courier_name || 'Kurir'}</p>
           </div>
@@ -23741,8 +23808,8 @@ window._yfOpenKurirProfile = async function(kurirId, orderId, courierName) {
     const uRows = uRes.ok ? await uRes.json() : [];
     const u = uRows[0];
     document.getElementById('yfKurirProfileName').textContent = u?.name || 'Kurir';
-    if (u?.photo_url) avEl.innerHTML = `<img src="${u.photo_url}" class="w-full h-full object-cover"/>`;
-    else avEl.textContent = (u?.name || 'K').charAt(0).toUpperCase();
+    if (u?.photo_url) avEl.innerHTML = `<img src="${u.photo_url}" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>`;
+    else window.ymSetAvatarFallback(avEl);
   } catch (e) {}
 
   // Jumlah Pengantaran = hitung langsung dari food_orders berstatus 'selesai' —
@@ -24305,7 +24372,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
   <div id="yfKurirProfileSheetInner" class="bg-white w-full" style="max-width:480px;max-height:50vh;overflow-y:auto;border-radius:24px 24px 0 0;position:relative;padding:24px 20px;transform:translateY(100%);transition:transform .3s ease-out">
     <button onclick="_yfCloseKurirProfile()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100" style="position:absolute;top:12px;right:12px"><i class="fa-solid fa-xmark text-gray-500"></i></button>
     <div style="display:flex;flex-direction:column;align-items:center;padding-top:8px">
-      <div id="yfKurirProfileAvatar" class="rounded-full bg-primary text-white font-black flex items-center justify-center overflow-hidden flex-shrink-0" style="width:80px;height:80px;font-size:28px">K</div>
+      <div id="yfKurirProfileAvatar" class="rounded-full ym-avatar-fb overflow-hidden flex-shrink-0" style="width:80px;height:80px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <h3 id="yfKurirProfileName" class="font-bold text-lg mt-3 text-center" style="color:#111827"></h3>
       <div class="stat-strip mt-4" style="max-width:320px;width:100%">
         <div class="stat-item"><p class="stat-num colored" id="yfKurirProfileDeliveries">0</p><p class="stat-label">Pengantaran</p></div>
@@ -24743,31 +24810,11 @@ async function _yfNotifySeller(order) {
   } catch (e) { console.warn('[YallaFood Seller] gagal kirim notifikasi bel:', e.message); }
 }
 
-// Hook klik TAMBAHAN (bukan pengganti) di atas listener notif yang sudah ada —
-// hanya menambah redirect ke Dashboard Kurir khusus notif type 'yallafood_kurir'.
-// Listener default (markNotifRead dkk) tetap jalan apa adanya, tidak disentuh.
-document.addEventListener('click', function(e) {
-  const card = e.target.closest('.notif-act-item');
-  if (!card) return;
-  const nid = card.getAttribute('data-notif-id');
-  if (!nid) return;
-  window._supaFetch(`/rest/v1/notifications?id=eq.${encodeURIComponent(nid)}&select=type&limit=1`)
-    .then(r => r.ok ? r.json() : [])
-    .then(rows => {
-      if (rows[0]?.type === 'yallafood_kurir') {
-        setTimeout(() => {
-          if (typeof closeNotifFullScreen === 'function') closeNotifFullScreen();
-          openKurirDashboard();
-        }, 150);
-      } else if (rows[0]?.type === 'yallafood_seller_order') {
-        setTimeout(() => {
-          if (typeof closeNotifFullScreen === 'function') closeNotifFullScreen();
-          openKelolaPesananYallaFood();
-        }, 150);
-      }
-    })
-    .catch(() => {});
-});
+// Navigasi klik notif YallaFood (kurir & seller) sekarang ditangani langsung di
+// _runNotifCardDefault (jalur click + touchend), supaya berfungsi di mobile.
+// Listener document lama DIHAPUS: dulu ia hanya menangkap 'click' yang di mobile
+// ke-suppress preventDefault touchend (jadi tak jalan), dan di desktop malah
+// berpotensi navigasi ganda. Tidak ada lagi hook terpisah di sini.
 
 // ============================================================
 // 📶 RECOVERY SAAT TAB/APP KEMBALI AKTIF — event-driven, BUKAN
