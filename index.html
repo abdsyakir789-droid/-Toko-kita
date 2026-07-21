@@ -15811,22 +15811,33 @@ window.toggleShopBlock = async function(shopId, currentlyActive) {
   if (!confirm(confirmMsg)) return;
   try {
     const item = (window._shopsAdminData||[]).find(x => String(x.id) === String(shopId));
+    // return=representation + verifikasi baris: kalau 0 baris (mis. RLS admin
+    // belum ada / gagal senyap), JANGAN anggap sukses. Dulu return=minimal bikin
+    // PATCH 0-baris tetap "sukses" → tombol balik ke Blokir saat re-fetch.
     const res = await window._supaFetch('/rest/v1/shops?id=eq.' + shopId, {
       method: 'PATCH',
-      prefer: 'return=minimal',
+      prefer: 'return=representation',
       body: JSON.stringify({ is_active: willActivate })
     });
     if (!res.ok) throw new Error(await res.text());
+    const _sRows = await res.json().catch(() => []);
+    if (!Array.isArray(_sRows) || _sRows.length === 0) {
+      throw new Error('perubahan status toko tidak tersimpan (izin ditolak)');
+    }
     // Blokir/aktifkan AKUN pemilik juga (users.is_blocked) — ini yang menegakkan
     // larangan posting iklan & transaksi, bukan sekadar status toko.
     const ownerUid = item && item.user_id;
     if (ownerUid) {
       const uRes = await window._supaFetch('/rest/v1/users?uid=eq.' + ownerUid, {
         method: 'PATCH',
-        prefer: 'return=minimal',
+        prefer: 'return=representation',
         body: JSON.stringify({ is_blocked: !willActivate })
       });
       if (!uRes.ok) throw new Error(await uRes.text());
+      const _uRows = await uRes.json().catch(() => []);
+      if (!Array.isArray(_uRows) || _uRows.length === 0) {
+        throw new Error('status blokir akun tidak tersimpan (izin ditolak)');
+      }
       // Kalau admin memblokir dirinya/akun yang sedang login, sinkronkan state lokal
       if (window._S && window._S.user && window._S.user.uid === ownerUid) {
         window._S.user.is_blocked = !willActivate;
@@ -22725,7 +22736,7 @@ window.closeKelolaToko = function() {
       <span style="font-size:9px;font-weight:600;color:#111827;line-height:1;white-space:nowrap">Pesanan Masuk</span>
     </button>
   </div>
-  <div id="yallaFoodList" class="flex-1 overflow-y-auto px-3 py-3" style="column-count:2;column-gap:12px"></div>
+  <div id="yallaFoodList" class="flex-1 overflow-y-auto px-3 py-3" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;align-content:start;min-height:0;-webkit-overflow-scrolling:touch"></div>
 </div>
 
 <!-- YALLAFOOD DETAIL + PESAN SEKARANG -->
@@ -23119,6 +23130,7 @@ function _yfBtnBadge(n) {
 
 async function _yfLoadList() {
   const box = document.getElementById('yallaFoodList');
+  box.style.display = 'block';
   box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat menu...</p>';
   try {
     const r = await window._supaFetch('/rest/v1/ads?is_yallafood=eq.true&select=*&order=created_at.desc');
@@ -23129,13 +23141,13 @@ async function _yfLoadList() {
       box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada menu YallaFood tersedia.</p>';
       return;
     }
-    box.style.display = 'block';
+    box.style.display = 'grid';
     box.innerHTML = rows.map(ad => {
       // Alamat kartu diambil dari yang seller tulis sendiri saat upload iklan (ads.location) —
       // BUKAN alamat toko umum. Kalau saat upload tidak diisi, tidak ditampilkan sama sekali.
       const alamat = ad.location || '';
       return `
-      <div class="bg-[#f8fafc] rounded-2xl overflow-hidden cursor-pointer flex flex-col" style="break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:12px" onclick="openFoodDetail('${ad.id}')">
+      <div class="bg-[#f8fafc] rounded-2xl overflow-hidden cursor-pointer flex flex-col" onclick="openFoodDetail('${ad.id}')">
         <div class="relative w-full" style="aspect-ratio:1/1;background:#f3f4f6">
           <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0" onerror="this.style.background='#eee'"/>
         </div>
