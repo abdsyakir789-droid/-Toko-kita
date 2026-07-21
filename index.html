@@ -14022,8 +14022,36 @@ window.previewPhoto=input=>{
 window._isAccountBlocked = function(){
   return !!(window._S && window._S.user && window._S.user.is_blocked);
 };
-window._guardBlocked = function(){
-  if(window._isAccountBlocked()){
+
+// Cek status blokir TERBARU dari DB, tapi di-throttle: hasil dipakai ulang
+// selama 60 detik supaya transaksi beruntun tidak bikin request berkali-kali.
+// Ini yang menangkap user yang diblokir SELAGI session-nya masih aktif (belum
+// reload app) — state lokal is_blocked cuma di-load sekali saat login.
+window._blockCheckCache = { ts: 0, blocked: false };
+window._refreshBlockStatus = async function(){
+  const uid = window._S && window._S.user && window._S.user.uid;
+  if(!uid) return window._isAccountBlocked();
+  // Pakai cache kalau baru saja dicek (< 60 detik lalu)
+  if(Date.now() - window._blockCheckCache.ts < 60000){
+    return window._blockCheckCache.blocked;
+  }
+  try{
+    const r = await window._supaFetch('/rest/v1/users?uid=eq.'+encodeURIComponent(uid)+'&select=is_blocked&limit=1');
+    if(r.ok){
+      const rows = await r.json();
+      const blocked = !!(rows[0] && rows[0].is_blocked);
+      window._blockCheckCache = { ts: Date.now(), blocked };
+      if(window._S && window._S.user) window._S.user.is_blocked = blocked; // sinkron state lokal
+      return blocked;
+    }
+  }catch(e){ console.warn('[blockCheck]', e.message); }
+  // Kalau cek gagal (jaringan/DB), fallback ke state lokal — jangan halangi transaksi
+  return window._isAccountBlocked();
+};
+
+window._guardBlocked = async function(){
+  const blocked = await window._refreshBlockStatus();
+  if(blocked){
     showToast('Akun Anda sedang dibatasi','red');
     return true;
   }
@@ -14031,7 +14059,7 @@ window._guardBlocked = function(){
 };
 
 window.submitAd=async()=>{
-  if(window._guardBlocked()) return;
+  if(await window._guardBlocked()) return;
   // Cegah klik berkali-kali selagi proses upload berjalan (dulu bisa
   // menghasilkan banyak iklan duplikat kalau user tidak sabar/klik ulang).
   const _submitBtn = document.getElementById('submitAdBtn');
@@ -19737,7 +19765,7 @@ window.playCheckoutSuccessSound = function(){
 };
 
 window.checkoutToChat = async function(){
-  if(window._guardBlocked()) return;
+  if(await window._guardBlocked()) return;
   // ── Guard anti double-submit: kalau masih ada proses checkout berjalan
   // (misal jaringan lemot, user tap tombol berkali-kali), TOLAK eksekusi baru
   // sampai yang sebelumnya selesai (sukses/gagal/dibatalkan). ──
@@ -23382,7 +23410,7 @@ window.yfCloseOrderSummary = function() {
 };
 
 window.yfSubmitFoodOrder = async function() {
-  if(window._guardBlocked()) return;
+  if(await window._guardBlocked()) return;
   const p = window._yfState.pendingOrder;
   const user = window._S?.user;
   if (!p || !user?.uid) { showToast('Sesi tidak valid, coba login ulang', 'red'); return; }
