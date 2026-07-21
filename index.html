@@ -5145,10 +5145,37 @@ window.deleteAd = async function(adId) {
 
   try {
     // 1. Hapus dari Supabase via _supaFetch
+    //    return=representation supaya kita bisa VERIFIKASI baris benar-benar terhapus.
+    //    Dulu pakai return=minimal → kalau RLS menolak (mis. admin hapus iklan user
+    //    lain tanpa izin), DELETE balas 204 sukses walau 0 baris → "terhapus" palsu.
     const _delRes = await window._supaFetch('/rest/v1/ads?id=eq.' + adId, {
-      method: 'DELETE', headers: { 'Prefer': 'return=minimal' }
+      method: 'DELETE', prefer: 'return=representation'
     });
     if(!_delRes.ok) throw new Error('Gagal hapus dari DB: ' + _delRes.status);
+    const _deletedRows = await _delRes.json().catch(() => []);
+    if(!Array.isArray(_deletedRows) || _deletedRows.length === 0) {
+      throw new Error('Iklan tidak terhapus (izin ditolak / sudah terhapus). Coba lagi.');
+    }
+
+    // 1b. Kalau ADMIN yang menghapus iklan MILIK USER LAIN → beri tahu pemiliknya
+    //     lewat notifikasi lonceng. Dibungkus try sendiri supaya gagal notif TIDAK
+    //     menggagalkan proses hapus yang sudah sukses.
+    try {
+      if(isAdmin(u.email) && ad.sellerUid && ad.sellerUid !== u.uid) {
+        await window._supaFetch('/rest/v1/notifications', {
+          method: 'POST', prefer: 'return=minimal',
+          body: JSON.stringify({
+            to_uid: ad.sellerUid, user_id: ad.sellerUid,
+            type: 'iklan_dihapus',
+            message: 'Iklan "' + (ad.title || '') + '" Anda telah dihapus oleh admin karena tidak sesuai standar YallaMart.',
+            sender_name: 'Tim YallaMart',
+            ad_title: ad.title || '',
+            is_read: false,
+            created_at: new Date().toISOString()
+          })
+        });
+      }
+    } catch(_eNotif) { console.warn('[deleteAd] notif ke pemilik gagal:', _eNotif.message); }
 
     // 2. Hapus foto dari Cloudinary/R2
     const _adImgUrl = ad.imgUrl || ad.img || '';
@@ -8187,13 +8214,17 @@ window.renderNotifFull = function(notifs) {
 
     actList.innerHTML = sorted.slice(0,30).map(n => {
       const isUnread = !n.read;
-      const icon = n.type==='follow'    ? 'fa-user-plus'
-                 : n.type==='chat'      ? 'fa-comment-dots'
-                 : n.type==='review'    ? 'fa-star'
+      const icon = n.type==='follow'         ? 'fa-user-plus'
+                 : n.type==='chat'           ? 'fa-comment-dots'
+                 : n.type==='review'         ? 'fa-star'
+                 : n.type==='peringatan'     ? 'fa-triangle-exclamation'
+                 : n.type==='iklan_dihapus'  ? 'fa-trash-can'
                  : 'fa-bell';
-      const iconBg = n.type==='follow'  ? 'bg-emerald-100 text-emerald-600'
-                   : n.type==='chat'    ? 'bg-blue-100 text-blue-500'
-                   : n.type==='review'  ? 'bg-amber-100 text-amber-500'
+      const iconBg = n.type==='follow'        ? 'bg-emerald-100 text-emerald-600'
+                   : n.type==='chat'          ? 'bg-blue-100 text-blue-500'
+                   : n.type==='review'        ? 'bg-amber-100 text-amber-500'
+                   : n.type==='peringatan'    ? 'bg-amber-100 text-amber-600'
+                   : n.type==='iklan_dihapus' ? 'bg-red-100 text-red-500'
                    : 'bg-gray-100 text-gray-500';
       const timeStr = n.createdAt?.seconds
         ? _relativeTimeShort(n.createdAt.seconds)
@@ -9126,6 +9157,9 @@ window.renderProducts = () => {
           ${currentUserIsAdmin ? `
           <div class="pc-dropdown-item" id="rec-btn-${p.id||''}" onclick="event.stopPropagation();pcToggleRecommend('${p.id||''}')">
             <i class="bi bi-star" style="font-size:13px;color:#F59E0B"></i> <span id="rec-label-${p.id||''}">Rekomendasikan</span>
+          </div>
+          <div class="pc-dropdown-item" onclick="event.stopPropagation();pcWarnUser('${p.id||''}','${encodeURIComponent(p.sellerUid||p.uid||'')}','${encodeURIComponent(name)}')">
+            <i class="bi bi-exclamation-triangle" style="font-size:13px;color:#F59E0B"></i> Beri Peringatan
           </div>` : ''}
         </div>` : ''}
       </div>
@@ -9234,6 +9268,100 @@ window.pcDeleteProduct = async function(pid, encodedName) {
   if (window.deleteAd) { await deleteAd(pid); }
   else if (window.removeAd) { await removeAd(pid); }
   else { showToast('Fitur hapus produk tidak tersedia', 'red'); }
+};
+
+// ── Beri Peringatan (admin only) ─────────────────────────────────
+// Kirim notifikasi peringatan ke lonceng pemilik iklan. TIDAK menyentuh
+// alur hapus produk sama sekali — ini item dropdown terpisah.
+window._YF_WARN_TEMPLATES = [
+  'Foto iklan tidak sesuai / menyesatkan.',
+  'Harga tidak wajar atau menyesatkan.',
+  'Kategori produk tidak sesuai.',
+  'Deskripsi mengandung konten terlarang.',
+  'Produk melanggar standar komunitas YallaMart.'
+];
+
+window.pcWarnUser = function(pid, encUid, encName) {
+  document.querySelectorAll('.pc-dropdown.open').forEach(el => el.classList.remove('open'));
+  const u = window._S?.user;
+  if(!u || !isAdmin(u.email)) { showToast('Akses ditolak', 'red'); return; }
+  const sellerUid = decodeURIComponent(encUid || '');
+  const adTitle = decodeURIComponent(encName || '');
+  if(!sellerUid) { showToast('UID pemilik tidak ditemukan', 'red'); return; }
+  if(sellerUid === u.uid) { showToast('Ini iklan Anda sendiri', 'red'); return; }
+  _openWarnModal(pid, sellerUid, adTitle);
+};
+
+function _openWarnModal(adId, sellerUid, adTitle) {
+  // Buang modal lama kalau ada
+  const _old = document.getElementById('warnUserOverlay');
+  if(_old) _old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'warnUserOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:20px';
+  const tplBtns = window._YF_WARN_TEMPLATES.map(t =>
+    `<button type="button" onclick="_warnFillTemplate(this)" data-tpl="${encodeURIComponent(t)}" style="text-align:left;background:#FEF3C7;border:1px solid #FDE68A;color:#92400E;font-size:11px;padding:6px 10px;border-radius:8px;cursor:pointer">${t}</button>`
+  ).join('');
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:18px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="padding:16px 18px;background:#F59E0B;color:#fff;display:flex;align-items:center;gap:8px">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span style="font-weight:800;font-size:15px">Beri Peringatan</span>
+      </div>
+      <div style="padding:16px 18px">
+        <p style="font-size:12px;color:#6B7280;margin:0 0 10px">Iklan: <span style="font-weight:700;color:#111827">${_sadEscHtml(adTitle) || '(tanpa judul)'}</span></p>
+        <p style="font-size:11px;color:#9CA3AF;margin:0 0 6px">Alasan cepat (opsional):</p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">${tplBtns}</div>
+        <label style="font-size:11px;color:#9CA3AF;display:block;margin-bottom:6px">Isi peringatan:</label>
+        <textarea id="warnReasonInput" rows="3" placeholder="Tulis alasan peringatan..." style="width:100%;border:1px solid #E5E7EB;border-radius:10px;padding:10px;font-size:13px;resize:vertical;outline:none"></textarea>
+      </div>
+      <div style="padding:0 18px 18px;display:flex;gap:8px">
+        <button type="button" onclick="_closeWarnModal()" style="flex:1;background:#F3F4F6;color:#374151;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:700;cursor:pointer">Batal</button>
+        <button type="button" id="warnSendBtn" onclick="_sendWarning('${adId}','${sellerUid}','${encodeURIComponent(adTitle)}')" style="flex:1;background:#F59E0B;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:700;cursor:pointer">Kirim Peringatan</button>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', function(e){ if(e.target === overlay) _closeWarnModal(); });
+  document.body.appendChild(overlay);
+};
+
+window._warnFillTemplate = function(btn) {
+  const input = document.getElementById('warnReasonInput');
+  if(input) input.value = decodeURIComponent(btn.dataset.tpl || '');
+};
+
+window._closeWarnModal = function() {
+  const o = document.getElementById('warnUserOverlay');
+  if(o) o.remove();
+};
+
+window._sendWarning = async function(adId, sellerUid, encTitle) {
+  const u = window._S?.user;
+  if(!u || !isAdmin(u.email)) { showToast('Akses ditolak', 'red'); return; }
+  const reason = (document.getElementById('warnReasonInput')?.value || '').trim();
+  if(!reason) { showToast('Tulis alasan peringatan dulu', 'red'); return; }
+  const adTitle = decodeURIComponent(encTitle || '');
+  const btn = document.getElementById('warnSendBtn');
+  if(btn) { btn.disabled = true; btn.textContent = 'Mengirim...'; }
+  try {
+    const res = await window._supaFetch('/rest/v1/notifications', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify({
+        to_uid: sellerUid, user_id: sellerUid,
+        type: 'peringatan',
+        message: 'Peringatan untuk iklan "' + adTitle + '": ' + reason,
+        sender_name: 'Tim YallaMart',
+        ad_id: adId, ad_title: adTitle,
+        is_read: false,
+        created_at: new Date().toISOString()
+      })
+    });
+    if(!res.ok) throw new Error('Gagal kirim (' + res.status + ')');
+    showToast('✅ Peringatan terkirim ke pemilik iklan', 'green');
+    _closeWarnModal();
+  } catch(e) {
+    if(btn) { btn.disabled = false; btn.textContent = 'Kirim Peringatan'; }
+    showToast('Gagal kirim peringatan: ' + (e.message||e), 'red');
+  }
 };
 
 // ── Sponsor / Rekomendasi (admin only) ────────────────────────
@@ -15874,21 +16002,16 @@ window.toggleGlobalAds = async function() {
   const newState = !currentlyOn;
   applyToggleUI(newState); // optimistic
   try {
-    // value tipe jsonb — kirim sebagai JSON.stringify(boolean)
-    // Pakai PATCH ke row existing berdasarkan key
-    const _res = await window._supaFetch('/rest/v1/settings?key=eq.isGlobalAdsOpen', {
-      method: 'PATCH',
-      headers: { 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ value: newState })
+    // UPSERT sekali jalan: insert kalau baris belum ada, update kalau sudah ada.
+    // Butuh UNIQUE(key) di tabel settings (sudah ditambahkan) supaya on_conflict jalan.
+    // Ini menggantikan pola lama PATCH-lalu-mungkin-POST yang GAGAL SENYAP kalau
+    // baris belum ada (PATCH 0 baris tetap balas 204 sukses → tidak pernah tersimpan).
+    const _res = await window._supaFetch('/rest/v1/settings?on_conflict=key', {
+      method: 'POST',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+      body: JSON.stringify({ key: 'isGlobalAdsOpen', value: newState })
     });
-    if (!_res.ok) {
-      // Kalau row belum ada, buat baru
-      await window._supaFetch('/rest/v1/settings', {
-        method: 'POST',
-        headers: { 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ key: 'isGlobalAdsOpen', value: newState })
-      });
-    }
+    if (!_res.ok) throw new Error('Gagal simpan status (' + _res.status + ')');
     // Update state global supaya cek posting iklan langsung terasa
     window._globalAdsOpen = newState;
     // Reload seller cache supaya iklan langsung update
