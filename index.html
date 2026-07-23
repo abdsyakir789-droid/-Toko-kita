@@ -24122,7 +24122,7 @@ function _yfSubscribeSellerRealtime() {
 window._kurirState = { profile: null };
 
 function _kurirStatusLabel(s) {
-  return { pending: 'Menunggu Verifikasi Admin', active: 'Aktif', rejected: 'Ditolak' }[s] || s;
+  return { pending: 'Menunggu Verifikasi Admin', active: 'Aktif', rejected: 'Ditolak', blocked: 'Diblokir' }[s] || s;
 }
 
 async function _kurirFetchOwnProfile(uid) {
@@ -24174,6 +24174,14 @@ window.openDaftarKurir = async function() {
         <p class="text-sm text-gray-500">Hubungi admin YallaCare untuk info lebih lanjut.</p>
       </div>
     `;
+  } else if (profile.status === 'blocked') {
+    body.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fa-solid fa-ban text-red-400 text-4xl mb-3"></i>
+        <p class="font-bold text-base mb-1">Akun kurir diblokir</p>
+        <p class="text-sm text-gray-500">Fitur pesanan YallaFood dinonaktifkan sementara. Hubungi admin YallaCare untuk info lebih lanjut.</p>
+      </div>
+    `;
   } else {
     body.innerHTML = `
       <div class="text-center py-6">
@@ -24214,7 +24222,11 @@ window.openKurirDashboard = async function() {
   if (!user?.uid) { showToast('Login dulu', 'red'); return; }
   const profile = await _kurirFetchOwnProfile(user.uid);
   window._kurirState.profile = profile;
-  if (!profile || profile.status !== 'active') { showToast('Kamu belum jadi mitra kurir aktif', 'red'); return; }
+  if (!profile || profile.status !== 'active') {
+    if (profile && profile.status === 'blocked') { _yfShowKurirBlockedPopup(); }
+    else { showToast('Kamu belum jadi mitra kurir aktif', 'red'); }
+    return;
+  }
   document.getElementById('kurirDashboard').style.display = 'flex';
   document.body.style.overflow = 'hidden';
   await _kurirLoadWaitingRoom();
@@ -24228,6 +24240,42 @@ window.openKurirDashboard = async function() {
 window.closeKurirDashboard = function() {
   document.getElementById('kurirDashboard').style.display = 'none';
   document.body.style.overflow = '';
+};
+
+// ── POPUP PERINGATAN: kurir YallaFood diblokir admin ──────────
+// Dibangun sekali secara dinamis (tidak menyentuh HTML lain). Dipanggil
+// saat kurir berstatus 'blocked' menekan tombol 'Pesanan YallaFood'.
+window._yfShowKurirBlockedPopup = function() {
+  let ov = document.getElementById('yfKurirBlockedOverlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'yfKurirBlockedOverlay';
+    ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:9000;background:rgba(17,24,39,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:24px';
+    ov.onclick = function(e) { if (e.target === ov) window._yfCloseKurirBlockedPopup(); };
+    ov.innerHTML = `
+      <div id="yfKurirBlockedCard" style="background:#fff;width:100%;max-width:360px;border-radius:24px;padding:30px 24px 22px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.28);transform:translateY(14px) scale(.95);opacity:0;transition:transform .3s cubic-bezier(.22,1,.36,1),opacity .3s">
+        <div style="width:74px;height:74px;margin:0 auto 18px;border-radius:50%;background:linear-gradient(135deg,#FEE2E2,#FECACA);display:flex;align-items:center;justify-content:center">
+          <div style="width:54px;height:54px;border-radius:50%;background:#EF4444;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(239,68,68,.4)">
+            <i class="fa-solid fa-user-lock" style="color:#fff;font-size:22px"></i>
+          </div>
+        </div>
+        <h3 style="font-size:18px;font-weight:800;color:#111827;margin:0 0 8px;letter-spacing:-.01em">Akun Dinonaktifkan</h3>
+        <p style="font-size:13.5px;line-height:1.65;color:#111827;margin:0 0 22px">Maaf, akun mitra kurir YallaFood Anda sedang dinonaktifkan. Segera hubungi admin untuk info lebih lanjut.</p>
+        <button onclick="window._yfCloseKurirBlockedPopup()" style="width:100%;background:#10B981;color:#fff;font-weight:700;font-size:14px;border:none;border-radius:16px;padding:13px;cursor:pointer">Mengerti</button>
+      </div>`;
+    document.body.appendChild(ov);
+  }
+  ov.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  const card = document.getElementById('yfKurirBlockedCard');
+  requestAnimationFrame(() => { card.style.transform = 'translateY(0) scale(1)'; card.style.opacity = '1'; });
+};
+window._yfCloseKurirBlockedPopup = function() {
+  const ov = document.getElementById('yfKurirBlockedOverlay');
+  if (!ov) return;
+  const card = document.getElementById('yfKurirBlockedCard');
+  if (card) { card.style.transform = 'translateY(14px) scale(.95)'; card.style.opacity = '0'; }
+  setTimeout(() => { ov.style.display = 'none'; document.body.style.overflow = ''; }, 220);
 };
 
 async function _kurirLoadWaitingRoom() {
@@ -24381,11 +24429,15 @@ window.loadKurirAdminUI = async function() {
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pendaftar kurir.</p>'; return; }
     box.innerHTML = rows.map(c => `
       <div class="bg-white rounded-2xl p-3.5 border border-gray-100 mb-2.5">
-        <div class="flex items-center justify-between mb-1">
-          <p class="font-bold text-sm text-gray-800">${c.name}</p>
-          <span class="text-[10px] font-bold px-2 py-1 rounded-full ${c.status === 'active' ? 'bg-pl text-primary' : c.status === 'rejected' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}">${_kurirStatusLabel(c.status)}</span>
+        <div class="flex items-center justify-between mb-1 gap-2">
+          <p class="font-bold text-sm text-gray-800 min-w-0 truncate">${c.name}</p>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            ${c.status === 'active' ? `<button onclick="kurirAdminSetStatus('${c.id}','blocked')" class="text-[10px] font-bold px-3 py-1 rounded-full bg-red-500 text-white shadow-sm active:scale-95 transition-transform">Blokir</button>` : ''}
+            ${c.status === 'blocked' ? `<button onclick="kurirAdminSetStatus('${c.id}','active')" class="text-[10px] font-bold px-3 py-1 rounded-full bg-primary text-white shadow-sm active:scale-95 transition-transform">Buka Blokir</button>` : ''}
+            <span class="text-[10px] font-bold px-2 py-1 rounded-full ${c.status === 'active' ? 'bg-pl text-primary' : (c.status === 'rejected' || c.status === 'blocked') ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}">${_kurirStatusLabel(c.status)}</span>
+          </div>
         </div>
-        <p class="text-xs text-gray-500 mb-2.5">Daerah: ${c.coverage_area || '-'}</p>
+        <p class="text-xs text-gray-500 ${c.status === 'pending' ? 'mb-2.5' : ''}">Daerah: ${c.coverage_area || '-'}</p>
         ${c.status === 'pending' ? `
         <div style="display:flex;gap:8px">
           <button onclick="kurirAdminSetStatus('${c.id}','active')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Setujui</button>
@@ -24401,12 +24453,16 @@ window.loadKurirAdminUI = async function() {
 window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
   try {
     const admin = window._S?.user;
+    // return=representation supaya bisa deteksi PATCH 0-baris (RLS/senyap), bukan hanya res.ok
     const res = await window._supaFetch(`/rest/v1/courier_profiles?id=eq.${encodeURIComponent(courierRowId)}`, {
-      method: 'PATCH', prefer: 'return=minimal',
+      method: 'PATCH', prefer: 'return=representation',
       body: JSON.stringify({ status: newStatus, approved_at: new Date().toISOString(), approved_by: admin?.email || '' })
     });
     if (!res.ok) throw new Error('Gagal update status kurir');
-    showToast(newStatus === 'active' ? 'Kurir disetujui!' : 'Kurir ditolak', 'green');
+    const updated = await res.json().catch(() => []);
+    if (!Array.isArray(updated) || !updated.length) throw new Error('Perubahan tidak tersimpan (0 baris)');
+    const msg = { active: 'Kurir diaktifkan!', rejected: 'Kurir ditolak', blocked: 'Kurir diblokir' }[newStatus] || 'Status kurir diperbarui';
+    showToast(msg, 'green');
     await window.loadKurirAdminUI();
   } catch (e) {
     showToast('Gagal: ' + e.message, 'red');
@@ -24613,16 +24669,18 @@ async function _yfRefreshKurirMenuLabel() {
   const deskBtn = document.getElementById('menuKurirBtnDesktop');
   if (!mobBtn && !deskBtn) return;
   const user = window._S?.user;
-  let isActive = false;
+  let status = null;
   if (user?.uid) {
     try {
       const r = await window._supaFetch(`/rest/v1/courier_profiles?uid=eq.${encodeURIComponent(user.uid)}&select=status&limit=1`);
       const rows = r.ok ? await r.json() : [];
-      isActive = rows[0]?.status === 'active';
+      status = rows[0]?.status || null;
     } catch (e) { /* fail-open ke label default */ }
   }
-  const label = isActive ? 'Pesanan YallaFood' : 'Daftar Kurir YallaFood';
-  const action = isActive ? 'openKurirDashboard()' : 'openDaftarKurir()';
+  // Kurir diblokir: tombol tetap tampil sbg 'Pesanan YallaFood' tapi klik = popup peringatan,
+  // dashboard TIDAK bisa dibuka sampai admin buka blokir (status kembali 'active').
+  const label = (status === 'active' || status === 'blocked') ? 'Pesanan YallaFood' : 'Daftar Kurir YallaFood';
+  const action = status === 'active' ? 'openKurirDashboard()' : status === 'blocked' ? '_yfShowKurirBlockedPopup()' : 'openDaftarKurir()';
   if (mobBtn) mobBtn.setAttribute('onclick', action);
   if (deskBtn) deskBtn.setAttribute('onclick', action);
   const mobLabel = document.getElementById('menuKurirLabelMob');
@@ -25192,6 +25250,10 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => { _ykRefres
     <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Teks Badge <span class="text-gray-400 font-normal">(opsional)</span></label>
     <input id="popupPromoBadgeTextInput" type="text" placeholder="🎉 PROMO SPESIAL" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-3.5"/>
 
+    <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Tampil Berapa Kali / Hari *</label>
+    <input id="popupPromoMaxPerDayInput" type="number" min="1" step="1" inputmode="numeric" placeholder="1" value="1" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-1.5"/>
+    <p class="text-[10px] text-gray-400 mb-3.5">Batas berapa kali popup ini muncul ke tiap user dalam sehari (dihitung per perangkat). Reset otomatis tiap ganti hari.</p>
+
     <div class="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3 mb-4">
       <div>
         <p class="text-sm font-bold text-gray-800">Status Aktif</p>
@@ -25245,6 +25307,7 @@ async function _loadPopupPromoList() {
           <p class="font-bold text-sm lc1">${_sadEscHtml(p.title || '(Tanpa judul)')}</p>
           <p class="text-xs text-gray-400 lc1 mt-0.5">${_sadEscHtml(p.action_url || '-')}</p>
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 inline-block ${p.is_active ? 'bg-pl text-primary' : 'bg-gray-100 text-gray-400'}">${p.is_active ? 'Aktif' : 'Nonaktif'}</span>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 ml-1 inline-block bg-amber-50 text-amber-600"><i class="fa-solid fa-repeat mr-0.5"></i>${(p.max_per_day && p.max_per_day > 0) ? p.max_per_day : 1}x/hari</span>
         </div>
         <div class="flex flex-col gap-1.5 flex-shrink-0">
           <button onclick="_togglePopupPromoActive('${p.id}', ${!p.is_active})" class="w-8 h-8 flex items-center justify-center rounded-full ${p.is_active ? 'bg-amber-50 text-amber-500' : 'bg-primary/10 text-primary'}" title="${p.is_active ? 'Nonaktifkan' : 'Aktifkan'}"><i class="fa-solid ${p.is_active ? 'fa-toggle-on' : 'fa-toggle-off'} text-sm"></i></button>
@@ -25278,6 +25341,7 @@ window.openPopupPromoForm = function(existing) {
   document.getElementById('popupPromoUrlInput').value = existing?.action_url || '';
   document.getElementById('popupPromoBtnTextInput').value = existing?.button_text || 'Lihat Promo';
   document.getElementById('popupPromoBadgeTextInput').value = existing?.badge_text || '';
+  document.getElementById('popupPromoMaxPerDayInput').value = (existing && existing.max_per_day) ? existing.max_per_day : 1;
   const preview = document.getElementById('popupPromoPhotoPreview');
   preview.innerHTML = existing?.img_url
     ? `<img src="${existing.img_url}" class="w-full object-cover rounded-2xl" style="max-height:220px"/>`
@@ -25309,6 +25373,8 @@ window.savePopupPromo = async function() {
   const actionUrl = document.getElementById('popupPromoUrlInput').value.trim();
   const btnText = document.getElementById('popupPromoBtnTextInput').value.trim() || 'Lihat Promo';
   const badgeText = document.getElementById('popupPromoBadgeTextInput').value.trim() || '🎉 PROMO SPESIAL';
+  let maxPerDay = parseInt(document.getElementById('popupPromoMaxPerDayInput').value, 10);
+  if (!Number.isFinite(maxPerDay) || maxPerDay < 1) maxPerDay = 1;
   const isActive = document.getElementById('popupPromoActiveToggle').checked;
   const st = window._popupPromoState;
 
@@ -25329,7 +25395,7 @@ window.savePopupPromo = async function() {
     }
     const payload = {
       title, img_url: imgUrl, action_url: actionUrl, button_text: btnText, badge_text: badgeText,
-      is_active: isActive, updated_at: new Date().toISOString()
+      max_per_day: maxPerDay, is_active: isActive, updated_at: new Date().toISOString()
     };
     if (imgPublicId) payload.img_public_id = imgPublicId;
 
@@ -25404,15 +25470,38 @@ window._showPopupPromoAction = function(url) {
   }
 };
 
+// Tanggal lokal "YYYY-MM-DD" (bukan UTC) — supaya reset harian ikut zona waktu
+// perangkat user, bukan pukul 00:00 UTC.
+function _popupPromoTodayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
 async function _checkAndShowPopupPromo() {
   try {
-    if (sessionStorage.getItem('ym_popup_promo_shown')) return;
+    // Guard 1x per pemuatan halaman (kalau fungsi terpanggil lebih dari sekali).
+    if (window._popupPromoShownThisView) return;
     const r = await window._supaFetch('/rest/v1/popup_promo?is_active=eq.true&select=*&order=updated_at.desc&limit=1');
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) return;
     const p = rows[0];
     if (!p.img_url) return;
-    sessionStorage.setItem('ym_popup_promo_shown', '1');
+
+    // ── Frequency cap harian per perangkat ──
+    // Batas berapa kali popup ini boleh tampil dalam sehari (admin-set,
+    // fallback 1 kalau kolom belum ada / nilai tak wajar). Hitungan disimpan
+    // di localStorage {date,id,count} dan direset otomatis saat ganti hari
+    // ATAU saat popup aktif berganti (id beda) — biar promo baru mulai dari 0.
+    const maxPerDay = (p.max_per_day && p.max_per_day > 0) ? p.max_per_day : 1;
+    const today = _popupPromoTodayStr();
+    let rec = null;
+    try { rec = JSON.parse(localStorage.getItem('ym_popup_promo_cap') || 'null'); } catch (e) {}
+    if (!rec || rec.date !== today || rec.id !== p.id) rec = { date: today, id: p.id, count: 0 };
+    if (rec.count >= maxPerDay) return; // sudah mencapai batas hari ini
+
+    rec.count += 1;
+    try { localStorage.setItem('ym_popup_promo_cap', JSON.stringify(rec)); } catch (e) {}
+    window._popupPromoShownThisView = true;
     _renderPopupPromoCard(p);
   } catch (e) { console.warn('[popupPromo]', e.message); }
 }
