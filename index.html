@@ -3273,6 +3273,11 @@ h3.text-sm.font-bold.text-gray-800 {
       <span class="lucide-icon" id="btnKirimBarangIconMob"></span>
       <p style="font-size:10px;font-weight:700;color:#111827;margin:0;line-height:1.3">Kirim Barang</p>
     </button>
+    <!-- Mat'am Terdekat (YallaFood, discovery) — SELALU tampil untuk semua user, sejajar Kirim Barang. -->
+    <button id="btnMatamTerdekatMob" onclick="window.openMatamTerdekat ? openMatamTerdekat() : showToast('Fitur Mat\'am Terdekat segera hadir!','green')" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 px-2 transition-all text-center w-1/4">
+      <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></span>
+      <p style="font-size:10px;font-weight:700;color:#111827;margin:0;line-height:1.3">Mat'am Terdekat</p>
+    </button>
     <!-- Pengaturan (khusus mobile Admin — Top Bar penuh, dipindah ke sini via JS di renderUserState) -->
     <button id="btnPengaturanMobAdmin" onclick="openSettings()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 px-2 transition-all text-center w-1/4" style="display:none">
       <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span>
@@ -24468,6 +24473,182 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     showToast('Gagal: ' + e.message, 'red');
   }
 };
+</script>
+
+<!-- ============================================================
+     📍 MAT'AM TERDEKAT — peta Leaflet + jarak Haversine.
+     Namespace _mt* TERPISAH TOTAL; tidak menyentuh alur YallaFood,
+     ongkir, maupun peta lokasi toko. Sumber data: ads(is_yallafood=true)
+     digabung shops(lat & lng sudah diisi). Hanya tampil mat'am ≤ 1 km.
+     ============================================================ -->
+<style>
+  #matamTerdekatOverlay .mt-me-lbl{background:#2563eb !important;color:#fff !important;border:none !important;font-size:10px !important;font-weight:700 !important;box-shadow:0 2px 6px rgba(0,0,0,.2) !important;border-radius:8px !important;padding:2px 6px !important}
+  #matamTerdekatOverlay .mt-me-lbl::before{border-bottom-color:#2563eb !important}
+  #matamTerdekatOverlay .leaflet-popup-content{margin:10px 12px}
+</style>
+<div id="matamTerdekatOverlay" style="display:none;position:fixed;inset:0;z-index:900;background:#fff;flex-direction:column">
+  <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #f0f0f0">
+    <button onclick="closeMatamTerdekat()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100" style="flex-shrink:0"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <div style="width:34px;height:34px;border-radius:12px;background:#10B981;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0"><i class="fa-solid fa-location-dot"></i></div>
+    <div style="flex:1;min-width:0">
+      <p style="margin:0;font-weight:800;font-size:15px;color:#111827">Mat'am Terdekat</p>
+      <p id="mtSubtitle" style="margin:0;font-size:11px;color:#6b7280" class="lc1">Memuat lokasi...</p>
+    </div>
+    <button onclick="_mtLocateUser()" id="mtLocateBtn" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100" style="flex-shrink:0" title="Lokasi saya"><i class="fa-solid fa-location-crosshairs text-primary"></i></button>
+  </div>
+  <div id="mtMap" style="flex:1;min-height:0;position:relative;background:#eef2f6"></div>
+  <div id="mtList" style="flex-shrink:0;max-height:42%;overflow-y:auto;padding:10px 12px;background:#f8fafc"></div>
+</div>
+
+<script>
+(function(){
+  const RADIUS_M = 1000; // hanya mat'am dalam 1 km dari user
+  const DEFAULT_CENTER = { lat: 30.0605, lng: 31.4900 }; // fallback area Rehab, Cairo
+  let _mtMap = null, _mtLayer = null, _mtUserMarker = null;
+  let _mtUser = null;    // {lat,lng} lokasi user
+  let _mtShops = null;   // cache daftar mat'am (null=belum dimuat)
+  let _mtManual = false; // true kalau lokasi di-set manual (GPS gagal)
+
+  function _mtHaversineM(lat1, lng1, lat2, lng2) {
+    const R = 6371000, p = Math.PI / 180;
+    const dLat = (lat2 - lat1) * p, dLng = (lng2 - lng1) * p;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * p) * Math.cos(lat2 * p) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  function _mtFmt(m) { return m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1) + ' km'; }
+  function _mtEsc(s) { return String(s == null ? '' : s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+  function openMatamTerdekat() {
+    const ov = document.getElementById('matamTerdekatOverlay');
+    ov.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _mtManual = false;
+    document.getElementById('mtSubtitle').textContent = 'Memuat lokasi...';
+    document.getElementById('mtList').innerHTML = '';
+    _mtInitMap();
+    _mtFetchShops();   // ambil data mat'am (async)
+    mtLocate();        // ambil lokasi user (async)
+  }
+
+  function closeMatamTerdekat() {
+    const ov = document.getElementById('matamTerdekatOverlay');
+    ov.style.display = 'none';
+    document.body.style.overflow = '';
+    if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; _mtLayer = null; _mtUserMarker = null; }
+  }
+
+  function _mtInitMap() {
+    if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; }
+    const c = _mtUser || DEFAULT_CENTER;
+    _mtMap = L.map('mtMap', { zoomControl: true }).setView([c.lat, c.lng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(_mtMap);
+    _mtLayer = L.layerGroup().addTo(_mtMap);
+    setTimeout(() => { if (_mtMap) _mtMap.invalidateSize(); }, 200);
+  }
+
+  async function _mtFetchShops() {
+    _mtShops = null;
+    try {
+      // 1) seller_uid yang punya produk YallaFood (terdaftar sbg mat'am)
+      const adsRes = await window._supaFetch('/rest/v1/ads?is_yallafood=eq.true&select=seller_uid');
+      const ads = adsRes.ok ? await adsRes.json() : [];
+      const uids = [...new Set(ads.map(a => a.seller_uid).filter(Boolean))];
+      if (!uids.length) { _mtShops = []; _mtDraw(); return; }
+      // 2) toko mat'am yang SUDAH mengaktifkan titik lokasi (lat & lng terisi)
+      const inList = uids.map(u => '"' + String(u).replace(/"/g, '') + '"').join(',');
+      const shopRes = await window._supaFetch(`/rest/v1/shops?user_id=in.(${inList})&lat=not.is.null&lng=not.is.null&select=user_id,nama_toko,lat,lng,alamat`);
+      const shops = shopRes.ok ? await shopRes.json() : [];
+      _mtShops = shops.map(s => ({ uid: s.user_id, name: s.nama_toko || "Mat'am", lat: Number(s.lat), lng: Number(s.lng), alamat: s.alamat || '' }))
+        .filter(s => !isNaN(s.lat) && !isNaN(s.lng));
+      _mtDraw();
+    } catch (e) {
+      _mtShops = [];
+      _mtDraw();
+    }
+  }
+
+  function mtLocate() {
+    const sub = document.getElementById('mtSubtitle');
+    if (!navigator.geolocation) { _mtFallbackManual('GPS tidak didukung — geser titik biru ke lokasimu'); return; }
+    sub.textContent = 'Mengambil lokasimu...';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { _mtManual = false; _mtSetUser(pos.coords.latitude, pos.coords.longitude); },
+      () => { _mtFallbackManual('Lokasi tidak aktif — geser titik biru ke lokasimu'); },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+    );
+  }
+
+  function _mtFallbackManual(msg) {
+    _mtManual = true;
+    const c = _mtUser || DEFAULT_CENTER;
+    _mtSetUser(c.lat, c.lng, true);
+    document.getElementById('mtSubtitle').textContent = msg;
+  }
+
+  function _mtSetUser(lat, lng, keepMsg) {
+    _mtUser = { lat: Number(lat), lng: Number(lng) };
+    if (_mtMap) _mtMap.setView([_mtUser.lat, _mtUser.lng], _mtMap.getZoom() < 14 ? 15 : _mtMap.getZoom());
+    _mtDraw(keepMsg);
+  }
+
+  function _mtDraw(keepMsg) {
+    if (!_mtMap || !_mtLayer) return;
+    _mtLayer.clearLayers();
+    // Titik user — draggable supaya user bisa mengoreksi lokasi manual
+    if (_mtUser) {
+      const meIcon = L.divIcon({ className: '', html: '<div style="width:20px;height:20px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 4px rgba(37,99,235,.3)"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
+      _mtUserMarker = L.marker([_mtUser.lat, _mtUser.lng], { icon: meIcon, draggable: true, zIndexOffset: 1000 }).addTo(_mtLayer);
+      _mtUserMarker.bindTooltip(_mtManual ? 'Geser ke lokasimu' : 'Lokasi kamu', { permanent: true, direction: 'bottom', offset: [0, 10], className: 'mt-me-lbl' });
+      _mtUserMarker.on('dragend', (e) => { const ll = e.target.getLatLng(); _mtUser = { lat: ll.lat, lng: ll.lng }; _mtManual = true; _mtDraw(true); });
+    }
+    const sub = document.getElementById('mtSubtitle');
+    if (_mtShops === null) { sub.textContent = "Memuat mat'am..."; return; }
+    if (!_mtUser) return;
+    // Hitung jarak (Haversine) & saring hanya yang ≤ 1 km
+    const near = _mtShops.map(s => ({ ...s, d: _mtHaversineM(_mtUser.lat, _mtUser.lng, s.lat, s.lng) }))
+      .filter(s => s.d <= RADIUS_M)
+      .sort((a, b) => a.d - b.d);
+    if (!(keepMsg && _mtManual)) {
+      sub.textContent = near.length ? (near.length + " mat'am dalam radius 1 km") : "Tidak ada mat'am dalam radius 1 km";
+    }
+    // Garis putus-putus user → mat'am + pin dengan nama jelas
+    near.forEach(s => {
+      L.polyline([[_mtUser.lat, _mtUser.lng], [s.lat, s.lng]], { color: '#10B981', weight: 2.5, dashArray: '6,8', opacity: .75 }).addTo(_mtLayer);
+      const pin = L.divIcon({
+        className: '', iconSize: [0, 0], html: `<div style="position:relative;transform:translate(-50%,-100%);text-align:center">
+          <div style="background:#fff;border:1.5px solid #10B981;color:#065f46;font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18);max-width:160px;overflow:hidden;text-overflow:ellipsis">🍽️ ${_mtEsc(s.name)}</div>
+          <div style="background:#10B981;color:#fff;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:10px;display:inline-block;margin-top:2px">${_mtFmt(s.d)}</div>
+          <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #10B981;margin:1px auto 0"></div>
+        </div>`
+      });
+      L.marker([s.lat, s.lng], { icon: pin }).addTo(_mtLayer)
+        .bindPopup(`<div style="text-align:center;min-width:130px"><b style="font-size:13px">${_mtEsc(s.name)}</b><br><span style="color:#10B981;font-weight:700">${_mtFmt(s.d)} dari kamu</span><br><button onclick="closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="margin-top:8px;background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:6px 14px;border-radius:10px;cursor:pointer">Lihat Mat'am</button></div>`);
+    });
+    _mtRenderList(near);
+  }
+
+  function _mtRenderList(near) {
+    const box = document.getElementById('mtList');
+    if (!near.length) {
+      box.innerHTML = '<div style="text-align:center;padding:22px 12px;color:#6b7280"><i class="fa-solid fa-store-slash" style="font-size:26px;color:#d1d5db"></i><p style="margin:10px 0 0;font-size:13px;font-weight:600">Belum ada mat\'am dalam radius 1 km</p><p style="margin:4px 0 0;font-size:11px">Geser titik lokasimu atau cek lagi nanti.</p></div>';
+      return;
+    }
+    box.innerHTML = near.map(s => `
+      <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #f0f0f0;border-radius:16px;padding:10px 12px;margin-bottom:8px">
+        <div style="width:46px;height:46px;border-radius:12px;background:#ecfdf5;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🍽️</div>
+        <div style="flex:1;min-width:0">
+          <p style="margin:0;font-weight:700;font-size:14px;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_mtEsc(s.name)}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="fa-solid fa-location-dot" style="color:#10B981"></i> ${_mtFmt(s.d)}${s.alamat ? ' · ' + _mtEsc(s.alamat) : ''}</p>
+        </div>
+        <button onclick="closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:8px 14px;border-radius:12px;flex-shrink:0">Lihat</button>
+      </div>`).join('');
+  }
+
+  // Ekspos hanya yang dipanggil dari HTML
+  window.openMatamTerdekat = openMatamTerdekat;
+  window.closeMatamTerdekat = closeMatamTerdekat;
+  window._mtLocateUser = mtLocate;
+})();
 </script>
 
 <!-- ============================================================
