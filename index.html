@@ -24485,6 +24485,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
   #matamTerdekatOverlay .mt-me-lbl{background:#2563eb !important;color:#fff !important;border:none !important;font-size:10px !important;font-weight:700 !important;box-shadow:0 2px 6px rgba(0,0,0,.2) !important;border-radius:8px !important;padding:2px 6px !important}
   #matamTerdekatOverlay .mt-me-lbl::before{border-bottom-color:#2563eb !important}
   #matamTerdekatOverlay .leaflet-popup-content{margin:10px 12px}
+  @keyframes mtspin{to{transform:rotate(360deg)}}
 </style>
 <div id="matamTerdekatOverlay" style="display:none;position:fixed;inset:0;z-index:900;background:#fff;flex-direction:column">
   <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #f0f0f0">
@@ -24496,7 +24497,13 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     </div>
     <button onclick="_mtLocateUser()" id="mtLocateBtn" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100" style="flex-shrink:0" title="Lokasi saya"><i class="fa-solid fa-location-crosshairs text-primary"></i></button>
   </div>
-  <div id="mtMap" style="flex:1;min-height:0;position:relative;background:#eef2f6"></div>
+  <div id="mtMapWrap" style="flex:1;min-height:0;position:relative;background:#eef2f6">
+    <div id="mtMap" style="position:absolute;inset:0"></div>
+    <div id="mtMapLoading" style="position:absolute;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#eef2f6;pointer-events:none">
+      <div style="width:34px;height:34px;border:3px solid #d1d5db;border-top-color:#10B981;border-radius:50%;animation:mtspin .8s linear infinite"></div>
+      <p style="margin:0;font-size:12px;color:#6b7280;font-weight:600">Memuat peta...</p>
+    </div>
+  </div>
   <div id="mtList" style="flex-shrink:0;max-height:42%;overflow-y:auto;padding:10px 12px;background:#f8fafc"></div>
 </div>
 
@@ -24539,11 +24546,23 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
 
   function _mtInitMap() {
     if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; }
+    const loader = document.getElementById('mtMapLoading');
+    if (loader) loader.style.display = 'flex';
+    let _loaderHidden = false;
+    const hideLoader = () => { if (_loaderHidden) return; _loaderHidden = true; const l = document.getElementById('mtMapLoading'); if (l) l.style.display = 'none'; };
     const c = _mtUser || DEFAULT_CENTER;
-    _mtMap = L.map('mtMap', { zoomControl: true }).setView([c.lat, c.lng], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(_mtMap);
+    _mtMap = L.map('mtMap', { zoomControl: true, fadeAnimation: false }).setView([c.lat, c.lng], 15);
+    // Tile dari CDN CARTO (basemap OpenStreetMap) — jauh lebih cepat drpd tile.openstreetmap.org
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO'
+    });
+    tiles.on('load', hideLoader);
+    tiles.addTo(_mtMap);
     _mtLayer = L.layerGroup().addTo(_mtMap);
-    setTimeout(() => { if (_mtMap) _mtMap.invalidateSize(); }, 200);
+    // Ukur peta secepatnya (bukan nunggu 200ms) supaya tile langsung dimuat utk ukuran benar
+    requestAnimationFrame(() => { if (_mtMap) _mtMap.invalidateSize(); });
+    // Pengaman: sembunyikan loader walau event 'load' telat/tak terpicu
+    setTimeout(() => { if (_mtMap) _mtMap.invalidateSize(); hideLoader(); }, 2500);
   }
 
   async function _mtFetchShops() {
@@ -24616,7 +24635,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
       L.polyline([[_mtUser.lat, _mtUser.lng], [s.lat, s.lng]], { color: '#10B981', weight: 2.5, dashArray: '6,8', opacity: .75 }).addTo(_mtLayer);
       const pin = L.divIcon({
         className: '', iconSize: [0, 0], html: `<div style="position:relative;transform:translate(-50%,-100%);text-align:center">
-          <div style="background:#fff;border:1.5px solid #10B981;color:#065f46;font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18);max-width:160px;overflow:hidden;text-overflow:ellipsis">🍽️ ${_mtEsc(s.name)}</div>
+          <div style="display:inline-block;background:#fff;border:1.5px solid #10B981;color:#065f46;font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18);max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">🍽️ ${_mtEsc(s.name)}</div>
           <div style="background:#10B981;color:#fff;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:10px;display:inline-block;margin-top:2px">${_mtFmt(s.d)}</div>
           <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #10B981;margin:1px auto 0"></div>
         </div>`
@@ -24624,6 +24643,14 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
       L.marker([s.lat, s.lng], { icon: pin }).addTo(_mtLayer)
         .bindPopup(`<div style="text-align:center;min-width:130px"><b style="font-size:13px">${_mtEsc(s.name)}</b><br><span style="color:#10B981;font-weight:700">${_mtFmt(s.d)} dari kamu</span><br><button onclick="closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="margin-top:8px;background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:6px 14px;border-radius:10px;cursor:pointer">Lihat Mat'am</button></div>`);
     });
+    // Auto-fit: zoom sedekat mungkin (bangunan & jalan jelas seperti demo) tapi
+    // semua mat'am + titik user tetap muat di layar; dibatasi maxZoom 17.
+    if (_mtUser && near.length) {
+      const pts = [[_mtUser.lat, _mtUser.lng]].concat(near.map(s => [s.lat, s.lng]));
+      try { _mtMap.fitBounds(pts, { padding: [60, 60], maxZoom: 17 }); } catch (e) {}
+    } else if (_mtUser) {
+      _mtMap.setView([_mtUser.lat, _mtUser.lng], 16);
+    }
     _mtRenderList(near);
   }
 
