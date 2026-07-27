@@ -24504,7 +24504,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
       <p style="margin:0;font-size:12px;color:#6b7280;font-weight:600">Memuat peta...</p>
     </div>
   </div>
-  <div id="mtList" style="flex-shrink:0;max-height:42%;overflow-y:auto;padding:10px 12px;background:#f8fafc"></div>
+  <div id="mtList" style="flex-shrink:0;height:210px;overflow-y:auto;padding:10px 12px;background:#f8fafc"></div>
 </div>
 
 <script>
@@ -24515,6 +24515,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
   let _mtUser = null;    // {lat,lng} lokasi user
   let _mtShops = null;   // cache daftar mat'am (null=belum dimuat)
   let _mtManual = false; // true kalau lokasi di-set manual (GPS gagal)
+  let _mtLastNear = [];  // mat'am ≤1km terakhir (dipakai utk re-fit stlh basemap siap)
 
   function _mtHaversineM(lat1, lng1, lat2, lng2) {
     const R = 6371000, p = Math.PI / 180;
@@ -24544,6 +24545,49 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; _mtLayer = null; _mtUserMarker = null; }
   }
 
+  // Lazy-load MapLibre GL + plugin Leaflet (dipakai utk basemap vektor OpenFreeMap
+  // yang bisa dipaksa berlabel Latin). Hanya dimuat saat fitur dibuka pertama kali.
+  let _mtMLPromise = null;
+  function _mtEnsureMapLibre() {
+    if (_mtMLPromise) return _mtMLPromise;
+    _mtMLPromise = new Promise((resolve) => {
+      if (L.maplibreGL) return resolve(true);
+      const loadPlugin = () => {
+        if (L.maplibreGL) return resolve(true);
+        const p = document.createElement('script');
+        p.src = 'https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js';
+        p.onload = () => resolve(!!L.maplibreGL);
+        p.onerror = () => resolve(false);
+        document.head.appendChild(p);
+      };
+      if (window.maplibregl) return loadPlugin();
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'; document.head.appendChild(css);
+      const s = document.createElement('script'); s.src = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+      s.onload = loadPlugin; s.onerror = () => resolve(false); document.head.appendChild(s);
+    });
+    return _mtMLPromise;
+  }
+
+  function _mtForceLatinLabels(mm) {
+    try {
+      const layers = (mm.getStyle().layers) || [];
+      layers.forEach(l => {
+        if (l.type === 'symbol' && l.layout && l.layout['text-field']) {
+          try { mm.setLayoutProperty(l.id, 'text-field', ['coalesce', ['get', 'name:latin'], ['get', 'name:en'], ['get', 'name']]); } catch (e) {}
+        }
+      });
+    } catch (e) {}
+  }
+
+  function _mtAddRasterFallback(hide) {
+    if (!_mtMap) return;
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO'
+    });
+    tiles.on('load', hide);
+    tiles.addTo(_mtMap);
+  }
+
   function _mtInitMap() {
     if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; }
     const loader = document.getElementById('mtMapLoading');
@@ -24551,18 +24595,45 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     let _loaderHidden = false;
     const hideLoader = () => { if (_loaderHidden) return; _loaderHidden = true; const l = document.getElementById('mtMapLoading'); if (l) l.style.display = 'none'; };
     const c = _mtUser || DEFAULT_CENTER;
-    _mtMap = L.map('mtMap', { zoomControl: true, fadeAnimation: false }).setView([c.lat, c.lng], 15);
-    // Tile dari CDN CARTO (basemap OpenStreetMap) — jauh lebih cepat drpd tile.openstreetmap.org
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO'
-    });
-    tiles.on('load', hideLoader);
-    tiles.addTo(_mtMap);
+    // Animasi zoom dimatikan supaya basemap vektor (MapLibre GL) & marker Leaflet tetap sinkron
+    _mtMap = L.map('mtMap', { zoomControl: true, fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false }).setView([c.lat, c.lng], 15);
     _mtLayer = L.layerGroup().addTo(_mtMap);
-    // Ukur peta secepatnya (bukan nunggu 200ms) supaya tile langsung dimuat utk ukuran benar
+    // Tombol "lokasi saya" tepat di bawah kontrol zoom (+/-): klik = balik ke tampilan
+    // lokasi kamu semula (auto-fit), berapa pun zoom/geser peta sebelumnya.
+    const _MtLocateCtrl = L.Control.extend({
+      options: { position: 'topleft' },
+      onAdd: function () {
+        const bar = L.DomUtil.create('div', 'leaflet-bar');
+        const a = L.DomUtil.create('a', '', bar);
+        a.href = '#'; a.title = 'Kembali ke lokasi saya'; a.setAttribute('role', 'button');
+        a.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i>';
+        a.style.cssText = 'display:flex;align-items:center;justify-content:center;font-size:15px;color:#10B981';
+        L.DomEvent.on(a, 'click', function (e) { L.DomEvent.stop(e); _mtFit(); });
+        L.DomEvent.disableClickPropagation(bar);
+        return bar;
+      }
+    });
+    _mtMap.addControl(new _MtLocateCtrl());
     requestAnimationFrame(() => { if (_mtMap) _mtMap.invalidateSize(); });
-    // Pengaman: sembunyikan loader walau event 'load' telat/tak terpicu
-    setTimeout(() => { if (_mtMap) _mtMap.invalidateSize(); hideLoader(); }, 2500);
+    // Basemap: coba OpenFreeMap (vektor, label Latin + landmark); kalau gagal → CARTO raster.
+    _mtEnsureMapLibre().then(ok => {
+      if (!_mtMap) return; // sudah ditutup sebelum library siap
+      if (ok && L.maplibreGL) {
+        try {
+          const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(_mtMap);
+          const mm = gl.getMaplibreMap ? gl.getMaplibreMap() : gl._glMap;
+          if (mm) {
+            mm.on('load', () => { _mtForceLatinLabels(mm); _mtFit(); hideLoader(); });
+            mm.on('idle', hideLoader);
+            mm.on('error', () => {});
+          } else { hideLoader(); }
+          return;
+        } catch (e) { /* jatuh ke raster */ }
+      }
+      _mtAddRasterFallback(hideLoader);
+    });
+    // Pengaman: sembunyikan loader walau event telat/tak terpicu
+    setTimeout(() => { if (_mtMap) { _mtMap.invalidateSize(); _mtFit(); } hideLoader(); }, 3500);
   }
 
   async function _mtFetchShops() {
@@ -24606,7 +24677,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
 
   function _mtSetUser(lat, lng, keepMsg) {
     _mtUser = { lat: Number(lat), lng: Number(lng) };
-    if (_mtMap) _mtMap.setView([_mtUser.lat, _mtUser.lng], _mtMap.getZoom() < 14 ? 15 : _mtMap.getZoom());
+    if (_mtMap) _mtMap.setView([_mtUser.lat, _mtUser.lng], _mtMap.getZoom() < 14 ? 15 : _mtMap.getZoom(), { animate: false });
     _mtDraw(keepMsg);
   }
 
@@ -24643,15 +24714,23 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
       L.marker([s.lat, s.lng], { icon: pin }).addTo(_mtLayer)
         .bindPopup(`<div style="text-align:center;min-width:130px"><b style="font-size:13px">${_mtEsc(s.name)}</b><br><span style="color:#10B981;font-weight:700">${_mtFmt(s.d)} dari kamu</span><br><button onclick="closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="margin-top:8px;background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:6px 14px;border-radius:10px;cursor:pointer">Lihat Mat'am</button></div>`);
     });
-    // Auto-fit: zoom sedekat mungkin (bangunan & jalan jelas seperti demo) tapi
-    // semua mat'am + titik user tetap muat di layar; dibatasi maxZoom 17.
-    if (_mtUser && near.length) {
-      const pts = [[_mtUser.lat, _mtUser.lng]].concat(near.map(s => [s.lat, s.lng]));
-      try { _mtMap.fitBounds(pts, { padding: [60, 60], maxZoom: 17 }); } catch (e) {}
-    } else if (_mtUser) {
-      _mtMap.setView([_mtUser.lat, _mtUser.lng], 16);
-    }
+    _mtLastNear = near;
+    _mtFit();
     _mtRenderList(near);
+  }
+
+  // Auto-fit: zoom sedekat mungkin (bangunan & jalan jelas) tapi semua mat'am +
+  // titik user tetap muat; maxZoom 17. Dipanggil ulang saat basemap siap supaya
+  // zoom tidak salah gara-gara ukuran peta belum final saat draw pertama.
+  function _mtFit() {
+    if (!_mtMap || !_mtUser) return;
+    try { _mtMap.invalidateSize(); } catch (e) {}
+    if (_mtLastNear.length) {
+      const pts = [[_mtUser.lat, _mtUser.lng]].concat(_mtLastNear.map(s => [s.lat, s.lng]));
+      try { _mtMap.fitBounds(pts, { padding: [60, 60], maxZoom: 17, animate: false }); } catch (e) {}
+    } else {
+      try { _mtMap.setView([_mtUser.lat, _mtUser.lng], 16, { animate: false }); } catch (e) {}
+    }
   }
 
   function _mtRenderList(near) {
