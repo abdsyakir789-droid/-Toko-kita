@@ -17195,11 +17195,13 @@ window.ycRemoveImage = function() {
 };
 
 let _ycLoadDebounce = null;
-async function ycLoadMessages() {
+async function ycLoadMessages(force) {
   const u = window._S.user; if(!u) return;
-  // Debounce — cegah double load dalam 500ms
-  if(_ycLoadDebounce) return;
-  _ycLoadDebounce = setTimeout(()=>{ _ycLoadDebounce = null; }, 500);
+  // Debounce — cegah double load dalam 500ms (kecuali dipaksa, mis. setelah kirim pesan)
+  if(!force){
+    if(_ycLoadDebounce) return;
+    _ycLoadDebounce = setTimeout(()=>{ _ycLoadDebounce = null; }, 500);
+  }
   const box = document.getElementById('ycChatMessages');
   if(!box) return;
   try {
@@ -17247,13 +17249,16 @@ window.ycSendChat = async function() {
     ycRemoveImage();
   }
   const r = await window._supaFetch('/rest/v1/yallacare_tickets',{
-    method:'POST', prefer:'return=minimal,return=representation',
+    method:'POST', prefer:'return=representation',
     body: JSON.stringify({ user_id:u.uid, user_name:u.name||u.email||'', user_email:u.email||'', message:msg||'', image_url:imageUrl, status:'pending', created_at:new Date().toISOString() })
   });
   if(!r.ok){ showToast('Gagal kirim pesan','red'); return; }
-  const inserted = await r.json();
+  // Amankan parse: kalau body kosong (mis. server balas minimal), jangan sampai error
+  // menghentikan fungsi sebelum render — pesan harus tetap tampil.
+  let inserted = null;
+  try { inserted = await r.json(); } catch(e) { inserted = null; }
   const ticketId = Array.isArray(inserted) ? inserted[0]?.id : inserted?.id;
-  await ycLoadMessages();
+  await ycLoadMessages(true);
 
   // ── YallaBot auto-reply ──
   if(ticketId){
@@ -17474,10 +17479,8 @@ window.openAdminYallaCare = async function() {
       // Update data lokal
       const newRow = payload.new || payload.old;
       if(payload.eventType === 'INSERT') {
-        _ycAllTickets.unshift(newRow);
-        // Reset read status user ini agar badge muncul lagi
-        if(window._ycReadNow && newRow.user_id) delete window._ycReadNow[newRow.user_id];
-        // Jangan reset _ycLastRead — agar hanya pesan baru yang dihitung
+        if(!_ycAllTickets.some(t => t.id === newRow.id)) _ycAllTickets.unshift(newRow);
+        // Badge muncul lagi otomatis kalau ada pesan baru (created_at > lastRead persist).
         // Fetch foto profil uid baru jika belum di-cache
         if(newRow.user_id && _ycProfileCache[newRow.user_id] === undefined) {
           fetchYcProfiles([newRow.user_id]);
@@ -17541,7 +17544,7 @@ function renderYcUserList() {
   });
   const users = Object.values(userMap).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
   // Hitung pesan yang masuk SETELAH admin terakhir buka chat user ini
-  if(!window._ycLastRead) window._ycLastRead = {};
+  if(!window._ycLastRead) window._ycLastRead = _ycLoadReadMap();
   const countUnreplied = uid => {
     const lastRead = window._ycLastRead[uid] || 0;
     return _ycAllTickets.filter(t => 
@@ -17551,7 +17554,6 @@ function renderYcUserList() {
       new Date(t.created_at).getTime() > lastRead
     ).length;
   };
-  const readUsers = getYcReadUsers();
   list.innerHTML = users.map(t => {
     const uid = t.user_id || t.user_email || 'unknown';
     const name = t.user_name || 'User';
@@ -17559,10 +17561,7 @@ function renderYcUserList() {
     const preview = t.message ? t.message.slice(0,40)+(t.message.length>40?'...':'') : (t.image_url?'📷 Foto':'');
     const date = t.created_at ? new Date(t.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit'}) : '';
     const unread = countUnreplied(uid);
-    // Badge hilang setelah diklik — simpan di _ycReadNow (session only, reset saat pesan baru masuk)
-    if(!window._ycReadNow) window._ycReadNow = {};
-    const isReadNow = window._ycReadNow[uid] === true;
-    const showBadge = unread > 0 && !isReadNow;
+    const showBadge = unread > 0;
     const safeName = name.replace(/'/g,'').replace(/"/g,'');
     const photoUrl = _ycProfileCache[uid] || '';
     const avatarHtml = photoUrl
@@ -17590,13 +17589,13 @@ function renderYcUserList() {
 window.openYcAdminChat = async function(userId, userName) {
   _ycActiveUserId = userId;
   _ycActiveUserName = userName;
-  // Tandai user ini sudah dibaca — badge berkurang
+  // Tandai semua pesan user ini terbaca sampai pesan TERBARU (persist ke localStorage)
   markYcUserRead(userId);
-  if(!window._ycReadNow) window._ycReadNow = {};
-  window._ycReadNow[userId] = true;
-  // Simpan timestamp terakhir admin buka chat user ini
-  if(!window._ycLastRead) window._ycLastRead = {};
-  window._ycLastRead[userId] = Date.now();
+  if(!window._ycLastRead) window._ycLastRead = _ycLoadReadMap();
+  let _newestTs = Date.now();
+  _ycAllTickets.forEach(t => { if((t.user_id||t.user_email||'unknown')===userId){ const ts=new Date(t.created_at).getTime(); if(ts>_newestTs) _newestTs=ts; } });
+  window._ycLastRead[userId] = _newestTs;
+  _ycSaveReadMap(window._ycLastRead);
   updateYcBadge();
   renderYcUserList();
   const header = document.getElementById('ycAdminChatHeader');
@@ -17660,7 +17659,14 @@ window.ycAdminSendReply = async function() {
       })
     });
     if(r.ok){
-      // Jangan push manual — biarkan realtime yang handle agar tidak dobel
+      const ins = await r.json().catch(()=>null);
+      const row = Array.isArray(ins) ? ins[0] : ins;
+      // Tampilkan langsung tanpa nunggu realtime (dedup by id supaya tidak dobel)
+      if(row && row.id && !_ycAllTickets.some(t => t.id === row.id)){
+        _ycAllTickets.unshift(row);
+        renderYcUserList();
+        if(_ycActiveUserId) renderYcAdminChat(_ycActiveUserId);
+      }
       showToast('Pesan terkirim','green');
     } else { showToast('Gagal kirim balasan','red'); }
   } catch(e){ showToast('Gagal kirim balasan','red'); }
@@ -17674,25 +17680,39 @@ function markYcUserRead(userId) {
   const read = getYcReadUsers();
   if(!read.includes(userId)){ read.push(userId); localStorage.setItem('yc_read_users', JSON.stringify(read)); }
 }
+// Peta persist: uid -> timestamp(ms) pesan terakhir yg sudah dibaca admin.
+// Ini penentu badge (bukan flag sesi), jadi tidak muncul lagi saat keluar-masuk chat.
+function _ycLoadReadMap(){ try{ return JSON.parse(localStorage.getItem('yc_admin_lastread')||'{}')||{}; }catch(e){ return {}; } }
+function _ycSaveReadMap(m){ try{ localStorage.setItem('yc_admin_lastread', JSON.stringify(m)); }catch(e){} }
 
 window.loadYcInboxBadge = async function() {
   try {
     // Ambil semua tiket user (bukan hanya pending) — untuk deteksi user baru yang chat
-    const res = await window._supaFetch('/rest/v1/yallacare_tickets?select=user_id,created_at&order=created_at.desc&limit=500');
+    const res = await window._supaFetch('/rest/v1/yallacare_tickets?select=user_id,user_email,message,admin_reply,created_at&order=created_at.desc&limit=500');
     const data = res.ok ? await res.json() : [];
-    const readUsers = getYcReadUsers();
-    // User unik yang belum pernah dibuka oleh admin
-    const allUsers = [...new Set(data.map(t=>t.user_id))];
-    const unreadUsers = allUsers.filter(uid => !readUsers.includes(uid));
-    updateYcBadge(unreadUsers.length);
+    const lr = window._ycLastRead || _ycLoadReadMap();
+    const byUser = {};
+    data.forEach(t => {
+      if(!(t.message && String(t.message).trim() !== '')) return;
+      if(t.admin_reply && String(t.admin_reply).trim() !== '') return;
+      const uid = t.user_id||t.user_email||'unknown';
+      if(new Date(t.created_at).getTime() > (lr[uid]||0)) byUser[uid] = true;
+    });
+    updateYcBadge(Object.keys(byUser).length);
   } catch(e) {}
 };
 
 function updateYcBadge(count) {
   if(count === undefined){
-    const readUsers = getYcReadUsers();
-    const allUsers = [...new Set(_ycAllTickets.map(t=>t.user_id))];
-    count = allUsers.filter(uid => !readUsers.includes(uid)).length;
+    const lr = window._ycLastRead || _ycLoadReadMap();
+    const byUser = {};
+    _ycAllTickets.forEach(t => {
+      if(!(t.message && String(t.message).trim() !== '')) return;
+      if(t.admin_reply && String(t.admin_reply).trim() !== '') return;
+      const uid = t.user_id||t.user_email||'unknown';
+      if(new Date(t.created_at).getTime() > (lr[uid]||0)) byUser[uid] = true;
+    });
+    count = Object.keys(byUser).length;
   }
   const badge = document.getElementById('ycInboxBadge');
   if(!badge) return;
@@ -24495,7 +24515,6 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
       <p style="margin:0;font-weight:800;font-size:15px;color:#111827">Mat'am Terdekat</p>
       <p id="mtSubtitle" style="margin:0;font-size:11px;color:#6b7280" class="lc1">Memuat lokasi...</p>
     </div>
-    <button onclick="_mtLocateUser()" id="mtLocateBtn" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100" style="flex-shrink:0" title="Lokasi saya"><i class="fa-solid fa-location-crosshairs text-primary"></i></button>
   </div>
   <div id="mtMapWrap" style="flex:1;min-height:0;position:relative;background:#eef2f6">
     <div id="mtMap" style="position:absolute;inset:0"></div>
@@ -24515,7 +24534,16 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
   let _mtUser = null;    // {lat,lng} lokasi user
   let _mtShops = null;   // cache daftar mat'am (null=belum dimuat)
   let _mtManual = false; // true kalau lokasi di-set manual (GPS gagal)
-  let _mtLastNear = [];  // mat'am ≤1km terakhir (dipakai utk re-fit stlh basemap siap)
+  let _mtLastNear = [];  // mat'am ≤1km terakhir (dipakai utk fit)
+  let _mtFitted = false;       // sudah auto-fit sekali?
+  let _mtUserMoved = false;    // user sudah geser/zoom peta sendiri?
+  let _mtBasemapReady = false; // basemap sudah termuat?
+  let _mtProg = false;         // penanda perubahan view oleh program (bukan user)
+  let _mtFetchedOnce = false;  // data mat'am sudah diambil sekali?
+  let _mtFetching = false;     // sedang mengambil data mat'am?
+  let _mtFetchCenter = null;   // pusat lokasi saat data terakhir diambil
+  let _mtWatchId = null;       // id watchPosition (live tracking)
+  let _mtLastTrackPt = null;   // titik GPS terakhir (utk throttle update)
 
   function _mtHaversineM(lat1, lng1, lat2, lng2) {
     const R = 6371000, p = Math.PI / 180;
@@ -24530,18 +24558,19 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     const ov = document.getElementById('matamTerdekatOverlay');
     ov.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    _mtManual = false;
+    _mtManual = false; _mtFitted = false; _mtUserMoved = false; _mtBasemapReady = false;
+    _mtShops = null; _mtFetchedOnce = false; _mtFetching = false; _mtFetchCenter = null; _mtLastTrackPt = null;
     document.getElementById('mtSubtitle').textContent = 'Memuat lokasi...';
     document.getElementById('mtList').innerHTML = '';
     _mtInitMap();
-    _mtFetchShops();   // ambil data mat'am (async)
-    mtLocate();        // ambil lokasi user (async)
+    _mtStopWatch(); _mtStartWatch(); // pantau lokasi live → fix pertama memicu ambil data mat'am
   }
 
   function closeMatamTerdekat() {
     const ov = document.getElementById('matamTerdekatOverlay');
     ov.style.display = 'none';
     document.body.style.overflow = '';
+    _mtStopWatch(); // matikan GPS live supaya tidak boros baterai
     if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; _mtLayer = null; _mtUserMarker = null; }
   }
 
@@ -24584,7 +24613,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO'
     });
-    tiles.on('load', hide);
+    tiles.on('load', () => { _mtBasemapReady = true; _mtTryFit(); hide(); });
     tiles.addTo(_mtMap);
   }
 
@@ -24598,6 +24627,9 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     // Animasi zoom dimatikan supaya basemap vektor (MapLibre GL) & marker Leaflet tetap sinkron
     _mtMap = L.map('mtMap', { zoomControl: true, fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false }).setView([c.lat, c.lng], 15);
     _mtLayer = L.layerGroup().addTo(_mtMap);
+    // Kalau user geser/zoom peta sendiri, jangan auto-fit lagi (biar tidak menyentak)
+    _mtMap.on('dragstart', () => { _mtUserMoved = true; });
+    _mtMap.on('zoomstart', () => { if (!_mtProg) _mtUserMoved = true; });
     // Tombol "lokasi saya" tepat di bawah kontrol zoom (+/-): klik = balik ke tampilan
     // lokasi kamu semula (auto-fit), berapa pun zoom/geser peta sebelumnya.
     const _MtLocateCtrl = L.Control.extend({
@@ -24608,7 +24640,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
         a.href = '#'; a.title = 'Kembali ke lokasi saya'; a.setAttribute('role', 'button');
         a.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i>';
         a.style.cssText = 'display:flex;align-items:center;justify-content:center;font-size:15px;color:#10B981';
-        L.DomEvent.on(a, 'click', function (e) { L.DomEvent.stop(e); _mtFit(); });
+        L.DomEvent.on(a, 'click', function (e) { L.DomEvent.stop(e); _mtLocateAndFit(); });
         L.DomEvent.disableClickPropagation(bar);
         return bar;
       }
@@ -24623,7 +24655,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
           const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(_mtMap);
           const mm = gl.getMaplibreMap ? gl.getMaplibreMap() : gl._glMap;
           if (mm) {
-            mm.on('load', () => { _mtForceLatinLabels(mm); _mtFit(); hideLoader(); });
+            mm.on('load', () => { _mtForceLatinLabels(mm); _mtBasemapReady = true; _mtTryFit(); hideLoader(); });
             mm.on('idle', hideLoader);
             mm.on('error', () => {});
           } else { hideLoader(); }
@@ -24633,39 +24665,68 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
       _mtAddRasterFallback(hideLoader);
     });
     // Pengaman: sembunyikan loader walau event telat/tak terpicu
-    setTimeout(() => { if (_mtMap) { _mtMap.invalidateSize(); _mtFit(); } hideLoader(); }, 3500);
+    setTimeout(() => { if (_mtMap) { _mtMap.invalidateSize(); _mtBasemapReady = true; _mtTryFit(); } hideLoader(); }, 3500);
   }
 
   async function _mtFetchShops() {
+    if (!_mtUser) { _mtShops = []; _mtDraw(); return; }
+    _mtFetching = true;
     _mtShops = null;
+    _mtFetchCenter = { lat: _mtUser.lat, lng: _mtUser.lng };
+    _mtDraw(); // tampilkan "Memuat mat'am..."
     try {
-      // 1) seller_uid yang punya produk YallaFood (terdaftar sbg mat'am)
-      const adsRes = await window._supaFetch('/rest/v1/ads?is_yallafood=eq.true&select=seller_uid');
-      const ads = adsRes.ok ? await adsRes.json() : [];
-      const uids = [...new Set(ads.map(a => a.seller_uid).filter(Boolean))];
-      if (!uids.length) { _mtShops = []; _mtDraw(); return; }
-      // 2) toko mat'am yang SUDAH mengaktifkan titik lokasi (lat & lng terisi)
+      // Kotak area di sekitar user (~1,2 km) supaya query ringan berapa pun total mat'am se-kota
+      const dLat = 0.011;
+      const dLng = 0.011 / Math.max(0.2, Math.cos(_mtUser.lat * Math.PI / 180));
+      const latMin = (_mtUser.lat - dLat).toFixed(6), latMax = (_mtUser.lat + dLat).toFixed(6);
+      const lngMin = (_mtUser.lng - dLng).toFixed(6), lngMax = (_mtUser.lng + dLng).toFixed(6);
+      // 1) toko di sekitar user yang SUDAH mengaktifkan titik lokasi (dibatasi kotak → ringan)
+      const shopRes = await window._supaFetch(`/rest/v1/shops?lat=gte.${latMin}&lat=lte.${latMax}&lng=gte.${lngMin}&lng=lte.${lngMax}&select=user_id,nama_toko,lat,lng,alamat`);
+      const shopsRaw = shopRes.ok ? await shopRes.json() : [];
+      if (!shopsRaw.length) { _mtShops = []; _mtFetching = false; _mtDraw(); return; }
+      // 2) dari toko sekitar itu, saring hanya yang mat'am YallaFood (in-list sudah kecil)
+      const uids = [...new Set(shopsRaw.map(s => s.user_id).filter(Boolean))];
       const inList = uids.map(u => '"' + String(u).replace(/"/g, '') + '"').join(',');
-      const shopRes = await window._supaFetch(`/rest/v1/shops?user_id=in.(${inList})&lat=not.is.null&lng=not.is.null&select=user_id,nama_toko,lat,lng,alamat`);
-      const shops = shopRes.ok ? await shopRes.json() : [];
-      _mtShops = shops.map(s => ({ uid: s.user_id, name: s.nama_toko || "Mat'am", lat: Number(s.lat), lng: Number(s.lng), alamat: s.alamat || '' }))
+      const adsRes = await window._supaFetch(`/rest/v1/ads?is_yallafood=eq.true&seller_uid=in.(${inList})&select=seller_uid`);
+      const ads = adsRes.ok ? await adsRes.json() : [];
+      const foodUids = new Set(ads.map(a => a.seller_uid));
+      _mtShops = shopsRaw
+        .filter(s => foodUids.has(s.user_id))
+        .map(s => ({ uid: s.user_id, name: s.nama_toko || "Mat'am", lat: Number(s.lat), lng: Number(s.lng), alamat: s.alamat || '' }))
         .filter(s => !isNaN(s.lat) && !isNaN(s.lng));
+      _mtFetching = false;
       _mtDraw();
     } catch (e) {
-      _mtShops = [];
-      _mtDraw();
+      _mtShops = []; _mtFetching = false; _mtDraw();
     }
   }
 
-  function mtLocate() {
-    const sub = document.getElementById('mtSubtitle');
+  // Live tracking: pantau lokasi terus-menerus (GPS lokal, TIDAK makan bandwidth).
+  function _mtStartWatch() {
     if (!navigator.geolocation) { _mtFallbackManual('GPS tidak didukung — geser titik biru ke lokasimu'); return; }
-    sub.textContent = 'Mengambil lokasimu...';
-    navigator.geolocation.getCurrentPosition(
-      (pos) => { _mtManual = false; _mtSetUser(pos.coords.latitude, pos.coords.longitude); },
-      () => { _mtFallbackManual('Lokasi tidak aktif — geser titik biru ke lokasimu'); },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+    if (_mtWatchId != null) return;
+    document.getElementById('mtSubtitle').textContent = 'Mengambil lokasimu...';
+    _mtWatchId = navigator.geolocation.watchPosition(
+      (pos) => _mtOnWatch(pos.coords.latitude, pos.coords.longitude),
+      () => { if (!_mtUser) _mtFallbackManual('Lokasi tidak aktif — geser titik biru ke lokasimu'); },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
+  }
+  function _mtStopWatch() {
+    if (_mtWatchId != null && navigator.geolocation) { try { navigator.geolocation.clearWatch(_mtWatchId); } catch (e) {} }
+    _mtWatchId = null;
+  }
+  // Dipanggil tiap update GPS. Throttle: abaikan gerakan < 8 m biar hemat kerja.
+  function _mtOnWatch(lat, lng) {
+    const first = !_mtUser;
+    if (!first && _mtLastTrackPt && _mtHaversineM(_mtLastTrackPt.lat, _mtLastTrackPt.lng, lat, lng) < 8) return;
+    _mtLastTrackPt = { lat: lat, lng: lng };
+    _mtManual = false;
+    if (first) { _mtSetUser(lat, lng); return; } // fix pertama: set + ambil data + boleh auto-fit sekali
+    // update berikutnya: geser titik + perbarui jarak/garis, TANPA memindah/zoom peta (biar tidak menyentak)
+    _mtUser = { lat: Number(lat), lng: Number(lng) };
+    if (_mtFetchCenter && _mtHaversineM(_mtUser.lat, _mtUser.lng, _mtFetchCenter.lat, _mtFetchCenter.lng) > 800) { _mtShops = null; _mtFetchShops(); }
+    else { _mtDraw(); }
   }
 
   function _mtFallbackManual(msg) {
@@ -24677,8 +24738,9 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
 
   function _mtSetUser(lat, lng, keepMsg) {
     _mtUser = { lat: Number(lat), lng: Number(lng) };
-    if (_mtMap) _mtMap.setView([_mtUser.lat, _mtUser.lng], _mtMap.getZoom() < 14 ? 15 : _mtMap.getZoom(), { animate: false });
+    if (_mtMap) _mtProgView(() => _mtMap.setView([_mtUser.lat, _mtUser.lng], _mtMap.getZoom() < 14 ? 15 : _mtMap.getZoom(), { animate: false }));
     _mtDraw(keepMsg);
+    if (!_mtFetchedOnce && !_mtFetching) { _mtFetchedOnce = true; _mtFetchShops(); }
   }
 
   function _mtDraw(keepMsg) {
@@ -24687,9 +24749,14 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     // Titik user — draggable supaya user bisa mengoreksi lokasi manual
     if (_mtUser) {
       const meIcon = L.divIcon({ className: '', html: '<div style="width:20px;height:20px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 4px rgba(37,99,235,.3)"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
-      _mtUserMarker = L.marker([_mtUser.lat, _mtUser.lng], { icon: meIcon, draggable: true, zIndexOffset: 1000 }).addTo(_mtLayer);
+      _mtUserMarker = L.marker([_mtUser.lat, _mtUser.lng], { icon: meIcon, draggable: _mtManual, zIndexOffset: 1000 }).addTo(_mtLayer);
       _mtUserMarker.bindTooltip(_mtManual ? 'Geser ke lokasimu' : 'Lokasi kamu', { permanent: true, direction: 'bottom', offset: [0, 10], className: 'mt-me-lbl' });
-      _mtUserMarker.on('dragend', (e) => { const ll = e.target.getLatLng(); _mtUser = { lat: ll.lat, lng: ll.lng }; _mtManual = true; _mtDraw(true); });
+      _mtUserMarker.on('dragend', (e) => {
+        const ll = e.target.getLatLng(); _mtUser = { lat: ll.lat, lng: ll.lng }; _mtManual = true;
+        // geser jauh dari titik data terakhir → ambil ulang mat'am sekitar; kalau dekat cukup redraw (view tetap)
+        if (_mtFetchCenter && _mtHaversineM(_mtUser.lat, _mtUser.lng, _mtFetchCenter.lat, _mtFetchCenter.lng) > 800) { _mtShops = null; _mtFetchShops(); }
+        else { _mtDraw(true); }
+      });
     }
     const sub = document.getElementById('mtSubtitle');
     if (_mtShops === null) { sub.textContent = "Memuat mat'am..."; return; }
@@ -24715,22 +24782,41 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
         .bindPopup(`<div style="text-align:center;min-width:130px"><b style="font-size:13px">${_mtEsc(s.name)}</b><br><span style="color:#10B981;font-weight:700">${_mtFmt(s.d)} dari kamu</span><br><button onclick="closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="margin-top:8px;background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:6px 14px;border-radius:10px;cursor:pointer">Lihat Mat'am</button></div>`);
     });
     _mtLastNear = near;
-    _mtFit();
+    _mtTryFit();
     _mtRenderList(near);
   }
 
-  // Auto-fit: zoom sedekat mungkin (bangunan & jalan jelas) tapi semua mat'am +
-  // titik user tetap muat; maxZoom 17. Dipanggil ulang saat basemap siap supaya
-  // zoom tidak salah gara-gara ukuran peta belum final saat draw pertama.
+  // Bungkus perubahan view oleh program supaya tidak dikira "user menggeser/zoom"
+  function _mtProgView(fn) { _mtProg = true; try { fn(); } finally { _mtProg = false; } }
+
+  // Fit paksa: zoom sedekat mungkin (bangunan & jalan jelas) tapi semua mat'am +
+  // titik user tetap muat; maxZoom 17. Dipakai tombol lokasi.
   function _mtFit() {
     if (!_mtMap || !_mtUser) return;
     try { _mtMap.invalidateSize(); } catch (e) {}
-    if (_mtLastNear.length) {
-      const pts = [[_mtUser.lat, _mtUser.lng]].concat(_mtLastNear.map(s => [s.lat, s.lng]));
-      try { _mtMap.fitBounds(pts, { padding: [60, 60], maxZoom: 17, animate: false }); } catch (e) {}
-    } else {
-      try { _mtMap.setView([_mtUser.lat, _mtUser.lng], 16, { animate: false }); } catch (e) {}
-    }
+    _mtProgView(() => {
+      if (_mtLastNear.length) {
+        const pts = [[_mtUser.lat, _mtUser.lng]].concat(_mtLastNear.map(s => [s.lat, s.lng]));
+        try { _mtMap.fitBounds(pts, { padding: [60, 60], maxZoom: 17, animate: false }); } catch (e) {}
+      } else {
+        try { _mtMap.setView([_mtUser.lat, _mtUser.lng], 16, { animate: false }); } catch (e) {}
+      }
+    });
+  }
+
+  // Auto-fit SEKALI: hanya saat basemap + lokasi + data siap & user belum menggeser sendiri.
+  function _mtTryFit() {
+    if (_mtFitted || _mtUserMoved) return;
+    if (!_mtBasemapReady || !_mtMap || !_mtUser || _mtShops === null) return;
+    _mtFit();
+    _mtFitted = true;
+  }
+
+  // Tombol lokasi: perbarui GPS lalu balik ke tampilan lokasi kamu (walau sudah zoom/geser).
+  function _mtLocateAndFit() {
+    _mtUserMoved = false;
+    _mtFit();          // balik ke lokasi live sekarang
+    _mtStartWatch();   // pastikan tracking aktif (kalau sempat mati)
   }
 
   function _mtRenderList(near) {
@@ -24753,7 +24839,6 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
   // Ekspos hanya yang dipanggil dari HTML
   window.openMatamTerdekat = openMatamTerdekat;
   window.closeMatamTerdekat = closeMatamTerdekat;
-  window._mtLocateUser = mtLocate;
 })();
 </script>
 
