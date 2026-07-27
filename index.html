@@ -17559,7 +17559,7 @@ function renderYcUserList() {
     const name = t.user_name || 'User';
     const initial = name.charAt(0).toUpperCase();
     const preview = t.message ? t.message.slice(0,40)+(t.message.length>40?'...':'') : (t.image_url?'📷 Foto':'');
-    const date = t.created_at ? new Date(t.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit'}) : '';
+    const date = t.created_at ? (typeof _yfTimeAgo === 'function' ? _yfTimeAgo(t.created_at) : new Date(t.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit'})) : '';
     const unread = countUnreplied(uid);
     const showBadge = unread > 0;
     const safeName = name.replace(/'/g,'').replace(/"/g,'');
@@ -24608,6 +24608,21 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     } catch (e) {}
   }
 
+  // Bangunan OpenFreeMap defaultnya terlalu terang (nyaris tak terlihat di zoom menengah).
+  // Pertajam warna isi + garis tepi supaya bangunan jelas terlihat, bukan cuma jalan.
+  function _mtEnhanceBuildings(mm) {
+    try {
+      if (mm.getLayer('building')) {
+        mm.setPaintProperty('building', 'fill-color', '#dcd3c0');
+        mm.setPaintProperty('building', 'fill-outline-color', '#a99e83');
+      }
+      if (mm.getLayer('building-3d')) {
+        mm.setPaintProperty('building-3d', 'fill-extrusion-color', '#d8cfba');
+        mm.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0.9);
+      }
+    } catch (e) {}
+  }
+
   function _mtAddRasterFallback(hide) {
     if (!_mtMap) return;
     const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
@@ -24655,7 +24670,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
           const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(_mtMap);
           const mm = gl.getMaplibreMap ? gl.getMaplibreMap() : gl._glMap;
           if (mm) {
-            mm.on('load', () => { _mtForceLatinLabels(mm); _mtBasemapReady = true; _mtTryFit(); hideLoader(); });
+            mm.on('load', () => { _mtForceLatinLabels(mm); _mtEnhanceBuildings(mm); _mtBasemapReady = true; _mtTryFit(); hideLoader(); });
             mm.on('idle', hideLoader);
             mm.on('error', () => {});
           } else { hideLoader(); }
