@@ -23927,6 +23927,7 @@ async function _yfLoadTracking() {
           <div class="flex-1 min-w-0">
             <p class="font-bold text-sm lc1">${o.ad_title}</p>
             ${o.variant ? `<p class="text-xs text-gray-600 mt-1" style="white-space:pre-line">${o.variant}</p>` : ''}
+            <p class="text-xs text-gray-600 mt-1">Ongkir: ${_yfFmtPrice(o.ongkir || 0)}</p>
             <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
           </div>
         </div>
