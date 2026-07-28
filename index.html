@@ -3298,7 +3298,7 @@ h3.text-sm.font-bold.text-gray-800 {
         <p class="lc1" style="font-size:9px;color:#6b7280;margin:0">Jadi mitra pengantar makanan</p>
       </div>
     </button>
-    <button id="menuYallaKurirBtnMob" onclick="showToast('Fitur YallaKurir segera hadir!','green')" class="flex-1 min-w-0 flex items-center gap-1.5 bg-white rounded-2xl py-4 pl-1.5 pr-3 transition-all text-left">
+    <button id="menuYallaKurirBtnMob" onclick="openDaftarYallaKurir()" class="flex-1 min-w-0 flex items-center gap-1.5 bg-white rounded-2xl py-4 pl-1.5 pr-3 transition-all text-left">
       <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center flex-shrink-0">
         <span class="lucide-icon" id="menuYallaKurirIconMob"></span>
       </div>
@@ -3391,7 +3391,7 @@ h3.text-sm.font-bold.text-gray-800 {
       </div>
       <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
     </button>
-    <button id="menuYallaKurirBtnDesktop" onclick="showToast('Fitur YallaKurir segera hadir!','green')" class="flex-1 min-w-0 flex items-center gap-3 bg-white rounded-2xl py-4 pl-3 pr-5 transition-all hover:shadow-md text-left">
+    <button id="menuYallaKurirBtnDesktop" onclick="openDaftarYallaKurir()" class="flex-1 min-w-0 flex items-center gap-3 bg-white rounded-2xl py-4 pl-3 pr-5 transition-all hover:shadow-md text-left">
       <div class="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0">
         <span class="lucide-icon" id="menuYallaKurirIconDesktop"></span>
       </div>
@@ -15183,6 +15183,7 @@ if ('serviceWorker' in navigator) {
         <button id="aptab-cleanup" onclick="switchApTab('cleanup')" class="ap-tab">🗑️ Iklan Hantu</button>
         <button id="aptab-title" onclick="switchApTab('title'); if(window.loadSponsorTitleAdminUI) loadSponsorTitleAdminUI();" class="ap-tab">📝 Judul Section</button>
         <button id="aptab-kurir" onclick="switchApTab('kurir'); if(window.loadKurirAdminUI) loadKurirAdminUI();" class="ap-tab">🛵 Kurir YallaFood</button>
+        <button id="aptab-yallakurir" onclick="switchApTab('yallakurir'); if(window.loadYkAdminUI) loadYkAdminUI();" class="ap-tab">📦 YallaKurir</button>
       </div>
     </div>
 
@@ -15327,6 +15328,15 @@ if ('serviceWorker' in navigator) {
           <p class="text-[11px] text-gray-500">Setujui atau tolak pendaftaran mitra kurir. Notifikasi pesanan hanya aktif untuk kurir berstatus Aktif.</p>
         </div>
         <div id="kurirAdminList"><p class="text-center text-gray-400 text-sm py-8">Memuat...</p></div>
+      </div>
+
+      <!-- ── Tab: YallaKurir (approval mitra antar barang) ── -->
+      <div id="aptab-yallakurir-content" style="display:none">
+        <div class="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-4">
+          <p class="text-sm font-black text-gray-800 mb-1">📦 Approval Mitra YallaKurir</p>
+          <p class="text-[11px] text-gray-500">Verifikasi identitas (KTP/Paspor + selfie) pendaftar jasa antar barang. Hanya mitra berstatus Aktif yang bisa menerima order.</p>
+        </div>
+        <div id="ykAdminList"><p class="text-center text-gray-400 text-sm py-8">Memuat...</p></div>
       </div>
 
     </div><!-- /body -->
@@ -15614,7 +15624,7 @@ window.closeAdminPanel = function() {
 };
 
 window.switchApTab = function(tab) {
-  ['switch','ads','verify','cleanup','title','kurir'].forEach(t => {
+  ['switch','ads','verify','cleanup','title','kurir','yallakurir'].forEach(t => {
     const btn = document.getElementById('aptab-' + t);
     const content = document.getElementById('aptab-' + t + '-content');
     if(btn) btn.classList.toggle('active', t === tab);
@@ -25512,6 +25522,100 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   <div id="yallaKurirStatusBody" class="flex-1 overflow-y-auto px-4 py-4"></div>
 </div>
 
+<!-- ═══ KIRIM BARANG (YallaKurir, sisi pengirim) — full-screen ═══ -->
+<style>
+  #kirimBarangOverlay .kb-chip{border:2px solid #e5e7eb;background:#fff;border-radius:16px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;cursor:pointer;transition:.15s;width:100%}
+  #kirimBarangOverlay .kb-chip i{font-size:20px;color:#6b7280;transition:.15s}
+  #kirimBarangOverlay .kb-chip span{font-size:12px;font-weight:700;color:#374151;transition:.15s}
+  #kirimBarangOverlay .kb-chip.kb-chip-active{border-color:#10B981;background:#ECFDF5}
+  #kirimBarangOverlay .kb-chip.kb-chip-active i,#kirimBarangOverlay .kb-chip.kb-chip-active span{color:#059669}
+  #kirimBarangOverlay .kb-chip:active{transform:scale(.97)}
+  @keyframes kbRadar{0%{transform:scale(.6);opacity:.7}100%{transform:scale(2.2);opacity:0}}
+  #kbFindingState .kb-radar{position:absolute;inset:0;border-radius:50%;border:2px solid #10B981;animation:kbRadar 1.8s ease-out infinite}
+  #kbFindingState .kb-radar.d2{animation-delay:.6s}
+  #kbFindingState .kb-radar.d3{animation-delay:1.2s}
+</style>
+<div id="kirimBarangOverlay" style="display:none;position:fixed;inset:0;z-index:62;background:#f8fafc;flex-direction:column">
+  <!-- Header -->
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeKirimBarangYallaKurir()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Kirim Barang</h2>
+    <span class="text-[11px] font-bold text-primary bg-pl px-2.5 py-1 rounded-full">YallaKurir</span>
+  </div>
+  <!-- Body -->
+  <div class="flex-1 overflow-y-auto px-4 py-4">
+    <p class="text-sm text-gray-500 mb-4">Titip antar barang ke tujuan lewat mitra kurir YallaMart. Isi lokasi & jenis barang, lalu cari kurir terdekat.</p>
+
+    <!-- Lokasi -->
+    <label class="text-xs font-bold text-gray-700 mb-1.5 block">Dari (lokasi penjemputan)</label>
+    <div class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 bg-white mb-1.5">
+      <i class="fa-solid fa-location-dot text-primary text-sm flex-shrink-0"></i>
+      <input id="kbFromInput" type="text" oninput="_kbValidate()" placeholder="Alamat asal / patokan" class="flex-1 py-2.5 text-sm bg-transparent outline-none"/>
+    </div>
+    <div class="flex gap-2 mb-1.5">
+      <button id="kbGpsBtn" onclick="_kbDetectLocation()" title="Deteksi lokasi saat ini" class="flex-1 flex items-center justify-center gap-1.5 bg-pl text-primary text-xs font-bold rounded-xl py-2"><i class="fa-solid fa-crosshairs"></i>GPS lokasi saya</button>
+      <button onclick="_kbOpenMap('from')" class="flex-1 flex items-center justify-center gap-1.5 bg-pl text-primary text-xs font-bold rounded-xl py-2"><i class="fa-solid fa-map-location-dot"></i>Pilih di peta</button>
+    </div>
+    <p id="kbFromCoordHint" class="text-[10px] text-gray-400 mb-3.5">Pakai GPS atau pilih titik di peta untuk lokasi akurat.</p>
+
+    <label class="text-xs font-bold text-gray-700 mb-1.5 block">Ke (alamat tujuan)</label>
+    <div class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 bg-white mb-1.5">
+      <i class="fa-solid fa-flag-checkered text-gray-400 text-sm flex-shrink-0"></i>
+      <input id="kbToInput" type="text" oninput="_kbValidate()" placeholder="Alamat tujuan / patokan" class="flex-1 py-2.5 text-sm bg-transparent outline-none"/>
+    </div>
+    <div class="flex mb-1.5">
+      <button onclick="_kbOpenMap('to')" class="w-full flex items-center justify-center gap-1.5 bg-pl text-primary text-xs font-bold rounded-xl py-2"><i class="fa-solid fa-map-location-dot"></i>Pilih tujuan di peta</button>
+    </div>
+    <p id="kbToCoordHint" class="text-[10px] text-gray-400 mb-4">Pilih titik tujuan di peta untuk lokasi akurat.</p>
+
+    <!-- Jenis barang -->
+    <label class="text-xs font-bold text-gray-700 mb-2 block">Jenis Barang</label>
+    <div id="kbJenisGrid" class="grid grid-cols-4 gap-2 mb-4">
+      <button type="button" data-jenis="Elektronik" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-laptop"></i><span>Elektronik</span></button>
+      <button type="button" data-jenis="Perhiasan" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-gem"></i><span>Perhiasan</span></button>
+      <button type="button" data-jenis="Dokumen" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-file-lines"></i><span>Dokumen</span></button>
+      <button type="button" data-jenis="Uang" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-money-bill-wave"></i><span>Uang</span></button>
+    </div>
+
+    <!-- Catatan -->
+    <label class="text-xs font-bold text-gray-700 mb-1.5 block">Catatan untuk kurir (opsional)</label>
+    <textarea id="kbNotesInput" rows="2" placeholder="Contoh: barang mudah pecah, hubungi sebelum jemput" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white outline-none resize-none"></textarea>
+  </div>
+  <!-- Footer -->
+  <div class="bg-white border-t border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button id="kbCariKurirBtn" onclick="_kbCariKurir()" disabled class="w-full bg-primary text-white font-bold rounded-2xl py-3.5 text-sm opacity-50 cursor-not-allowed flex items-center justify-center gap-2"><i class="fa-solid fa-magnifying-glass"></i>Cari Kurir</button>
+  </div>
+
+  <!-- Finding-courier state -->
+  <div id="kbFindingState" style="display:none;position:absolute;inset:0;background:#f8fafc;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
+    <div style="position:relative;width:110px;height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:28px">
+      <span class="kb-radar"></span><span class="kb-radar d2"></span><span class="kb-radar d3"></span>
+      <div style="width:64px;height:64px;border-radius:50%;background:#10B981;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(16,185,129,.4);position:relative;z-index:1">
+        <i class="fa-solid fa-motorcycle text-white" style="font-size:26px"></i>
+      </div>
+    </div>
+    <p class="font-black text-lg text-gray-800 mb-1">Mencari kurir terdekat...</p>
+    <p class="text-sm text-gray-500 mb-8" style="max-width:280px">Kami sedang menghubungkan kamu dengan mitra YallaKurir aktif di sekitar. Mohon tunggu sebentar ya.</p>
+    <button onclick="_kbCancelSearch()" class="text-sm font-bold text-red-500 border border-red-200 rounded-2xl py-2.5 px-6">Batalkan Pencarian</button>
+  </div>
+</div>
+
+<!-- Pemilih titik di peta (Leaflet) untuk Dari & Ke -->
+<div id="kbMapPickerOverlay" style="display:none;position:fixed;inset:0;z-index:64;background:#fff;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="_kbCloseMap()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 id="kbMapPickerTitle" class="font-bold text-base flex-1">Pilih Titik di Peta</h2>
+  </div>
+  <div style="position:relative;flex:1;min-height:0">
+    <div id="kbMapPickerMap" style="position:absolute;inset:0"></div>
+    <button onclick="_kbMapUseGps()" title="Lokasi saya" style="position:absolute;right:14px;bottom:14px;z-index:500;width:44px;height:44px;border-radius:50%;background:#fff;border:none;box-shadow:0 2px 10px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fa-solid fa-crosshairs text-primary"></i></button>
+  </div>
+  <div class="bg-white border-t border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <p class="text-[11px] text-gray-500 text-center mb-2">Geser pin atau ketuk peta untuk menentukan titik.</p>
+    <button onclick="_kbConfirmMap()" class="w-full bg-primary text-white font-bold rounded-2xl py-3.5 text-sm"><i class="fa-solid fa-check mr-1"></i>Gunakan Titik Ini</button>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // 📦 YALLAKURIR MODULE — pendaftaran mitra antar barang.
@@ -25522,6 +25626,238 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 // ============================================================
 
 window._ykState = { profile: null };
+
+// ── KIRIM BARANG (sisi pengirim) — full-screen form → cari kurir ──
+window._kbState = { jenis: null, fromLat: null, fromLng: null, toLat: null, toLng: null, orderId: null, mapTarget: null, _map: null, _marker: null };
+
+window.openKirimBarangYallaKurir = function() {
+  if (!window._S?.user?.uid) { showToast('Login dulu ya!', 'red'); return; }
+  const ov = document.getElementById('kirimBarangOverlay');
+  ov.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  // reset form tiap buka
+  window._kbState = { jenis: null, fromLat: null, fromLng: null, toLat: null, toLng: null, orderId: null, mapTarget: null, _map: null, _marker: null };
+  document.getElementById('kbFromInput').value = '';
+  document.getElementById('kbToInput').value = '';
+  const notes = document.getElementById('kbNotesInput'); if (notes) notes.value = '';
+  document.querySelectorAll('#kbJenisGrid [data-jenis]').forEach(b => b.classList.remove('kb-chip-active'));
+  const fh = document.getElementById('kbFromCoordHint'); if (fh) { fh.textContent = 'Pakai GPS atau pilih titik di peta untuk lokasi akurat.'; fh.style.color = ''; fh.style.fontWeight = ''; }
+  const th = document.getElementById('kbToCoordHint'); if (th) { th.textContent = 'Pilih titik tujuan di peta untuk lokasi akurat.'; th.style.color = ''; th.style.fontWeight = ''; }
+  document.getElementById('kbFindingState').style.display = 'none';
+  _kbValidate();
+};
+
+window.closeKirimBarangYallaKurir = function() {
+  document.getElementById('kirimBarangOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+};
+
+window._kbSelectJenis = function(btn) {
+  document.querySelectorAll('#kbJenisGrid [data-jenis]').forEach(b => b.classList.remove('kb-chip-active'));
+  btn.classList.add('kb-chip-active');
+  window._kbState.jenis = btn.getAttribute('data-jenis');
+  _kbValidate();
+};
+
+window._kbValidate = function() {
+  const from = (document.getElementById('kbFromInput')?.value || '').trim();
+  const to = (document.getElementById('kbToInput')?.value || '').trim();
+  const ok = !!from && !!to && !!window._kbState.jenis;
+  const btn = document.getElementById('kbCariKurirBtn');
+  if (!btn) return;
+  btn.disabled = !ok;
+  btn.classList.toggle('opacity-50', !ok);
+  btn.classList.toggle('cursor-not-allowed', !ok);
+};
+
+window._kbDetectLocation = function() {
+  if (!navigator.geolocation) { showToast('Perangkat tidak mendukung GPS', 'red'); return; }
+  const btn = document.getElementById('kbGpsBtn');
+  const input = document.getElementById('kbFromInput');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+  // Safety timer: sebagian HP/PWA tidak pernah memanggil callback (GPS mati)
+  let settled = false;
+  const timer = setTimeout(() => {
+    if (settled) return; settled = true;
+    btn.disabled = false; btn.innerHTML = orig;
+    showToast('Gagal mendeteksi lokasi otomatis, isi alamat manual ya', 'red');
+  }, 20000);
+  navigator.geolocation.getCurrentPosition((pos) => {
+    if (settled) return; settled = true; clearTimeout(timer);
+    window._kbState.fromLat = pos.coords.latitude;
+    window._kbState.fromLng = pos.coords.longitude;
+    input.value = '📍 Lokasi saat ini (' + pos.coords.latitude.toFixed(5) + ', ' + pos.coords.longitude.toFixed(5) + ')';
+    btn.disabled = false; btn.innerHTML = orig;
+    showToast('Lokasi terdeteksi', 'green');
+    _kbValidate();
+  }, () => {
+    if (settled) return; settled = true; clearTimeout(timer);
+    btn.disabled = false; btn.innerHTML = orig;
+    showToast('Gagal mendapat lokasi GPS, isi alamat manual ya', 'red');
+  }, { enableHighAccuracy: true, timeout: 15000 });
+};
+
+window._kbCariKurir = async function() {
+  const user = window._S?.user;
+  if (!user?.uid) { showToast('Login dulu', 'red'); return; }
+  const from = document.getElementById('kbFromInput').value.trim();
+  const to = document.getElementById('kbToInput').value.trim();
+  const notes = (document.getElementById('kbNotesInput')?.value || '').trim();
+  const jenis = window._kbState.jenis;
+  if (!from || !to || !jenis) { showToast('Lengkapi lokasi & jenis barang dulu ya', 'red'); return; }
+  // Tampilkan state pencarian kurir
+  document.getElementById('kbFindingState').style.display = 'flex';
+  try {
+    const res = await window._supaFetch('/rest/v1/yallakurir_orders', {
+      method: 'POST', prefer: 'return=representation',
+      body: JSON.stringify({
+        sender_id: user.uid, sender_name: user.name || '', sender_phone: user.phone || '',
+        from_address: from, from_lat: window._kbState.fromLat, from_lng: window._kbState.fromLng,
+        to_address: to, to_lat: window._kbState.toLat, to_lng: window._kbState.toLng,
+        item_type: jenis, notes: notes, status: 'mencari_kurir'
+      })
+    });
+    if (res.ok) {
+      const rows = await res.json().catch(() => []);
+      window._kbState.orderId = Array.isArray(rows) ? rows[0]?.id : rows?.id;
+    } else {
+      console.warn('[kirimBarang] simpan order gagal:', res.status);
+    }
+  } catch (e) { console.warn('[kirimBarang]', e.message); }
+};
+
+window._kbCancelSearch = async function() {
+  const id = window._kbState.orderId;
+  if (id) {
+    try {
+      await window._supaFetch('/rest/v1/yallakurir_orders?id=eq.' + encodeURIComponent(id), {
+        method: 'PATCH', prefer: 'return=minimal',
+        body: JSON.stringify({ status: 'dibatalkan', updated_at: new Date().toISOString() })
+      });
+    } catch (e) { /* diamkan — UI tetap kembali ke form */ }
+  }
+  window._kbState.orderId = null;
+  document.getElementById('kbFindingState').style.display = 'none';
+};
+
+// ── Pemilih titik di peta (Leaflet) untuk Dari/Ke ──
+// Basemap vektor OpenFreeMap dgn label dipaksa Latin/Indonesia (name:id → name:latin
+// → name:en → name), bukan aksara lokal (Arab). Fallback ke raster kalau vektor gagal.
+let _kbMLPromise = null;
+function _kbEnsureMapLibre() {
+  if (_kbMLPromise) return _kbMLPromise;
+  _kbMLPromise = new Promise((resolve) => {
+    if (L.maplibreGL) return resolve(true);
+    const loadPlugin = () => {
+      if (L.maplibreGL) return resolve(true);
+      const p = document.createElement('script');
+      p.src = 'https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js';
+      p.onload = () => resolve(!!L.maplibreGL);
+      p.onerror = () => resolve(false);
+      document.head.appendChild(p);
+    };
+    if (window.maplibregl) return loadPlugin();
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'; document.head.appendChild(css);
+    const s = document.createElement('script'); s.src = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+    s.onload = loadPlugin; s.onerror = () => resolve(false); document.head.appendChild(s);
+  });
+  return _kbMLPromise;
+}
+function _kbForceLatinLabels(mm) {
+  try {
+    const layers = (mm.getStyle().layers) || [];
+    layers.forEach(l => {
+      if (l.type === 'symbol' && l.layout && l.layout['text-field']) {
+        try { mm.setLayoutProperty(l.id, 'text-field', ['coalesce', ['get', 'name:id'], ['get', 'name:latin'], ['get', 'name:en'], ['get', 'name']]); } catch (e) {}
+      }
+    });
+  } catch (e) {}
+}
+
+// Reverse-geocode koordinat → nama/alamat (Nominatim OSM, bahasa Indonesia).
+// Dipakai supaya kolom Dari/Ke menampilkan NAMA alamat, bukan angka koordinat.
+async function _kbReverseGeocode(lat, lng) {
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 8000);
+    const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + lat + '&lon=' + lng + '&accept-language=id&zoom=18';
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: ctrl.signal });
+    clearTimeout(to);
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d && d.display_name ? d.display_name : null;
+  } catch (e) { return null; }
+}
+
+window._kbOpenMap = function(target) {
+  const st = window._kbState;
+  st.mapTarget = target;
+  document.getElementById('kbMapPickerOverlay').style.display = 'flex';
+  document.getElementById('kbMapPickerTitle').textContent = target === 'from' ? 'Pilih Lokasi Penjemputan' : 'Pilih Lokasi Tujuan';
+  // Center awal: koordinat target ini kalau sudah ada, atau koordinat 'from', atau pusat Kairo
+  let clat = 30.0444, clng = 31.2357;
+  if (target === 'from' && st.fromLat != null) { clat = st.fromLat; clng = st.fromLng; }
+  else if (target === 'to' && st.toLat != null) { clat = st.toLat; clng = st.toLng; }
+  else if (st.fromLat != null) { clat = st.fromLat; clng = st.fromLng; }
+  setTimeout(() => {
+    const mapEl = document.getElementById('kbMapPickerMap');
+    if (st._map) { try { st._map.remove(); } catch (e) {} st._map = null; st._marker = null; }
+    const map = L.map(mapEl).setView([clat, clng], 15);
+    // Basemap: OpenFreeMap vektor (label Latin/Indonesia) → kalau gagal, raster CARTO
+    _kbEnsureMapLibre().then(ok => {
+      if (!st._map) return; // overlay sudah ditutup sebelum library siap
+      if (ok && L.maplibreGL) {
+        try {
+          const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(map);
+          const mm = gl.getMaplibreMap ? gl.getMaplibreMap() : gl._glMap;
+          if (mm) { mm.on('load', () => _kbForceLatinLabels(mm)); }
+          return;
+        } catch (e) { /* jatuh ke raster */ }
+      }
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
+    });
+    const marker = L.marker([clat, clng], { draggable: true }).addTo(map);
+    map.on('click', (e) => { marker.setLatLng(e.latlng); });
+    st._map = map; st._marker = marker;
+    map.invalidateSize();
+    setTimeout(() => { if (st._map) st._map.invalidateSize(); }, 400);
+  }, 60);
+};
+
+window._kbCloseMap = function() {
+  const st = window._kbState;
+  if (st._map) { try { st._map.remove(); } catch (e) {} st._map = null; st._marker = null; }
+  document.getElementById('kbMapPickerOverlay').style.display = 'none';
+};
+
+window._kbMapUseGps = function() {
+  if (!navigator.geolocation) { showToast('Perangkat tidak mendukung GPS', 'red'); return; }
+  const st = window._kbState;
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const lat = pos.coords.latitude, lng = pos.coords.longitude;
+    if (st._map && st._marker) { st._map.setView([lat, lng], 16); st._marker.setLatLng([lat, lng]); }
+  }, () => { showToast('Gagal ambil lokasi GPS', 'red'); }, { enableHighAccuracy: true, timeout: 15000 });
+};
+
+window._kbConfirmMap = function() {
+  const st = window._kbState;
+  if (!st._marker) { _kbCloseMap(); return; }
+  const pos = st._marker.getLatLng();
+  const t = st.mapTarget;
+  const lat = pos.lat, lng = pos.lng;
+  if (t === 'from') { st.fromLat = lat; st.fromLng = lng; } else { st.toLat = lat; st.toLng = lng; }
+  const input = document.getElementById(t === 'from' ? 'kbFromInput' : 'kbToInput');
+  // Kalau field kosong / masih label titik peta, isi dengan label koordinat; kalau user
+  // sudah menulis patokan sendiri, biarkan teksnya utuh.
+  if (input && (!input.value.trim() || input.value.trim().startsWith('📍'))) {
+    input.value = '📍 Titik peta (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ')';
+  }
+  const hint = document.getElementById(t === 'from' ? 'kbFromCoordHint' : 'kbToCoordHint');
+  if (hint) { hint.textContent = '✓ Titik peta terpilih (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ')'; hint.style.color = '#059669'; hint.style.fontWeight = '600'; }
+  _kbCloseMap();
+  _kbValidate();
+};
 
 async function _ykFetchOwnProfile(uid) {
   const r = await window._supaFetch(`/rest/v1/yallakurir_profiles?uid=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc&limit=1`);
@@ -25615,6 +25951,14 @@ window.openDaftarYallaKurir = async function() {
         <p class="text-sm text-gray-500">Hubungi admin YallaCare untuk info lebih lanjut.</p>
       </div>
     `;
+  } else if (profile.status === 'blocked') {
+    body.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fa-solid fa-ban text-red-400 text-4xl mb-3"></i>
+        <p class="font-bold text-base mb-1">Akun dinonaktifkan</p>
+        <p class="text-sm text-gray-500">Mitra YallaKurir kamu sedang dinonaktifkan. Hubungi admin YallaCare untuk info lebih lanjut.</p>
+      </div>
+    `;
   } else {
     body.innerHTML = `
       <div class="text-center py-6">
@@ -25666,6 +26010,69 @@ window.submitDaftarYallaKurir = async function() {
   } catch (e) {
     showToast('Gagal mendaftar: ' + e.message, 'red');
     if (btn) { btn.disabled = false; btn.textContent = 'Daftar Sekarang'; }
+  }
+};
+
+// ── ADMIN: approval mitra YallaKurir (tab '📦 YallaKurir' di Panel Admin) ──
+// Mirror pola loadKurirAdminUI/kurirAdminSetStatus, tapi tabel yallakurir_profiles
+// dan menampilkan foto identitas (KTP/Paspor/Selfie) untuk diverifikasi.
+window.loadYkAdminUI = async function() {
+  const box = document.getElementById('ykAdminList');
+  if (!box) return;
+  const esc = s => (s == null ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
+  box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat...</p>';
+  try {
+    const r = await window._supaFetch('/rest/v1/yallakurir_profiles?select=*&order=created_at.desc');
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pendaftar YallaKurir.</p>'; return; }
+    const statusLabel = s => s === 'active' ? 'Aktif' : s === 'rejected' ? 'Ditolak' : s === 'blocked' ? 'Diblokir' : 'Menunggu';
+    const photo = (url, label) => url
+      ? `<a href="${esc(url)}" target="_blank" rel="noopener" class="flex-1 min-w-0"><img src="${esc(url)}" class="w-full h-20 object-cover rounded-lg border border-gray-200"/><span class="block text-[9px] text-center text-gray-400 mt-0.5">${label}</span></a>`
+      : `<div class="flex-1 min-w-0"><div class="w-full h-20 rounded-lg border border-dashed border-gray-200 flex items-center justify-center text-[9px] text-gray-300">${label} -</div></div>`;
+    box.innerHTML = rows.map(c => `
+      <div class="bg-white rounded-2xl p-3.5 border border-gray-100 mb-2.5">
+        <div class="flex items-center justify-between mb-1 gap-2">
+          <p class="font-bold text-sm text-gray-800 min-w-0 truncate">${esc(c.name)}</p>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            ${c.status === 'active' ? `<button onclick="ykAdminSetStatus('${c.id}','blocked')" class="text-[10px] font-bold px-3 py-1 rounded-full bg-red-500 text-white shadow-sm active:scale-95 transition-transform">Blokir</button>` : ''}
+            ${c.status === 'blocked' ? `<button onclick="ykAdminSetStatus('${c.id}','active')" class="text-[10px] font-bold px-3 py-1 rounded-full bg-primary text-white shadow-sm active:scale-95 transition-transform">Buka Blokir</button>` : ''}
+            <span class="text-[10px] font-bold px-2 py-1 rounded-full ${c.status === 'active' ? 'bg-pl text-primary' : (c.status === 'rejected' || c.status === 'blocked') ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}">${statusLabel(c.status)}</span>
+          </div>
+        </div>
+        <p class="text-xs text-gray-500 mb-2">📱 ${esc(c.phone) || '-'}</p>
+        <div class="flex gap-2 mb-2.5">
+          ${photo(c.ktp_photo_url, 'KTP')}
+          ${photo(c.paspor_photo_url, 'Paspor')}
+          ${photo(c.selfie_photo_url, 'Selfie')}
+        </div>
+        ${c.status === 'pending' ? `
+        <div style="display:flex;gap:8px">
+          <button onclick="ykAdminSetStatus('${c.id}','active')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Setujui</button>
+          <button onclick="ykAdminSetStatus('${c.id}','rejected')" class="flex-1 bg-gray-100 text-gray-600 text-xs font-bold rounded-xl py-2">Tolak</button>
+        </div>` : ''}
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat data YallaKurir.</p>';
+  }
+};
+
+window.ykAdminSetStatus = async function(rowId, newStatus) {
+  try {
+    const admin = window._S?.user;
+    // return=representation supaya bisa deteksi PATCH 0-baris (RLS/senyap)
+    const res = await window._supaFetch(`/rest/v1/yallakurir_profiles?id=eq.${encodeURIComponent(rowId)}`, {
+      method: 'PATCH', prefer: 'return=representation',
+      body: JSON.stringify({ status: newStatus, approved_at: new Date().toISOString(), approved_by: admin?.email || '' })
+    });
+    if (!res.ok) throw new Error('Gagal update status');
+    const updated = await res.json().catch(() => []);
+    if (!Array.isArray(updated) || !updated.length) throw new Error('Perubahan tidak tersimpan (0 baris)');
+    const msg = { active: 'Mitra diaktifkan!', rejected: 'Pendaftaran ditolak', blocked: 'Mitra diblokir' }[newStatus] || 'Status diperbarui';
+    showToast(msg, 'green');
+    await window.loadYkAdminUI();
+  } catch (e) {
+    showToast('Gagal: ' + e.message, 'red');
   }
 };
 
