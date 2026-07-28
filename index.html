@@ -11107,6 +11107,24 @@ window.openChatList=()=>{
   }
 };
 
+// Waktu chat list: format relatif ringkas ("1 menit", "5 menit", "2 jam",
+// "3 hari", ...) — bukan tanggal (mis. 21/07). Dihitung dari waktu pesan terakhir.
+function _chatListTimeAgo(ms){
+  const diffSec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if(diffSec < 60) return 'Baru saja';
+  const min = Math.floor(diffSec / 60);
+  if(min < 60) return min + ' menit';
+  const hr = Math.floor(min / 60);
+  if(hr < 24) return hr + ' jam';
+  const day = Math.floor(hr / 24);
+  if(day < 7) return day + ' hari';
+  const wk = Math.floor(day / 7);
+  if(wk < 5) return wk + ' minggu';
+  const mo = Math.floor(day / 30);
+  if(mo < 12) return mo + ' bulan';
+  return Math.floor(day / 365) + ' tahun';
+}
+
 // ── Render baris chat list ────────────────────────────────────
 function renderChatListUI(chats, query='') {
   const content=document.getElementById('chatListContent');
@@ -11148,17 +11166,11 @@ function renderChatListUI(chats, query='') {
       const otherId=isMe?sellerId:buyerId;
       const unread=(ch.unread_counts||{})[window._S.user.uid]||0;
 
-      // Format waktu
+      // Format waktu — relatif ringkas ("5 menit", "2 jam", "3 hari"), bukan tanggal
       let timeStr='';
       const lastAtMs = ch.last_at ? new Date(ch.last_at).getTime() : (ch.lastAt?.seconds ? ch.lastAt.seconds*1000 : 0);
       if(lastAtMs){
-        const d=new Date(lastAtMs);
-        const now=new Date();
-        const isToday=d.toDateString()===now.toDateString();
-        const isYest=new Date(now-86400000).toDateString()===d.toDateString();
-        if(isToday) timeStr=d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-        else if(isYest) timeStr='Kemarin';
-        else timeStr=d.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit'});
+        timeStr = _chatListTimeAgo(lastAtMs);
       }
 
       const preview=ch.last_message||ch.lastMessage||'Mulai percakapan';
