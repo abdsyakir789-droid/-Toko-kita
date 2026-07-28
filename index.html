@@ -5555,7 +5555,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     }, 2000);
 
   } else {
-    if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
+    if (_profileUnsub) { _profileUnsub.unsubscribe(); _profileUnsub = null; }
     setTimeout(()=>{ try { if(window._S.user) window._FB?.setPresence(false); } catch(e){} }, 300);
 
     window._S.user = null;
@@ -6646,6 +6646,7 @@ async function _writeAdsCache(ads) {
 async function _clearAdsCache() {
   await window._idb.del(_ADS_CACHE_KEY);
   _kvDelete(_KV_ADS_KEY); // hapus KV sekaligus
+  if (window._yfClearCache) window._yfClearCache(); // invalidate cache YallaFood juga (food = subset ads)
 }
 
 window._clearAdsCache = _clearAdsCache;
@@ -17142,10 +17143,15 @@ window.updateYcUserBadge = async function() {
       const replyTime = t.replied_at ? new Date(t.replied_at).getTime() : 0;
       return replyTime > lastRead;
     }).length;
-    const badge = document.getElementById('ycUserBadge');
-    if(!badge) return;
-    if(unread > 0){ badge.textContent = unread > 99 ? '99+' : unread; badge.style.display = 'flex'; }
-    else { badge.style.display = 'none'; }
+    // Update badge mobile + desktop sekaligus
+    const setBadge = (id) => {
+      const badge = document.getElementById(id);
+      if(!badge) return;
+      if(unread > 0){ badge.textContent = unread > 99 ? '99+' : unread; badge.style.display = 'flex'; }
+      else { badge.style.display = 'none'; }
+    };
+    setBadge('ycUserBadge');
+    setBadge('ycUserBadgeDesktop');
   } catch(e){ console.warn('[ycBadge]', e.message); }
 };
 
@@ -17158,6 +17164,8 @@ window.openYallaCare = async function() {
   _ycSetLastRead(window._S.user.uid);
   const badge = document.getElementById('ycUserBadge');
   if(badge) badge.style.display = 'none';
+  const badgeDesktop = document.getElementById('ycUserBadgeDesktop');
+  if(badgeDesktop) badgeDesktop.style.display = 'none';
   await ycLoadMessages();
   // Realtime listener — auto refresh saat ada data baru
   if(_ycUserChannel) supabase.removeChannel(_ycUserChannel);
@@ -17475,28 +17483,13 @@ window.openAdminYallaCare = async function() {
   _ycAdminChannel = supabase.channel('yallacare_admin')
     .on('postgres_changes', {
       event: '*', schema: 'public', table: 'yallacare_tickets'
-    }, async (payload) => {
-      // Update data lokal
-      const newRow = payload.new || payload.old;
-      if(payload.eventType === 'INSERT') {
-        if(!_ycAllTickets.some(t => t.id === newRow.id)) _ycAllTickets.unshift(newRow);
-        // Badge muncul lagi otomatis kalau ada pesan baru (created_at > lastRead persist).
-        // Fetch foto profil uid baru jika belum di-cache
-        if(newRow.user_id && _ycProfileCache[newRow.user_id] === undefined) {
-          fetchYcProfiles([newRow.user_id]);
-        }
-      } else if(payload.eventType === 'UPDATE') {
-        const idx = _ycAllTickets.findIndex(t => t.id === newRow.id);
-        if(idx > -1) _ycAllTickets[idx] = newRow;
-      } else if(payload.eventType === 'DELETE') {
-        _ycAllTickets = _ycAllTickets.filter(t => t.id !== (payload.old||{}).id);
-      }
-      renderYcUserList();
-      updateYcBadge();
-      // Kalau chat user aktif sedang dibuka, refresh chat-nya juga
-      if(_ycActiveUserId && newRow && (newRow.user_id||newRow.user_email||'unknown') === _ycActiveUserId) {
-        renderYcAdminChat(_ycActiveUserId);
-      }
+    }, async () => {
+      // Payload realtime pada tabel ber-RLS sering datang KOSONG (p.new = {}),
+      // jadi JANGAN dipercaya untuk update daftar. Ambil ulang dari server
+      // (otoritatif) supaya tidak muncul kartu "hantu"/profil duplikat,
+      // lalu refresh chat yang sedang dibuka.
+      await loadYcTickets();
+      if(_ycActiveUserId) renderYcAdminChat(_ycActiveUserId);
     })
     .subscribe();
 };
@@ -23172,10 +23165,12 @@ window.openYallaFoodHome = async function() {
   document.body.style.overflow = 'hidden';
   _yfRenderTopbarIcons();
   await _yfLoadList();
+  if (window._yfStartRealtime) _yfStartRealtime(); // realtime aktif selama halaman terbuka
 };
 window.closeYallaFoodHome = function() {
   document.getElementById('yallaFoodHome').style.display = 'none';
   document.body.style.overflow = '';
+  if (window._yfStopRealtime) _yfStopRealtime();
 };
 
 // Samakan cara baca rating dengan _loadAllAds() di YallaMart: rating_score → rating (legacy) → 0
@@ -23188,26 +23183,149 @@ function _yfBtnBadge(n) {
   return n > 0 ? `<span style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0 3px">${n > 9 ? '9+' : n}</span>` : '';
 }
 
+// ── Cache YallaFood (pola sama seperti iklan: RAM → IndexedDB → KV → Supabase) ──
+// Data sumber = ads(is_yallafood=true). Invalidasi ikut _clearAdsCache() (dipanggil
+// di setiap create/edit/delete iklan) via window._yfClearCache.
+const _KV_YF_KEY    = 'ym_yf_v1';
+const _YF_CACHE_KEY = 'ym_yf_cache_v1';
+const _YF_CACHE_TTL = 10 * 60 * 1000; // 10 menit
+
+async function _yfReadCache(ignoreExpiry = false) {
+  try {
+    const parsed = await window._idb.get(_YF_CACHE_KEY);
+    if (!parsed) return null;
+    if (!ignoreExpiry && Date.now() - parsed.ts > _YF_CACHE_TTL) return null;
+    return parsed.data;
+  } catch(e) { return null; }
+}
+async function _yfIsCacheFresh() {
+  try {
+    const parsed = await window._idb.get(_YF_CACHE_KEY);
+    if (!parsed || !parsed.ts) return false;
+    return (Date.now() - parsed.ts) <= _YF_CACHE_TTL;
+  } catch(e) { return false; }
+}
+async function _yfWriteCache(rows) {
+  try { await window._idb.set(_YF_CACHE_KEY, { ts: Date.now(), data: rows }); } catch(e) {}
+}
+async function _yfWriteAllCaches(rows) {
+  await _yfWriteCache(rows);                              // IndexedDB
+  if (window._kvSet) window._kvSet(_KV_YF_KEY, rows);    // KV (fire & forget; auto-skip di staging)
+}
+async function _yfClearCache() {
+  try { await window._idb.del(_YF_CACHE_KEY); } catch(e) {}
+  if (window._kvDelete) window._kvDelete(_KV_YF_KEY);
+}
+window._yfClearCache = _yfClearCache;
+
+// Fetch fresh dari Supabase (sumber tunggal query food list)
+async function _yfFetchFromDb() {
+  const r = await window._supaFetch('/rest/v1/ads?is_yallafood=eq.true&select=*&order=created_at.desc');
+  return r.ok ? await r.json() : [];
+}
+
+// ── Realtime YallaFood — hanya aktif selama halaman food terbuka ──
+// Listen SEMUA perubahan tabel `ads` (unfiltered) supaya DELETE menu food ikut ketangkap
+// (payload DELETE tidak bawa kolom is_yallafood). Channel di-start saat buka halaman &
+// di-stop saat tutup, jadi tidak ada kerja latar saat halaman food tidak dilihat.
+let _yfChannel = null;
+function _yfStartRealtime() {
+  if (!window.supabase) return;
+  if (_yfChannel) { supabase.removeChannel(_yfChannel); _yfChannel = null; }
+  _yfChannel = supabase.channel('yf_realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ads' }, () => {
+      _yfFetchFromDb().then(async rows => {
+        await _yfWriteAllCaches(rows);
+        const home = document.getElementById('yallaFoodHome');
+        if (home && home.style.display !== 'none') _yfRenderList(rows);
+      }).catch(e => console.warn('[YF realtime] reload error:', e.message));
+    })
+    .subscribe(status => {
+      if (status === 'CHANNEL_ERROR') {
+        console.warn('[YF realtime] channel error, retry in 30s');
+        setTimeout(() => {
+          const home = document.getElementById('yallaFoodHome');
+          if (home && home.style.display !== 'none') _yfStartRealtime();
+        }, 30000);
+      }
+    });
+}
+function _yfStopRealtime() {
+  if (_yfChannel) { supabase.removeChannel(_yfChannel); _yfChannel = null; }
+}
+window._yfStartRealtime = _yfStartRealtime;
+window._yfStopRealtime  = _yfStopRealtime;
+
+// Orchestrator cache-first: IndexedDB → KV → Supabase, dengan background sync.
 async function _yfLoadList() {
   const box = document.getElementById('yallaFoodList');
+  if (!box) return;
+  const isOffline = !navigator.onLine;
+
+  // ── LAYER 1 & 2: IndexedDB cache → render instant ──
+  const cached = await _yfReadCache(isOffline);
+  if (cached && cached.length > 0) {
+    _yfRenderList(cached);
+    // Background sync kalau cache tidak fresh (offline → skip)
+    if (!isOffline) {
+      const fresh = await _yfIsCacheFresh();
+      if (!fresh) {
+        _yfFetchFromDb().then(async rows => {
+          await _yfWriteAllCaches(rows);
+          _yfRenderList(rows);
+        }).catch(e => console.warn('[YF] bg sync error:', e.message));
+      }
+    }
+    return;
+  }
+
+  // Cache miss → tampilkan loading
   box.style.display = 'block';
   box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat menu...</p>';
+
+  // ── LAYER 3: KV (auto-null di staging karena _KV_ENABLED=false) ──
   try {
-    const r = await window._supaFetch('/rest/v1/ads?is_yallafood=eq.true&select=*&order=created_at.desc');
-    const rows = r.ok ? await r.json() : [];
-    window._yfState.list = rows;
-    if (!rows.length) {
-      box.style.display = 'block';
-      box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada menu YallaFood tersedia.</p>';
+    const kvRows = window._kvGet ? await window._kvGet(_KV_YF_KEY) : null;
+    if (kvRows && kvRows.length > 0) {
+      await _yfWriteCache(kvRows);
+      _yfRenderList(kvRows);
+      _yfFetchFromDb().then(async rows => {
+        await _yfWriteAllCaches(rows);
+        _yfRenderList(rows);
+      }).catch(e => console.warn('[YF] bg sync after KV error:', e.message));
       return;
     }
-    // Masonry berbasis JS: 2 kolom, tiap kartu ditaruh ke kolom TERPENDEK.
-    // Rapat tanpa celah (gaya Pinterest), TAPI item baru selalu masuk ke bawah
-    // kolom terpendek — tidak menyeimbangkan ulang / geser seperti column-count.
-    box.style.display = 'flex';
-    box.innerHTML = '<div class="yf-col"></div><div class="yf-col"></div>';
-    const _yfCols = [box.children[0], box.children[1]];
-    const _yfColH = [0, 0];
+  } catch(e) {}
+
+  // ── LAYER 4: Supabase langsung ──
+  try {
+    const rows = await _yfFetchFromDb();
+    await _yfWriteAllCaches(rows);
+    _yfRenderList(rows);
+  } catch (e) {
+    box.style.display = 'block';
+    box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat menu.</p>';
+  }
+}
+
+// Render masonry (dipisah agar bisa dipanggil ulang dari cache & background sync)
+function _yfRenderList(rows) {
+  const box = document.getElementById('yallaFoodList');
+  if (!box) return;
+  window._yfState.list = rows;
+  if (!rows.length) {
+    box.style.display = 'block';
+    box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada menu YallaFood tersedia.</p>';
+    return;
+  }
+  // Masonry berbasis JS: 2 kolom, tiap kartu ditaruh ke kolom TERPENDEK.
+  // Rapat tanpa celah (gaya Pinterest), TAPI item baru selalu masuk ke bawah
+  // kolom terpendek — tidak menyeimbangkan ulang / geser seperti column-count.
+  box.style.display = 'flex';
+  box.innerHTML = '<div class="yf-col"></div><div class="yf-col"></div>';
+  const _yfCols = [box.children[0], box.children[1]];
+  const _yfColH = [0, 0];
+  {
     rows.forEach(ad => {
       // Alamat kartu diambil dari yang seller tulis sendiri saat upload iklan (ads.location) —
       // BUKAN alamat toko umum. Kalau saat upload tidak diisi, tidak ditampilkan sama sekali.
@@ -23248,9 +23366,6 @@ async function _yfLoadList() {
       _yfCols[_ci].insertAdjacentHTML('beforeend', cardHtml);
       _yfColH[_ci] = _yfCols[_ci].offsetHeight;      // ukur ulang tinggi kolom
     });
-  } catch (e) {
-    box.style.display = 'block';
-    box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat menu.</p>';
   }
 }
 
@@ -25880,6 +25995,32 @@ async function _checkAndShowPopupPromo() {
     // di localStorage {date,id,count} dan direset otomatis saat ganti hari
     // ATAU saat popup aktif berganti (id beda) — biar promo baru mulai dari 0.
     const maxPerDay = (p.max_per_day && p.max_per_day > 0) ? p.max_per_day : 1;
+
+    // ── Cap server-side untuk user login ──
+    // Hitungan disimpan di Supabase (tabel popup_promo_views via RPC
+    // popup_promo_register_view) sehingga TAHAN meski storage perangkat terhapus
+    // saat app di-force-close, dan konsisten lintas perangkat. RPC mengembalikan
+    // jumlah tampil hari ini (>=1) kalau boleh tampil, atau -1 kalau sudah mencapai
+    // batas. Guest atau kalau RPC gagal (mis. offline) → fallback localStorage.
+    const _uid = window._S && window._S.user && window._S.user.uid;
+    if (_uid) {
+      try {
+        const rr = await window._supaFetch('/rest/v1/rpc/popup_promo_register_view', {
+          method: 'POST',
+          body: JSON.stringify({ p_promo_id: p.id, p_max: maxPerDay })
+        });
+        if (rr.ok) {
+          const newCount = await rr.json();
+          if (typeof newCount === 'number' && newCount < 0) return; // sudah mencapai batas hari ini
+          window._popupPromoShownThisView = true;
+          _renderPopupPromoCard(p);
+          return;
+        }
+        // rr tidak ok → lanjut ke fallback localStorage di bawah
+      } catch (e) { /* fallback localStorage */ }
+    }
+
+    // ── Fallback cap per perangkat via localStorage (guest / RPC gagal) ──
     const today = _popupPromoTodayStr();
     let rec = null;
     try { rec = JSON.parse(localStorage.getItem('ym_popup_promo_cap') || 'null'); } catch (e) {}
