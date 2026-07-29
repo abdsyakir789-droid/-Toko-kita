@@ -25685,11 +25685,18 @@ window._kbDetectLocation = function() {
   }, 20000);
   navigator.geolocation.getCurrentPosition((pos) => {
     if (settled) return; settled = true; clearTimeout(timer);
-    window._kbState.fromLat = pos.coords.latitude;
-    window._kbState.fromLng = pos.coords.longitude;
-    input.value = '📍 Lokasi saat ini (' + pos.coords.latitude.toFixed(5) + ', ' + pos.coords.longitude.toFixed(5) + ')';
+    const glat = pos.coords.latitude, glng = pos.coords.longitude;
+    window._kbState.fromLat = glat;
+    window._kbState.fromLng = glng;
+    input.value = 'Mengambil nama alamat…';
     btn.disabled = false; btn.innerHTML = orig;
     showToast('Lokasi terdeteksi', 'green');
+    const fh = document.getElementById('kbFromCoordHint');
+    if (fh) { fh.textContent = '✓ Lokasi saya (' + glat.toFixed(5) + ', ' + glng.toFixed(5) + ')'; fh.style.color = '#059669'; fh.style.fontWeight = '600'; }
+    _kbReverseGeocode(glat, glng).then(name => {
+      input.value = name || ('📍 Lokasi saat ini (' + glat.toFixed(5) + ', ' + glng.toFixed(5) + ')');
+      _kbValidate();
+    });
     _kbValidate();
   }, () => {
     if (settled) return; settled = true; clearTimeout(timer);
@@ -25781,7 +25788,7 @@ async function _kbReverseGeocode(lat, lng) {
   try {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 8000);
-    const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + lat + '&lon=' + lng + '&accept-language=id&zoom=18';
+    const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + lat + '&lon=' + lng + '&accept-language=id,en&zoom=18';
     const r = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: ctrl.signal });
     clearTimeout(to);
     if (!r.ok) return null;
@@ -25848,14 +25855,16 @@ window._kbConfirmMap = function() {
   const lat = pos.lat, lng = pos.lng;
   if (t === 'from') { st.fromLat = lat; st.fromLng = lng; } else { st.toLat = lat; st.toLng = lng; }
   const input = document.getElementById(t === 'from' ? 'kbFromInput' : 'kbToInput');
-  // Kalau field kosong / masih label titik peta, isi dengan label koordinat; kalau user
-  // sudah menulis patokan sendiri, biarkan teksnya utuh.
-  if (input && (!input.value.trim() || input.value.trim().startsWith('📍'))) {
-    input.value = '📍 Titik peta (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ')';
-  }
   const hint = document.getElementById(t === 'from' ? 'kbFromCoordHint' : 'kbToCoordHint');
-  if (hint) { hint.textContent = '✓ Titik peta terpilih (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ')'; hint.style.color = '#059669'; hint.style.fontWeight = '600'; }
+  // Isi sementara sambil ambil nama alamat, koordinat tetap di hint
+  if (input) input.value = 'Mengambil nama alamat…';
+  if (hint) { hint.textContent = '✓ Titik peta (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ')'; hint.style.color = '#059669'; hint.style.fontWeight = '600'; }
   _kbCloseMap();
+  // Reverse-geocode → tampilkan NAMA alamat di kolom (fallback ke koordinat kalau gagal)
+  _kbReverseGeocode(lat, lng).then(name => {
+    if (input) input.value = name || ('📍 Titik peta (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ')');
+    _kbValidate();
+  });
   _kbValidate();
 };
 
