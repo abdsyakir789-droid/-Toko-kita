@@ -25524,9 +25524,9 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 
 <!-- ═══ KIRIM BARANG (YallaKurir, sisi pengirim) — full-screen ═══ -->
 <style>
-  #kirimBarangOverlay .kb-chip{border:2px solid #e5e7eb;background:#fff;border-radius:16px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;cursor:pointer;transition:.15s;width:100%}
-  #kirimBarangOverlay .kb-chip i{font-size:20px;color:#6b7280;transition:.15s}
-  #kirimBarangOverlay .kb-chip span{font-size:12px;font-weight:700;color:#374151;transition:.15s}
+  #kirimBarangOverlay .kb-chip{border:2px solid #e5e7eb;background:#fff;border-radius:14px;padding:12px 3px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:.15s;width:100%}
+  #kirimBarangOverlay .kb-chip i{font-size:18px;color:#6b7280;transition:.15s}
+  #kirimBarangOverlay .kb-chip span{font-size:10.5px;font-weight:700;color:#374151;transition:.15s;white-space:nowrap}
   #kirimBarangOverlay .kb-chip.kb-chip-active{border-color:#10B981;background:#ECFDF5}
   #kirimBarangOverlay .kb-chip.kb-chip-active i,#kirimBarangOverlay .kb-chip.kb-chip-active span{color:#059669}
   #kirimBarangOverlay .kb-chip:active{transform:scale(.97)}
@@ -25570,11 +25570,12 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 
     <!-- Jenis barang -->
     <label class="text-xs font-bold text-gray-700 mb-2 block">Jenis Barang</label>
-    <div id="kbJenisGrid" class="grid grid-cols-4 gap-2 mb-4">
+    <div id="kbJenisGrid" class="grid grid-cols-5 gap-1.5 mb-4">
       <button type="button" data-jenis="Elektronik" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-laptop"></i><span>Elektronik</span></button>
       <button type="button" data-jenis="Perhiasan" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-gem"></i><span>Perhiasan</span></button>
       <button type="button" data-jenis="Dokumen" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-file-lines"></i><span>Dokumen</span></button>
       <button type="button" data-jenis="Uang" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-money-bill-wave"></i><span>Uang</span></button>
+      <button type="button" data-jenis="Umum" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-box"></i><span>Umum</span></button>
     </div>
 
     <!-- Catatan -->
@@ -25583,6 +25584,9 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   </div>
   <!-- Footer -->
   <div class="bg-white border-t border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <div id="kbOngkirBox" class="rounded-2xl px-4 py-2.5 mb-2.5 bg-pl/60 flex items-center" style="min-height:44px">
+      <span class="w-full text-center text-xs font-medium text-gray-400"><i class="fa-solid fa-circle-info mr-1"></i>Pilih titik Dari &amp; Ke untuk lihat estimasi ongkir</span>
+    </div>
     <button id="kbCariKurirBtn" onclick="_kbCariKurir()" disabled class="w-full bg-primary text-white font-bold rounded-2xl py-3.5 text-sm opacity-50 cursor-not-allowed flex items-center justify-center gap-2"><i class="fa-solid fa-magnifying-glass"></i>Cari Kurir</button>
   </div>
 
@@ -25595,7 +25599,8 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
       </div>
     </div>
     <p class="font-black text-lg text-gray-800 mb-1">Mencari kurir terdekat...</p>
-    <p class="text-sm text-gray-500 mb-8" style="max-width:280px">Kami sedang menghubungkan kamu dengan mitra YallaKurir aktif di sekitar. Mohon tunggu sebentar ya.</p>
+    <p class="text-sm text-gray-500 mb-4" style="max-width:280px">Kami sedang menghubungkan kamu dengan mitra YallaKurir aktif di sekitar. Mohon tunggu sebentar ya.</p>
+    <div id="kbFindingOngkir" class="text-sm font-semibold text-primary bg-pl rounded-2xl px-4 py-2 mb-8">Menghitung ongkir...</div>
     <button onclick="_kbCancelSearch()" class="text-sm font-bold text-red-500 border border-red-200 rounded-2xl py-2.5 px-6">Batalkan Pencarian</button>
   </div>
 </div>
@@ -25628,7 +25633,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 window._ykState = { profile: null };
 
 // ── KIRIM BARANG (sisi pengirim) — full-screen form → cari kurir ──
-window._kbState = { jenis: null, fromLat: null, fromLng: null, toLat: null, toLng: null, orderId: null, mapTarget: null, _map: null, _marker: null };
+window._kbState = { jenis: null, fromLat: null, fromLng: null, toLat: null, toLng: null, ongkir: null, distanceKm: null, _ongkirKey: null, orderId: null, mapTarget: null, _map: null, _marker: null };
 
 window.openKirimBarangYallaKurir = function() {
   if (!window._S?.user?.uid) { showToast('Login dulu ya!', 'red'); return; }
@@ -25636,7 +25641,7 @@ window.openKirimBarangYallaKurir = function() {
   ov.style.display = 'flex';
   document.body.style.overflow = 'hidden';
   // reset form tiap buka
-  window._kbState = { jenis: null, fromLat: null, fromLng: null, toLat: null, toLng: null, orderId: null, mapTarget: null, _map: null, _marker: null };
+  window._kbState = { jenis: null, fromLat: null, fromLng: null, toLat: null, toLng: null, ongkir: null, distanceKm: null, _ongkirKey: null, orderId: null, mapTarget: null, _map: null, _marker: null };
   document.getElementById('kbFromInput').value = '';
   document.getElementById('kbToInput').value = '';
   const notes = document.getElementById('kbNotesInput'); if (notes) notes.value = '';
@@ -25660,14 +25665,49 @@ window._kbSelectJenis = function(btn) {
 };
 
 window._kbValidate = function() {
-  const from = (document.getElementById('kbFromInput')?.value || '').trim();
-  const to = (document.getElementById('kbToInput')?.value || '').trim();
-  const ok = !!from && !!to && !!window._kbState.jenis;
+  // Butuh koordinat Dari & Ke (untuk hitung jarak/ongkir) + jenis barang
+  const st = window._kbState;
+  const ok = st.fromLat != null && st.fromLng != null && st.toLat != null && st.toLng != null && !!st.jenis;
   const btn = document.getElementById('kbCariKurirBtn');
-  if (!btn) return;
-  btn.disabled = !ok;
-  btn.classList.toggle('opacity-50', !ok);
-  btn.classList.toggle('cursor-not-allowed', !ok);
+  if (btn) {
+    btn.disabled = !ok;
+    btn.classList.toggle('opacity-50', !ok);
+    btn.classList.toggle('cursor-not-allowed', !ok);
+  }
+  // Ongkir muncul otomatis begitu titik Dari & Ke lengkap (tak perlu tunggu jenis)
+  if (window._kbRefreshOngkir) _kbRefreshOngkir();
+};
+
+// Hitung & tampilkan estimasi ongkir di atas tombol "Cari Kurir" — dinamis:
+// kosong → status menunggu; Dari & Ke lengkap → langsung hitung (engine YallaFood).
+let _kbOngkirSeq = 0;
+window._kbRefreshOngkir = async function() {
+  const st = window._kbState;
+  const box = document.getElementById('kbOngkirBox');
+  if (!box) return;
+  const bothSet = st.fromLat != null && st.fromLng != null && st.toLat != null && st.toLng != null;
+  if (!bothSet) {
+    st.ongkir = null; st.distanceKm = null; st._ongkirKey = null;
+    box.innerHTML = '<span class="w-full text-center text-xs font-medium text-gray-400"><i class="fa-solid fa-circle-info mr-1"></i>Pilih titik Dari &amp; Ke untuk lihat estimasi ongkir</span>';
+    return;
+  }
+  const key = st.fromLat + ',' + st.fromLng + ',' + st.toLat + ',' + st.toLng;
+  if (key === st._ongkirKey && st.ongkir != null) return; // titik sama, sudah dihitung
+  st._ongkirKey = key;
+  const seq = ++_kbOngkirSeq;
+  box.innerHTML = '<span class="w-full text-center text-xs font-medium text-gray-500"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Menghitung ongkir…</span>';
+  try {
+    const distanceKm = await _yfGetDistanceKm(st.fromLat, st.fromLng, st.toLat, st.toLng);
+    const cfg = await _yfGetOngkirConfig();
+    const ongkir = _yfCalcOngkir(distanceKm, cfg);
+    if (seq !== _kbOngkirSeq) return; // titik keburu berubah lagi
+    st.ongkir = ongkir; st.distanceKm = distanceKm;
+    box.innerHTML = '<div class="w-full flex items-center justify-between gap-2"><span class="text-xs font-semibold text-gray-600"><i class="fa-solid fa-motorcycle mr-1 text-primary"></i>Estimasi Ongkir</span><span class="text-right"><b class="text-primary text-base">' + _yfFmtPrice(ongkir) + '</b> <span class="text-[11px] text-gray-400 font-medium">· ' + distanceKm.toFixed(1) + ' km</span></span></div>';
+  } catch (e) {
+    if (seq !== _kbOngkirSeq) return;
+    st.ongkir = null; st.distanceKm = null;
+    box.innerHTML = '<span class="w-full text-center text-xs font-medium text-gray-400">Ongkir dihitung saat kurir mengambil</span>';
+  }
 };
 
 window._kbDetectLocation = function() {
@@ -25708,26 +25748,48 @@ window._kbDetectLocation = function() {
 window._kbCariKurir = async function() {
   const user = window._S?.user;
   if (!user?.uid) { showToast('Login dulu', 'red'); return; }
+  const st = window._kbState;
   const from = document.getElementById('kbFromInput').value.trim();
   const to = document.getElementById('kbToInput').value.trim();
   const notes = (document.getElementById('kbNotesInput')?.value || '').trim();
-  const jenis = window._kbState.jenis;
-  if (!from || !to || !jenis) { showToast('Lengkapi lokasi & jenis barang dulu ya', 'red'); return; }
+  const jenis = st.jenis;
+  if (st.fromLat == null || st.toLat == null || !jenis) { showToast('Pilih titik jemput & tujuan di peta, dan jenis barang', 'red'); return; }
+
   // Tampilkan state pencarian kurir
   document.getElementById('kbFindingState').style.display = 'flex';
+  const ongkirEl = document.getElementById('kbFindingOngkir');
+
+  // ── Ongkir: pakai yang SUDAH dihitung di form (engine YallaFood); hitung ulang kalau belum ada ──
+  let ongkir = st.ongkir, distanceKm = st.distanceKm;
+  if (ongkir == null) {
+    if (ongkirEl) ongkirEl.textContent = 'Menghitung ongkir...';
+    try {
+      distanceKm = await _yfGetDistanceKm(st.fromLat, st.fromLng, st.toLat, st.toLng);
+      const cfg = await _yfGetOngkirConfig();
+      ongkir = _yfCalcOngkir(distanceKm, cfg);
+    } catch (e) { console.warn('[kirimBarang] hitung ongkir gagal:', e.message); }
+  }
+  if (ongkirEl) {
+    ongkirEl.innerHTML = (ongkir != null)
+      ? ('Estimasi ongkir <b>' + _yfFmtPrice(ongkir) + '</b> &middot; ' + (distanceKm || 0).toFixed(1) + ' km')
+      : 'Ongkir dihitung saat kurir mengambil';
+  }
+
   try {
     const res = await window._supaFetch('/rest/v1/yallakurir_orders', {
       method: 'POST', prefer: 'return=representation',
       body: JSON.stringify({
         sender_id: user.uid, sender_name: user.name || '', sender_phone: user.phone || '',
-        from_address: from, from_lat: window._kbState.fromLat, from_lng: window._kbState.fromLng,
-        to_address: to, to_lat: window._kbState.toLat, to_lng: window._kbState.toLng,
-        item_type: jenis, notes: notes, status: 'mencari_kurir'
+        from_address: from, from_lat: st.fromLat, from_lng: st.fromLng,
+        to_address: to, to_lat: st.toLat, to_lng: st.toLng,
+        item_type: jenis, notes: notes,
+        ongkir: ongkir, distance_km: distanceKm,
+        status: 'mencari_kurir'
       })
     });
     if (res.ok) {
       const rows = await res.json().catch(() => []);
-      window._kbState.orderId = Array.isArray(rows) ? rows[0]?.id : rows?.id;
+      st.orderId = Array.isArray(rows) ? rows[0]?.id : rows?.id;
     } else {
       console.warn('[kirimBarang] simpan order gagal:', res.status);
     }
