@@ -25522,6 +25522,18 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   <div id="yallaKurirStatusBody" class="flex-1 overflow-y-auto px-4 py-4"></div>
 </div>
 
+<!-- YALLAKURIR: dashboard mitra kurir aktif — kartu order 'Kirim Barang' menunggu diambil -->
+<div id="ykCourierDashboard" style="display:none;position:fixed;inset:0;z-index:55;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeYkCourierDashboard()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Dashboard YallaKurir</h2>
+  </div>
+  <div class="flex-1 overflow-y-auto px-3 py-3">
+    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Pesanan Menunggu Kurir</p>
+    <div id="ykWaitingRoomList" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div>
+</div>
+
 <!-- ═══ KIRIM BARANG (YallaKurir, sisi pengirim) — full-screen ═══ -->
 <style>
   #kirimBarangOverlay .kb-chip{border:2px solid #e5e7eb;background:#fff;border-radius:14px;padding:12px 3px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:.15s;width:100%}
@@ -26175,10 +26187,98 @@ async function _ykRefreshMenuLabel() {
     } catch (e) { /* fail-open ke label default */ }
   }
   const label = status === 'active' ? 'YallaKurir Aktif' : status === 'pending' ? 'Menunggu Verifikasi' : 'Daftar YallaKurir';
+  const action = status === 'active' ? 'openYkCourierDashboard()' : 'openDaftarYallaKurir()';
+  if (mobBtn) mobBtn.setAttribute('onclick', action);
+  if (deskBtn) deskBtn.setAttribute('onclick', action);
   const mobLabel = document.getElementById('menuYallaKurirLabelMob');
   const deskLabel = document.getElementById('menuYallaKurirLabelDesktop');
   if (mobLabel) mobLabel.textContent = label;
   if (deskLabel) deskLabel.textContent = label;
+}
+
+// ── DASHBOARD MITRA YALLAKURIR AKTIF — kartu order 'Kirim Barang' menunggu diambil ──
+// Mirror pola _kurirLoadWaitingRoom/yfKurirClaimOrder/_kurirSubscribeRealtime (kurir
+// YallaFood), tapi tabel yallakurir_orders, TIDAK menyentuh satupun kode YallaFood.
+window.openYkCourierDashboard = async function() {
+  const user = window._S?.user;
+  if (!user?.uid) { showToast('Login dulu', 'red'); return; }
+  const profile = await _ykFetchOwnProfile(user.uid);
+  window._ykState.profile = profile;
+  if (!profile || profile.status !== 'active') {
+    showToast('Kamu belum jadi mitra YallaKurir aktif', 'red');
+    return;
+  }
+  document.getElementById('ykCourierDashboard').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  await _ykLoadWaitingRoom();
+  _ykSubscribeRealtime();
+};
+window.closeYkCourierDashboard = function() {
+  document.getElementById('ykCourierDashboard').style.display = 'none';
+  document.body.style.overflow = '';
+  if (_ykChannel) { try { window.supabase.removeChannel(_ykChannel); } catch (e) {} _ykChannel = null; }
+};
+
+const _YK_ITEM_ICON = { Elektronik: 'fa-laptop', Perhiasan: 'fa-gem', Dokumen: 'fa-file-lines', Uang: 'fa-money-bill-wave', Umum: 'fa-box' };
+
+async function _ykLoadWaitingRoom() {
+  const box = document.getElementById('ykWaitingRoomList');
+  if (!box) return;
+  box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
+  try {
+    const r = await window._supaFetch('/rest/v1/yallakurir_orders?status=eq.mencari_kurir&select=*&order=created_at.desc');
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan menunggu kurir.</p>'; return; }
+    box.innerHTML = rows.map(o => `
+      <div class="bg-white rounded-2xl p-3 border border-gray-100">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span class="text-[11px] font-bold text-primary bg-pl px-2.5 py-1 rounded-full"><i class="fa-solid ${_YK_ITEM_ICON[o.item_type] || 'fa-box'} mr-1"></i>${_sadEscHtml(o.item_type || '-')}</span>
+          <span style="font-size:10px;font-weight:600;color:#6b7280">${_yfTimeAgo(o.created_at)}</span>
+        </div>
+        <div style="background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
+          <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:6px">
+            <i class="fa-solid fa-location-dot" style="color:#059669;font-size:13px;margin-top:2px;flex-shrink:0"></i>
+            <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Jemput: ${_sadEscHtml(o.from_address || '-')}</p>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:6px">
+            <i class="fa-solid fa-flag-checkered" style="color:#6b7280;font-size:13px;margin-top:2px;flex-shrink:0"></i>
+            <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Tujuan: ${_sadEscHtml(o.to_address || '-')}</p>
+          </div>
+        </div>
+        ${o.notes ? `<p class="text-xs text-gray-500 mb-2">Catatan: ${_sadEscHtml(o.notes)}</p>` : ''}
+        <p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${o.ongkir != null ? _yfFmtPrice(o.ongkir) : 'Dihitung saat diambil'}</span>${o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : ''}</p>
+        <button onclick="ykKurirClaimOrder('${o.id}')" class="w-full bg-primary text-white text-xs font-bold rounded-xl py-2">Ambil Pesanan</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = '<p class="text-center text-red-400 text-xs py-4">Gagal memuat.</p>';
+  }
+}
+
+window.ykKurirClaimOrder = async function(orderId) {
+  const user = window._S?.user;
+  if (!user?.uid) return;
+  try {
+    const res = await window._supaFetch(`/rest/v1/yallakurir_orders?id=eq.${encodeURIComponent(orderId)}&status=eq.mencari_kurir`, {
+      method: 'PATCH', prefer: 'return=representation',
+      body: JSON.stringify({ courier_id: user.uid, courier_name: user.name || '', status: 'diambil', updated_at: new Date().toISOString() })
+    });
+    const updated = res.ok ? await res.json() : [];
+    if (!updated.length) { showToast('Pesanan sudah diambil kurir lain', 'red'); await _ykLoadWaitingRoom(); return; }
+    showToast('Pesanan berhasil diambil!', 'green');
+    await _ykLoadWaitingRoom();
+  } catch (e) {
+    showToast('Gagal mengambil pesanan: ' + e.message, 'red');
+  }
+};
+
+let _ykChannel = null;
+function _ykSubscribeRealtime() {
+  if (!window.supabase) return;
+  if (_ykChannel) { try { window.supabase.removeChannel(_ykChannel); } catch (e) {} }
+  _ykChannel = window.supabase.channel('yallakurir_orders_kurir_pool')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'yallakurir_orders', filter: 'status=eq.mencari_kurir' }, () => { _ykLoadWaitingRoom(); })
+    .subscribe();
 }
 
 // Ikut jalan tiap kali renderUserState() dipanggil — dibungkus dari luar LAGI,
