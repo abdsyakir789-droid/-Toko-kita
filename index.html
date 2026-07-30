@@ -25625,6 +25625,13 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   </div>
   <div style="position:relative;flex:1;min-height:0">
     <div id="kbMapPickerMap" style="position:absolute;inset:0"></div>
+    <div style="position:absolute;top:12px;left:12px;right:12px;z-index:500">
+      <div style="position:relative">
+        <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:13px;pointer-events:none"></i>
+        <input id="kbMapSearchInput" type="text" oninput="_kbSearchAddress(this.value)" placeholder="Cari nama jalan / tempat..." style="width:100%;box-sizing:border-box;padding:11px 14px 11px 36px;border-radius:14px;border:none;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18);font-size:13px;outline:none"/>
+      </div>
+      <div id="kbMapSearchResults" style="display:none;margin-top:6px;background:#fff;border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,.18);max-height:240px;overflow-y:auto"></div>
+    </div>
     <button onclick="_kbMapUseGps()" title="Lokasi saya" style="position:absolute;right:14px;bottom:14px;z-index:500;width:44px;height:44px;border-radius:50%;background:#fff;border:none;box-shadow:0 2px 10px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fa-solid fa-crosshairs text-primary"></i></button>
   </div>
   <div class="bg-white border-t border-gray-100 px-4 py-3" style="flex-shrink:0">
@@ -25871,11 +25878,68 @@ async function _kbReverseGeocode(lat, lng) {
   } catch (e) { return null; }
 }
 
+// Forward-geocode: cari nama jalan/tempat → daftar titik kandidat (Nominatim OSM,
+// dibatasi Mesir karena YallaKurir cuma layanan lokal Kairo). Dipakai search box
+// di atas peta pemilih titik, supaya tak melulu tap/drag pin seperti sebelumnya.
+let _kbSearchDebounce = null;
+let _kbSearchSeq = 0;
+window._kbSearchResultsCache = [];
+window._kbSearchAddress = function(q) {
+  clearTimeout(_kbSearchDebounce);
+  const box = document.getElementById('kbMapSearchResults');
+  q = (q || '').trim();
+  if (q.length < 3) { if (box) { box.style.display = 'none'; box.innerHTML = ''; } return; }
+  _kbSearchDebounce = setTimeout(() => _kbDoSearchAddress(q), 450);
+};
+
+async function _kbDoSearchAddress(q) {
+  const box = document.getElementById('kbMapSearchResults');
+  if (!box) return;
+  const seq = ++_kbSearchSeq;
+  box.style.display = 'block';
+  box.innerHTML = '<p class="text-center text-gray-400 text-xs py-3">Mencari...</p>';
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 8000);
+    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&q=' + encodeURIComponent(q) + '&accept-language=id,en&limit=6&countrycodes=eg';
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: ctrl.signal });
+    clearTimeout(to);
+    if (seq !== _kbSearchSeq) return; // ketikan sudah berubah lagi, buang hasil basi
+    const rows = r.ok ? await r.json() : [];
+    window._kbSearchResultsCache = rows;
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-3">Tidak ditemukan, coba kata kunci lain.</p>'; return; }
+    box.innerHTML = rows.map((row, i) => `
+      <button type="button" onclick="_kbSelectSearchResult(${i})" style="display:block;width:100%;text-align:left;padding:10px 14px;border:none;background:none;border-bottom:1px solid #f3f4f6;font-size:12.5px;color:#111827;cursor:pointer">
+        <i class="fa-solid fa-location-dot" style="color:#10B981;margin-right:6px;font-size:11px"></i>${_sadEscHtml(row.display_name)}
+      </button>
+    `).join('');
+  } catch (e) {
+    if (seq !== _kbSearchSeq) return;
+    box.innerHTML = '<p class="text-center text-red-400 text-xs py-3">Gagal mencari, coba lagi.</p>';
+  }
+}
+
+window._kbSelectSearchResult = function(i) {
+  const row = (window._kbSearchResultsCache || [])[i];
+  if (!row) return;
+  const st = window._kbState;
+  const lat = parseFloat(row.lat), lng = parseFloat(row.lon);
+  if (st._map && st._marker) { st._map.setView([lat, lng], 16); st._marker.setLatLng([lat, lng]); }
+  const input = document.getElementById('kbMapSearchInput');
+  if (input) input.value = row.display_name;
+  const box = document.getElementById('kbMapSearchResults');
+  if (box) box.style.display = 'none';
+};
+
 window._kbOpenMap = function(target) {
   const st = window._kbState;
   st.mapTarget = target;
   document.getElementById('kbMapPickerOverlay').style.display = 'flex';
   document.getElementById('kbMapPickerTitle').textContent = target === 'from' ? 'Pilih Lokasi Penjemputan' : 'Pilih Lokasi Tujuan';
+  const searchInput = document.getElementById('kbMapSearchInput');
+  if (searchInput) searchInput.value = '';
+  const searchResults = document.getElementById('kbMapSearchResults');
+  if (searchResults) { searchResults.style.display = 'none'; searchResults.innerHTML = ''; }
   // Center awal: koordinat target ini kalau sudah ada, atau koordinat 'from', atau pusat Kairo
   let clat = 30.0444, clng = 31.2357;
   if (target === 'from' && st.fromLat != null) { clat = st.fromLat; clng = st.fromLng; }
@@ -25899,7 +25963,7 @@ window._kbOpenMap = function(target) {
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
     });
     const marker = L.marker([clat, clng], { draggable: true }).addTo(map);
-    map.on('click', (e) => { marker.setLatLng(e.latlng); });
+    map.on('click', (e) => { marker.setLatLng(e.latlng); const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none'; });
     st._map = map; st._marker = marker;
     map.invalidateSize();
     setTimeout(() => { if (st._map) st._map.invalidateSize(); }, 400);
