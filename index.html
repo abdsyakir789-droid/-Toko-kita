@@ -3299,8 +3299,9 @@ h3.text-sm.font-bold.text-gray-800 {
       </div>
     </button>
     <button id="menuYallaKurirBtnMob" onclick="openDaftarYallaKurir()" class="flex-1 min-w-0 flex items-center gap-1.5 bg-white rounded-2xl py-4 pl-1.5 pr-3 transition-all text-left">
-      <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center flex-shrink-0">
+      <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center flex-shrink-0" style="position:relative">
         <span class="lucide-icon" id="menuYallaKurirIconMob"></span>
+        <span id="ykOrderBadgeMob" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;padding:0 3px;border-radius:8px;align-items:center;justify-content:center;box-sizing:border-box">0</span>
       </div>
       <div class="flex-1 min-w-0">
         <p id="menuYallaKurirLabelMob" class="lc1" style="font-size:11.5px;font-weight:700;color:#111827;margin:0">Daftar YallaKurir</p>
@@ -3402,8 +3403,9 @@ h3.text-sm.font-bold.text-gray-800 {
       <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
     </button>
     <button id="menuYallaKurirBtnDesktop" onclick="openDaftarYallaKurir()" class="flex-1 min-w-0 flex items-center gap-3 bg-white rounded-2xl py-4 pl-3 pr-5 transition-all hover:shadow-md text-left">
-      <div class="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0">
+      <div class="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0" style="position:relative">
         <span class="lucide-icon" id="menuYallaKurirIconDesktop"></span>
+        <span id="ykOrderBadgeDesktop" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;padding:0 3px;border-radius:8px;align-items:center;justify-content:center;box-sizing:border-box">0</span>
       </div>
       <div class="flex-1 min-w-0">
         <p id="menuYallaKurirLabelDesktop" class="text-sm font-bold text-gray-900 lc1">Daftar YallaKurir</p>
@@ -26386,12 +26388,33 @@ window._kbConfirmMap = function() {
 // pengguna. Admin (email admin) otomatis ditandai created_by_role='admin'.
 window._patokanAddState = { lat: null, lng: null, cat: 'umum' };
 
+// Bug yang pernah bikin tombol Simpan "muter selamanya" sampai app di-swipe-close:
+// _patokanOpenAdd dulu TIDAK reset tampilan #patokanSaveBtn. Kalau user nutup modal
+// SEBELUM 15 detik (timeout di _patokanSubmitAdd belum sempat jalan) lalu buka lagi,
+// tombol MASIH dalam kondisi disabled+spinner dari percobaan sebelumnya — klik jadi
+// tidak bereaksi (tombol disabled memang diabaikan browser). Fix: paksa reset tombol
+// + batalkan request lama tiap kali modal dibuka ATAU ditutup, apapun kondisinya.
+function _patokanResetSaveBtn() {
+  const btn = document.getElementById('patokanSaveBtn');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Patokan'; }
+}
+window._patokanAbortCtrl = null;
+function _patokanAbortPending() {
+  if (window._patokanAbortCtrl) {
+    window._patokanManualAbort = true; // tandai: ini dibatalkan user (buka/tutup modal), bukan timeout jaringan
+    try { window._patokanAbortCtrl.abort(); } catch (e) {}
+    window._patokanAbortCtrl = null;
+  }
+}
+
 window._patokanOpenAdd = function() {
   if (!window._S?.user?.uid) { showToast('Login dulu ya!', 'red'); return; }
   const st = window._kbState;
   if (!st._marker) { showToast('Tentukan titik dulu di peta', 'red'); return; }
   const pos = st._marker.getLatLng();
   window._patokanAddState = { lat: pos.lat, lng: pos.lng, cat: 'umum' };
+  _patokanAbortPending();
+  _patokanResetSaveBtn();
   const grid = document.getElementById('patokanCatGrid');
   grid.innerHTML = window._PATOKAN_CATS.map(c => `
     <button type="button" data-cat="${c.key}" onclick="_patokanSelectCat(this)" class="pat-chip${c.key === 'umum' ? ' pat-chip-active' : ''}">
@@ -26404,6 +26427,8 @@ window._patokanOpenAdd = function() {
 window._patokanCloseAdd = function() {
   document.getElementById('patokanAddOverlay').style.display = 'none';
   document.body.style.overflow = 'hidden'; // map picker di belakang masih terbuka
+  _patokanAbortPending();
+  _patokanResetSaveBtn();
 };
 window._patokanSelectCat = function(btn) {
   document.querySelectorAll('#patokanCatGrid .pat-chip').forEach(b => b.classList.remove('pat-chip-active'));
@@ -26419,12 +26444,15 @@ window._patokanSubmitAdd = async function() {
   if (st.lat == null || st.lng == null) { showToast('Titik lokasi belum ada', 'red'); return; }
   // Sesi login habis → _supaFetch jatuh ke anon key → RLS tolak (401). Kasih tahu jelas.
   if (!window._S?._accessToken) { showToast('Sesi login habis, masuk ulang dulu ya', 'red'); return; }
-  const btn = document.getElementById('patokanSaveBtn');
   const isAdmin = (user.email || '').toLowerCase() === 'abdsyakir160@gmail.com';
+  const btn = document.getElementById('patokanSaveBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Menyimpan...'; }
-  const reset = () => { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Patokan'; } };
+  const reset = _patokanResetSaveBtn;
   // Timeout 15s: kalau respons ketunda/hilang (jaringan HP), JANGAN muter selamanya.
+  // Controller disimpan di window._patokanAbortCtrl supaya bisa dibatalkan paksa
+  // dari _patokanOpenAdd/_patokanCloseAdd kalau user tutup modal sebelum 15 detik.
   const ctrl = new AbortController();
+  window._patokanAbortCtrl = ctrl;
   const timer = setTimeout(() => ctrl.abort(), 15000);
   try {
     // return=representation + cek baris → deteksi write gagal senyap (RLS/0-baris)
@@ -26438,9 +26466,16 @@ window._patokanSubmitAdd = async function() {
     if (!res.ok) throw new Error((rows && rows.message) ? rows.message : ('HTTP ' + res.status));
     if (!Array.isArray(rows) || !rows.length) throw new Error('tidak tersimpan (0 baris)');
     showToast('Patokan tersimpan!', 'green');
+    window._patokanAbortCtrl = null;
     _patokanCloseAdd();
   } catch (e) {
     clearTimeout(timer);
+    window._patokanAbortCtrl = null;
+    // Dibatalkan karena user tutup/buka modal (bukan timeout jaringan) → jangan tampilkan
+    // toast yang keliru, UI sudah di-reset duluan oleh _patokanOpenAdd/_patokanCloseAdd.
+    const wasManual = window._patokanManualAbort;
+    window._patokanManualAbort = false;
+    if (wasManual) return;
     showToast(e && e.name === 'AbortError' ? 'Jaringan lambat, coba lagi ya' : ('Gagal menyimpan: ' + (e.message || 'error')), 'red');
     reset();
   }
@@ -26698,6 +26733,39 @@ async function _ykRefreshMenuLabel() {
   const deskLabel = document.getElementById('menuYallaKurirLabelDesktop');
   if (mobLabel) mobLabel.textContent = label;
   if (deskLabel) deskLabel.textContent = label;
+  // Badge order baru hanya untuk kurir AKTIF.
+  window._ykIsActiveCourier = (status === 'active');
+  if (window._ykIsActiveCourier) { _ykOrderBadgeRefresh(); _ykOrderBadgeSubscribeGlobal(); }
+  else _ykOrderBadgeHide();
+}
+
+// ── BADGE REAL-TIME "ORDER BARU" pada menu YallaKurir Aktif (mirror pola antrean YallaFood) ──
+// Hitung order status=mencari_kurir yang dibuat SETELAH terakhir kurir buka dashboard.
+// Muncul saat ada order baru (INSERT); turun saat order diklaim kurir lain (UPDATE) —
+// kurir aktif bisa SELECT semua order jadi event UPDATE tetap sampai (tanpa broadcast).
+function _ykOrderBadgeEls() { return ['ykOrderBadgeMob', 'ykOrderBadgeDesktop'].map(id => document.getElementById(id)).filter(Boolean); }
+function _ykOrderBadgeHide() { _ykOrderBadgeEls().forEach(b => { b.style.display = 'none'; }); }
+function _ykOrderBadgeLastSeenKey(uid) { return 'yk_orderqueue_lastseen_' + uid; }
+function _ykOrderBadgeGetLastSeen() { const uid = window._S?.user?.uid; if (!uid) return 0; try { return parseInt(localStorage.getItem(_ykOrderBadgeLastSeenKey(uid)) || '0'); } catch (e) { return 0; } }
+function _ykOrderBadgeSetLastSeen() { const uid = window._S?.user?.uid; if (!uid) return; try { localStorage.setItem(_ykOrderBadgeLastSeenKey(uid), Date.now().toString()); } catch (e) {} }
+async function _ykOrderBadgeRefresh() {
+  const badges = _ykOrderBadgeEls(); if (!badges.length) return;
+  if (!window._ykIsActiveCourier || !window._S?.user?.uid) { badges.forEach(b => { b.style.display = 'none'; }); return; }
+  try {
+    const r = await window._supaFetch('/rest/v1/yallakurir_orders?status=eq.mencari_kurir&select=created_at');
+    const rows = r.ok ? await r.json() : [];
+    const lastSeen = _ykOrderBadgeGetLastSeen();
+    const count = rows.filter(o => new Date(o.created_at).getTime() > lastSeen).length;
+    badges.forEach(b => { b.textContent = count > 9 ? '9+' : String(count); b.style.display = count > 0 ? 'flex' : 'none'; });
+  } catch (e) { /* diamkan */ }
+}
+let _ykOrderBadgeChannel = null;
+function _ykOrderBadgeSubscribeGlobal() {
+  const uid = window._S?.user?.uid; if (!uid || !window.supabase) return;
+  if (_ykOrderBadgeChannel) { try { window.supabase.removeChannel(_ykOrderBadgeChannel); } catch (e) {} }
+  _ykOrderBadgeChannel = window.supabase.channel('yk_orderqueue_badge_' + uid)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'yallakurir_orders' }, () => { _ykOrderBadgeRefresh(); })
+    .subscribe();
 }
 
 // ── DASHBOARD MITRA YALLAKURIR AKTIF — kartu order 'Kirim Barang' menunggu diambil ──
@@ -26714,6 +26782,9 @@ window.openYkCourierDashboard = async function() {
   }
   document.getElementById('ykCourierDashboard').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  // Buka dashboard = semua order sekarang sudah "dilihat" → badge order baru dibersihkan.
+  _ykOrderBadgeSetLastSeen();
+  _ykOrderBadgeRefresh();
   await _ykLoadWaitingRoom();
   await _ykLoadMyDeliveries();
   _ykSubscribeRealtime();
@@ -26932,8 +27003,12 @@ let _ykChannel = null;
 function _ykSubscribeRealtime() {
   if (!window.supabase) return;
   if (_ykChannel) { try { window.supabase.removeChannel(_ykChannel); } catch (e) {} }
+  // TANPA filter status: klaim/batal = UPDATE (status jadi diambil/dibatalkan). Kalau difilter
+  // status=mencari_kurir, event UPDATE itu ter-buang → kartu di kurir lain tak hilang. Tanpa
+  // filter, semua perubahan memicu reload; waiting room hanya ambil mencari_kurir jadi order
+  // yang sudah diambil LANGSUNG lenyap dari dashboard kurir lain (realtime).
   _ykChannel = window.supabase.channel('yallakurir_orders_kurir_pool')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'yallakurir_orders', filter: 'status=eq.mencari_kurir' }, () => { _ykLoadWaitingRoom(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'yallakurir_orders' }, () => { _ykLoadWaitingRoom(); _ykLoadMyDeliveries(); })
     .subscribe();
 }
 
