@@ -26068,10 +26068,48 @@ window._kbOpenMap = function(target) {
     const marker = L.marker([clat, clng], { draggable: true }).addTo(map);
     map.on('click', (e) => { marker.setLatLng(e.latlng); const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none'; });
     st._map = map; st._marker = marker;
+    _kbLoadPatokanMarkers(map); // tampilkan patokan sebagai pin tetap di peta
     map.invalidateSize();
     setTimeout(() => { if (st._map) st._map.invalidateSize(); }, 400);
   }, 60);
 };
+
+// Render semua patokan aktif sebagai PIN TETAP (non-draggable) di peta map picker.
+// Tap pin → set marker seleksi ke titik patokan itu. Titik patokan permanen —
+// tidak bisa digeser user; hanya admin yang bisa ubah datanya (RLS admin-only).
+async function _kbLoadPatokanMarkers(map) {
+  const st = window._kbState;
+  if (st._patokanLayer) { try { map.removeLayer(st._patokanLayer); } catch (e) {} st._patokanLayer = null; }
+  try {
+    const r = await window._supaFetch('/rest/v1/patokan?status=eq.active&select=name,category,lat,lng&limit=500');
+    const rows = r.ok ? await r.json() : [];
+    if (!st._map || st._map !== map) return; // overlay keburu ditutup
+    const layer = L.layerGroup();
+    rows.forEach(p => {
+      if (p.lat == null || p.lng == null) return;
+      const cat = _patokanCat(p.category);
+      const icon = L.divIcon({
+        className: 'kb-patokan-pin',
+        html: '<div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto">'
+          + '<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#F59E0B;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center">'
+          + '<i class="fa-solid ' + cat.icon + '" style="color:#fff;font-size:12px;transform:rotate(45deg)"></i></div>'
+          + '<span style="margin-top:1px;font-size:9px;font-weight:700;color:#111827;background:rgba(255,255,255,.9);padding:0 4px;border-radius:4px;white-space:nowrap;max-width:96px;overflow:hidden;text-overflow:ellipsis">' + _sadEscHtml(p.name) + '</span>'
+          + '</div>',
+        iconSize: [96, 44], iconAnchor: [48, 26]
+      });
+      const m = L.marker([p.lat, p.lng], { icon, draggable: false, keyboard: false });
+      m.on('click', () => {
+        if (st._marker) st._marker.setLatLng([p.lat, p.lng]);
+        map.setView([p.lat, p.lng], Math.max(map.getZoom(), 16));
+        const inp = document.getElementById('kbMapSearchInput'); if (inp) inp.value = p.name;
+        const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none';
+      });
+      m.addTo(layer);
+    });
+    layer.addTo(map);
+    st._patokanLayer = layer;
+  } catch (e) { /* diamkan — peta tetap jalan tanpa pin patokan */ }
+}
 
 window._kbCloseMap = function() {
   const st = window._kbState;
