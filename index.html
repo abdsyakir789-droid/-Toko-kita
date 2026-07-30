@@ -25540,7 +25540,9 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   </div>
   <div class="flex-1 overflow-y-auto px-3 py-3">
     <p class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Pesanan Menunggu Kurir</p>
-    <div id="ykWaitingRoomList" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div id="ykWaitingRoomList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px"></div>
+    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Pesanan Saya Antar</p>
+    <div id="ykMyDeliveriesList" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 </div>
 
@@ -25803,15 +25805,12 @@ window._kbDetectLocation = function() {
     const glat = pos.coords.latitude, glng = pos.coords.longitude;
     window._kbState.fromLat = glat;
     window._kbState.fromLng = glng;
-    input.value = 'Mengambil nama alamat…';
+    window._kbState._selPatokan = null; // lokasi GPS = bukan patokan → koordinat
+    input.value = '📍 ' + glat.toFixed(5) + ', ' + glng.toFixed(5);
     btn.disabled = false; btn.innerHTML = orig;
     showToast('Lokasi terdeteksi', 'green');
     const fh = document.getElementById('kbFromCoordHint');
     if (fh) { fh.textContent = '✓ Lokasi saya (' + glat.toFixed(5) + ', ' + glng.toFixed(5) + ')'; fh.style.color = '#059669'; fh.style.fontWeight = '600'; }
-    _kbReverseGeocode(glat, glng).then(name => {
-      input.value = name || ('📍 Lokasi saat ini (' + glat.toFixed(5) + ', ' + glng.toFixed(5) + ')');
-      _kbValidate();
-    });
     _kbValidate();
   }, () => {
     if (settled) return; settled = true; clearTimeout(timer);
@@ -25985,7 +25984,7 @@ async function _kbSearchPatokan(q) {
   try {
     const r = await window._supaFetch('/rest/v1/patokan?status=eq.active&name=ilike.*' + encodeURIComponent(q) + '*&select=id,name,category,lat,lng,address&order=created_at.desc&limit=6');
     const rows = r.ok ? await r.json() : [];
-    return rows.map(row => ({ source: 'patokan', label: row.name + (row.address ? ' — ' + row.address : ''), category: row.category, lat: row.lat, lng: row.lng }));
+    return rows.map(row => ({ source: 'patokan', name: row.name, label: row.name + (row.address ? ' — ' + row.address : ''), category: row.category, lat: row.lat, lng: row.lng }));
   } catch (e) { return []; }
 }
 
@@ -26048,6 +26047,9 @@ window._kbSelectSearchResult = function(i) {
   const it = (window._kbSearchResultsCache || [])[i];
   if (!it || it.lat == null || it.lng == null || isNaN(it.lat) || isNaN(it.lng)) return;
   const st = window._kbState;
+  // Titik dari PATOKAN (punya nama) → kolom Dari/Ke nanti pakai nama patokan.
+  // Hasil Photon (bukan patokan) dianggap titik biasa → koordinat.
+  st._selPatokan = (it.source === 'patokan') ? { name: it.name || it.label, lat: it.lat, lng: it.lng } : null;
   if (st._map && st._marker) { st._map.setView([it.lat, it.lng], 16); st._marker.setLatLng([it.lat, it.lng]); }
   const input = document.getElementById('kbMapSearchInput');
   if (input) input.value = it.label;
@@ -26058,6 +26060,7 @@ window._kbSelectSearchResult = function(i) {
 window._kbOpenMap = function(target) {
   const st = window._kbState;
   st.mapTarget = target;
+  st._selPatokan = null; // mulai fresh; diisi lagi kalau user pilih patokan
   document.getElementById('kbMapPickerOverlay').style.display = 'flex';
   document.getElementById('kbMapPickerTitle').textContent = target === 'from' ? 'Pilih Lokasi Penjemputan' : 'Pilih Lokasi Tujuan';
   const searchInput = document.getElementById('kbMapSearchInput');
@@ -26087,7 +26090,9 @@ window._kbOpenMap = function(target) {
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
     });
     const marker = L.marker([clat, clng], { draggable: true }).addTo(map);
-    map.on('click', (e) => { marker.setLatLng(e.latlng); const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none'; });
+    // Taruh/geser pin sendiri = bukan patokan lagi → kolom nanti pakai koordinat.
+    map.on('click', (e) => { marker.setLatLng(e.latlng); st._selPatokan = null; const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none'; });
+    marker.on('dragend', () => { st._selPatokan = null; });
     st._map = map; st._marker = marker;
     _kbLoadPatokanMarkers(map); // tampilkan patokan sebagai pin tetap di peta
     map.invalidateSize();
@@ -26125,6 +26130,7 @@ async function _kbLoadPatokanMarkers(map) {
       const m = L.marker([p.lat, p.lng], { icon, draggable: false, keyboard: false });
       m.on('click', () => {
         if (st._marker) st._marker.setLatLng([p.lat, p.lng]);
+        st._selPatokan = { name: p.name, lat: p.lat, lng: p.lng }; // titik ini = patokan → pakai namanya
         map.setView([p.lat, p.lng], Math.max(map.getZoom(), 16));
         const inp = document.getElementById('kbMapSearchInput'); if (inp) inp.value = p.name;
         const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none';
@@ -26156,7 +26162,7 @@ window._kbMapUseGps = function() {
   const st = window._kbState;
   navigator.geolocation.getCurrentPosition((pos) => {
     const lat = pos.coords.latitude, lng = pos.coords.longitude;
-    if (st._map && st._marker) { st._map.setView([lat, lng], 16); st._marker.setLatLng([lat, lng]); }
+    if (st._map && st._marker) { st._map.setView([lat, lng], 16); st._marker.setLatLng([lat, lng]); st._selPatokan = null; }
   }, () => { showToast('Gagal ambil lokasi GPS', 'red'); }, { enableHighAccuracy: true, timeout: 15000 });
 };
 
@@ -26169,15 +26175,13 @@ window._kbConfirmMap = function() {
   if (t === 'from') { st.fromLat = lat; st.fromLng = lng; } else { st.toLat = lat; st.toLng = lng; }
   const input = document.getElementById(t === 'from' ? 'kbFromInput' : 'kbToInput');
   const hint = document.getElementById(t === 'from' ? 'kbFromCoordHint' : 'kbToCoordHint');
-  // Isi sementara sambil ambil nama alamat, koordinat tetap di hint
-  if (input) input.value = 'Mengambil nama alamat…';
+  // Titik dari PATOKAN (posisi masih persis sama) → tampilkan NAMA patokan.
+  // Pin sendiri (bukan patokan / sudah digeser) → tampilkan KOORDINAT (angka).
+  const sp = st._selPatokan;
+  const isPatokan = sp && Math.abs(sp.lat - lat) < 1e-6 && Math.abs(sp.lng - lng) < 1e-6;
+  if (input) input.value = isPatokan ? sp.name : ('📍 ' + lat.toFixed(5) + ', ' + lng.toFixed(5));
   if (hint) { hint.textContent = '✓ Titik peta (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ')'; hint.style.color = '#059669'; hint.style.fontWeight = '600'; }
   _kbCloseMap();
-  // Reverse-geocode → tampilkan NAMA alamat di kolom (fallback ke koordinat kalau gagal)
-  _kbReverseGeocode(lat, lng).then(name => {
-    if (input) input.value = name || ('📍 Titik peta (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ')');
-    _kbValidate();
-  });
   _kbValidate();
 };
 
@@ -26524,6 +26528,7 @@ window.closeYkCourierDashboard = function() {
 };
 
 const _YK_ITEM_ICON = { Elektronik: 'fa-laptop', Perhiasan: 'fa-gem', Dokumen: 'fa-file-lines', Uang: 'fa-money-bill-wave', Umum: 'fa-box' };
+const _YK_STATUS_LABEL = { mencari_kurir: 'Mencari Kurir', diambil: 'Sedang Diantar', selesai: 'Selesai', dibatalkan: 'Dibatalkan' };
 
 async function _ykLoadWaitingRoom() {
   const box = document.getElementById('ykWaitingRoomList');
