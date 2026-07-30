@@ -25637,6 +25637,31 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   <div class="bg-white border-t border-gray-100 px-4 py-3" style="flex-shrink:0">
     <p class="text-[11px] text-gray-500 text-center mb-2">Geser pin atau ketuk peta untuk menentukan titik.</p>
     <button onclick="_kbConfirmMap()" class="w-full bg-primary text-white font-bold rounded-2xl py-3.5 text-sm"><i class="fa-solid fa-check mr-1"></i>Gunakan Titik Ini</button>
+    <button onclick="_patokanOpenAdd()" class="w-full mt-2 text-primary bg-pl font-bold rounded-2xl py-2.5 text-xs"><i class="fa-solid fa-map-pin mr-1"></i>Jadikan titik ini sebagai Patokan</button>
+  </div>
+</div>
+
+<!-- Tambah Patokan — dari titik peta yang dipilih (bottom sheet) -->
+<style>
+  #patokanCatGrid .pat-chip{border:2px solid #e5e7eb;background:#fff;border-radius:12px;padding:9px 3px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;transition:.15s}
+  #patokanCatGrid .pat-chip i{font-size:16px;color:#6b7280;transition:.15s}
+  #patokanCatGrid .pat-chip span{font-size:9px;font-weight:700;color:#374151;text-align:center;line-height:1.15;transition:.15s}
+  #patokanCatGrid .pat-chip.pat-chip-active{border-color:#10B981;background:#ECFDF5}
+  #patokanCatGrid .pat-chip.pat-chip-active i,#patokanCatGrid .pat-chip.pat-chip-active span{color:#059669}
+  #patokanCatGrid .pat-chip:active{transform:scale(.96)}
+</style>
+<div id="patokanAddOverlay" style="display:none;position:fixed;inset:0;z-index:66;background:rgba(17,24,39,.5);align-items:flex-end;justify-content:center">
+  <div style="background:#fff;width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:18px 18px 24px;max-height:88vh;overflow-y:auto">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="font-bold text-base">Tambah Patokan</h3>
+      <button onclick="_patokanCloseAdd()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-xmark text-gray-500"></i></button>
+    </div>
+    <p class="text-xs text-gray-500 mb-3">Simpan lokasi ini sebagai patokan biar gampang dicari lain kali. Patokan bisa dicari semua pengguna YallaMart.</p>
+    <label class="text-xs font-bold text-gray-700 mb-1.5 block">Nama Patokan</label>
+    <input id="patokanNameInput" type="text" placeholder="Contoh: Masjid Indonesia, Asrama Darrosah" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mb-3 outline-none"/>
+    <label class="text-xs font-bold text-gray-700 mb-2 block">Kategori</label>
+    <div id="patokanCatGrid" class="grid grid-cols-4 gap-1.5 mb-4"></div>
+    <button onclick="_patokanSubmitAdd()" id="patokanSaveBtn" class="w-full bg-primary text-white font-bold rounded-2xl py-3 text-sm"><i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Patokan</button>
   </div>
 </div>
 
@@ -25878,9 +25903,13 @@ async function _kbReverseGeocode(lat, lng) {
   } catch (e) { return null; }
 }
 
-// Forward-geocode: cari nama jalan/tempat → daftar titik kandidat (Nominatim OSM,
-// dibatasi Mesir karena YallaKurir cuma layanan lokal Kairo). Dipakai search box
-// di atas peta pemilih titik, supaya tak melulu tap/drag pin seperti sebelumnya.
+// Forward-geocode: cari nama jalan/tempat → daftar titik kandidat.
+// Pakai PHOTON (photon.komoot.io) — mesin search gratis berbasis data OSM yang
+// sama, tapi autocomplete/ranking & toleransi typo jauh lebih baik dari Nominatim.
+// Tanpa API key. Hasil di-bias ke titik tengah peta yang sedang dilihat (proximity)
+// supaya relevan ke area Kairo, bukan tempat bernama sama di negara lain.
+// Catatan: Photon balikin GeoJSON (features[] + geometry.coordinates [lon,lat]),
+// dan TIDAK ada display_name tunggal → label dirangkai dari properties.
 let _kbSearchDebounce = null;
 let _kbSearchSeq = 0;
 window._kbSearchResultsCache = [];
@@ -25892,27 +25921,92 @@ window._kbSearchAddress = function(q) {
   _kbSearchDebounce = setTimeout(() => _kbDoSearchAddress(q), 450);
 };
 
+// Rangkai label alamat dari properties Photon (name, street, district, city, ...).
+function _kbPhotonLabel(p) {
+  p = p || {};
+  const parts = [];
+  if (p.name) parts.push(p.name);
+  if (p.street && p.street !== p.name) parts.push(p.street + (p.housenumber ? ' ' + p.housenumber : ''));
+  if (p.district) parts.push(p.district);
+  if (p.city && p.city !== p.name) parts.push(p.city);
+  if (p.state) parts.push(p.state);
+  if (p.country) parts.push(p.country);
+  // buang duplikat berurutan
+  return parts.filter((v, i) => v && parts.indexOf(v) === i).join(', ') || (p.name || '');
+}
+
+// ── Kategori PATOKAN (database patokan milik YallaMart sendiri) ──
+// Dipakai bersama: search "Kirim Barang", form tambah patokan, panel admin,
+// dan (nanti) Mat'am Terdekat. Ikon Font Awesome.
+window._PATOKAN_CATS = [
+  { key: 'masjid',         label: 'Masjid',          icon: 'fa-mosque' },
+  { key: 'rumah_makan',    label: 'Rumah Makan',     icon: 'fa-utensils' },
+  { key: 'kafe',           label: 'Kafe',            icon: 'fa-mug-hot' },
+  { key: 'tempat_belajar', label: 'Tempat Belajar',  icon: 'fa-graduation-cap' },
+  { key: 'asrama',         label: 'Asrama/Rumah',    icon: 'fa-house' },
+  { key: 'toko',           label: 'Toko/Minimarket', icon: 'fa-store' },
+  { key: 'umum',           label: 'Umum/Lainnya',    icon: 'fa-location-dot' }
+];
+function _patokanCat(key) { return window._PATOKAN_CATS.find(c => c.key === key) || window._PATOKAN_CATS[window._PATOKAN_CATS.length - 1]; }
+
+// Cari patokan di database sendiri (muncul PALING ATAS di hasil search).
+async function _kbSearchPatokan(q) {
+  try {
+    const r = await window._supaFetch('/rest/v1/patokan?status=eq.active&name=ilike.*' + encodeURIComponent(q) + '*&select=id,name,category,lat,lng,address&order=created_at.desc&limit=6');
+    const rows = r.ok ? await r.json() : [];
+    return rows.map(row => ({ source: 'patokan', label: row.name + (row.address ? ' — ' + row.address : ''), category: row.category, lat: row.lat, lng: row.lng }));
+  } catch (e) { return []; }
+}
+
+// Cari via Photon (OSM) — dedupe + normalisasi ke bentuk seragam.
+async function _kbSearchPhoton(q, blat, blng) {
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 8000);
+    const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&limit=6&lang=en&lat=' + blat + '&lon=' + blng;
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: ctrl.signal });
+    clearTimeout(to);
+    const data = r.ok ? await r.json() : null;
+    const raw = (data && Array.isArray(data.features)) ? data.features : [];
+    const seen = {}; const out = [];
+    raw.forEach(f => {
+      if (!f.geometry || !Array.isArray(f.geometry.coordinates)) return;
+      const label = _kbPhotonLabel(f.properties); const k = label.toLowerCase();
+      if (!label || seen[k]) return; seen[k] = 1;
+      out.push({ source: 'photon', label: label, lat: parseFloat(f.geometry.coordinates[1]), lng: parseFloat(f.geometry.coordinates[0]) });
+    });
+    return out;
+  } catch (e) { return []; }
+}
+
 async function _kbDoSearchAddress(q) {
   const box = document.getElementById('kbMapSearchResults');
   if (!box) return;
   const seq = ++_kbSearchSeq;
   box.style.display = 'block';
   box.innerHTML = '<p class="text-center text-gray-400 text-xs py-3">Mencari...</p>';
+  // Bias hasil ke tengah peta yang lagi dilihat, fallback ke pusat Kairo.
+  const st = window._kbState;
+  let blat = 30.0444, blng = 31.2357;
+  try { if (st._map) { const c = st._map.getCenter(); blat = c.lat; blng = c.lng; } } catch (e) {}
   try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 8000);
-    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&q=' + encodeURIComponent(q) + '&accept-language=id,en&limit=6&countrycodes=eg';
-    const r = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: ctrl.signal });
-    clearTimeout(to);
+    // Paralel: patokan lokal (database sendiri) + Photon (OSM). Patokan tampil dulu.
+    const [patItems, photonItems] = await Promise.all([_kbSearchPatokan(q), _kbSearchPhoton(q, blat, blng)]);
     if (seq !== _kbSearchSeq) return; // ketikan sudah berubah lagi, buang hasil basi
-    const rows = r.ok ? await r.json() : [];
-    window._kbSearchResultsCache = rows;
-    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-3">Tidak ditemukan, coba kata kunci lain.</p>'; return; }
-    box.innerHTML = rows.map((row, i) => `
+    const items = patItems.concat(photonItems);
+    window._kbSearchResultsCache = items;
+    if (!items.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-3">Tidak ditemukan, coba kata kunci lain.</p>'; return; }
+    box.innerHTML = items.map((it, i) => {
+      const isPat = it.source === 'patokan';
+      const cat = isPat ? _patokanCat(it.category) : null;
+      const icon = isPat ? cat.icon : 'fa-location-dot';
+      const color = isPat ? '#F59E0B' : '#10B981';
+      const badge = isPat ? `<span style="font-size:9px;font-weight:700;color:#B45309;background:#FEF3C7;padding:1px 6px;border-radius:6px;margin-left:6px;white-space:nowrap">${cat.label}</span>` : '';
+      return `
       <button type="button" onclick="_kbSelectSearchResult(${i})" style="display:block;width:100%;text-align:left;padding:10px 14px;border:none;background:none;border-bottom:1px solid #f3f4f6;font-size:12.5px;color:#111827;cursor:pointer">
-        <i class="fa-solid fa-location-dot" style="color:#10B981;margin-right:6px;font-size:11px"></i>${_sadEscHtml(row.display_name)}
-      </button>
-    `).join('');
+        <i class="fa-solid ${icon}" style="color:${color};margin-right:6px;font-size:11px"></i>${_sadEscHtml(it.label)}${badge}
+      </button>`;
+    }).join('');
   } catch (e) {
     if (seq !== _kbSearchSeq) return;
     box.innerHTML = '<p class="text-center text-red-400 text-xs py-3">Gagal mencari, coba lagi.</p>';
@@ -25920,13 +26014,12 @@ async function _kbDoSearchAddress(q) {
 }
 
 window._kbSelectSearchResult = function(i) {
-  const row = (window._kbSearchResultsCache || [])[i];
-  if (!row) return;
+  const it = (window._kbSearchResultsCache || [])[i];
+  if (!it || it.lat == null || it.lng == null || isNaN(it.lat) || isNaN(it.lng)) return;
   const st = window._kbState;
-  const lat = parseFloat(row.lat), lng = parseFloat(row.lon);
-  if (st._map && st._marker) { st._map.setView([lat, lng], 16); st._marker.setLatLng([lat, lng]); }
+  if (st._map && st._marker) { st._map.setView([it.lat, it.lng], 16); st._marker.setLatLng([it.lat, it.lng]); }
   const input = document.getElementById('kbMapSearchInput');
-  if (input) input.value = row.display_name;
+  if (input) input.value = it.label;
   const box = document.getElementById('kbMapSearchResults');
   if (box) box.style.display = 'none';
 };
@@ -26004,6 +26097,61 @@ window._kbConfirmMap = function() {
     _kbValidate();
   });
   _kbValidate();
+};
+
+// ── TAMBAH PATOKAN (dari titik peta yang sedang dipilih di map picker) ──
+// Tersimpan ke tabel `patokan` (database sendiri) → langsung bisa dicari semua
+// pengguna. Admin (email admin) otomatis ditandai created_by_role='admin'.
+window._patokanAddState = { lat: null, lng: null, cat: 'umum' };
+
+window._patokanOpenAdd = function() {
+  if (!window._S?.user?.uid) { showToast('Login dulu ya!', 'red'); return; }
+  const st = window._kbState;
+  if (!st._marker) { showToast('Tentukan titik dulu di peta', 'red'); return; }
+  const pos = st._marker.getLatLng();
+  window._patokanAddState = { lat: pos.lat, lng: pos.lng, cat: 'umum' };
+  const grid = document.getElementById('patokanCatGrid');
+  grid.innerHTML = window._PATOKAN_CATS.map(c => `
+    <button type="button" data-cat="${c.key}" onclick="_patokanSelectCat(this)" class="pat-chip${c.key === 'umum' ? ' pat-chip-active' : ''}">
+      <i class="fa-solid ${c.icon}"></i><span>${c.label}</span>
+    </button>`).join('');
+  document.getElementById('patokanNameInput').value = '';
+  document.getElementById('patokanAddOverlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+};
+window._patokanCloseAdd = function() {
+  document.getElementById('patokanAddOverlay').style.display = 'none';
+  document.body.style.overflow = 'hidden'; // map picker di belakang masih terbuka
+};
+window._patokanSelectCat = function(btn) {
+  document.querySelectorAll('#patokanCatGrid .pat-chip').forEach(b => b.classList.remove('pat-chip-active'));
+  btn.classList.add('pat-chip-active');
+  window._patokanAddState.cat = btn.getAttribute('data-cat');
+};
+window._patokanSubmitAdd = async function() {
+  const user = window._S?.user;
+  if (!user?.uid) { showToast('Login dulu', 'red'); return; }
+  const st = window._patokanAddState;
+  const name = document.getElementById('patokanNameInput').value.trim();
+  if (!name) { showToast('Nama patokan wajib diisi', 'red'); return; }
+  if (st.lat == null || st.lng == null) { showToast('Titik lokasi belum ada', 'red'); return; }
+  const btn = document.getElementById('patokanSaveBtn');
+  const isAdmin = (user.email || '').toLowerCase() === 'abdsyakir160@gmail.com';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Menyimpan...'; }
+  try {
+    // return=representation + cek baris → deteksi write gagal senyap (RLS/0-baris)
+    const res = await window._supaFetch('/rest/v1/patokan', {
+      method: 'POST', prefer: 'return=representation',
+      body: JSON.stringify({ name, category: st.cat, lat: st.lat, lng: st.lng, created_by: user.uid, created_by_role: isAdmin ? 'admin' : 'user', status: 'active' })
+    });
+    const rows = res.ok ? await res.json().catch(() => []) : [];
+    if (!res.ok || !Array.isArray(rows) || !rows.length) throw new Error('tidak tersimpan');
+    showToast('Patokan tersimpan!', 'green');
+    _patokanCloseAdd();
+  } catch (e) {
+    showToast('Gagal menyimpan patokan', 'red');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Patokan'; }
+  }
 };
 
 async function _ykFetchOwnProfile(uid) {
