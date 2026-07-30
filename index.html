@@ -25650,6 +25650,44 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   </div>
 </div>
 
+<!-- YALLAKURIR: panel kurir ditemukan (bottom sheet setengah layar, sisi PENGIRIM) -->
+<div id="kbCourierPanel" style="display:none;position:fixed;inset:0;z-index:63;background:rgba(17,24,39,.35);align-items:flex-end;justify-content:center">
+  <div style="background:#fff;width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:18px 18px 26px;box-shadow:0 -10px 34px rgba(0,0,0,.18)">
+    <div style="width:52px;height:5px;background:#e5e7eb;border-radius:3px;margin:0 auto 16px"></div>
+    <div style="text-align:center;margin-bottom:16px">
+      <div id="kbCourierStatusIcon" style="width:58px;height:58px;margin:0 auto 10px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-circle-check" style="color:#10B981;font-size:30px"></i></div>
+      <p id="kbCourierPanelTitle" class="font-black text-lg text-gray-800" style="margin:0 0 2px">Kurir ditemukan!</p>
+      <p id="kbCourierPanelSub" class="text-sm text-gray-500" style="margin:0">Kurir sedang menuju lokasi penjemputan.</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;background:#f9fafb;border-radius:16px;padding:12px 14px">
+      <div id="kbCourierAvatar" style="width:52px;height:52px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#e5e7eb;display:flex;align-items:center;justify-content:center;color:#9ca3af"></div>
+      <div style="flex:1;min-width:0">
+        <p id="kbCourierName" class="font-bold text-sm text-gray-800 lc1" style="margin:0">Kurir</p>
+        <p class="text-xs text-gray-500 lc1" style="margin:0">Mitra YallaKurir</p>
+      </div>
+      <button id="kbCourierChatBtn" onclick="_kbOpenCourierChat()" title="Chat kurir" style="width:46px;height:46px;border-radius:50%;background:#10B981;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;position:relative"><i class="fa-solid fa-comment-dots" style="color:#fff;font-size:18px"></i></button>
+    </div>
+    <button onclick="_kbCloseCourierPanel()" class="w-full mt-4 text-gray-500 text-sm font-semibold" style="background:none;border:none;padding:8px;cursor:pointer">Tutup</button>
+  </div>
+</div>
+
+<!-- YALLAKURIR: overlay chat pengirim <-> kurir (dipakai kedua sisi) -->
+<div id="ykChatOverlay" style="display:none;position:fixed;inset:0;z-index:68;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeYkChat()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <div class="flex-1 min-w-0">
+      <h2 id="ykChatTitle" class="font-bold text-base lc1" style="margin:0">Chat</h2>
+      <p id="ykChatSubtitle" class="text-[11px] text-gray-400 lc1" style="margin:0">YallaKurir</p>
+    </div>
+  </div>
+  <div id="ykChatMessages" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:8px"></div>
+  <div id="ykChatInputBar" class="bg-white border-t border-gray-100 px-3 py-2.5" style="flex-shrink:0;display:flex;align-items:flex-end;gap:8px">
+    <textarea id="ykChatInput" rows="1" placeholder="Tulis pesan..." oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,96)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ykChatSend();}" class="flex-1 border border-gray-200 rounded-2xl px-3.5 py-2.5 text-sm outline-none resize-none" style="max-height:96px"></textarea>
+    <button onclick="ykChatSend()" style="width:42px;height:42px;border-radius:50%;background:#10B981;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0"><i class="fa-solid fa-paper-plane" style="color:#fff;font-size:15px"></i></button>
+  </div>
+  <div id="ykChatClosedNote" class="bg-gray-50 border-t border-gray-100 px-4 py-3 text-center text-xs font-semibold text-gray-400" style="flex-shrink:0;display:none">Pesanan sudah selesai — chat ditutup.</div>
+</div>
+
 <!-- Pemilih titik di peta (Leaflet) untuk Dari & Ke -->
 <div id="kbMapPickerOverlay" style="display:none;position:fixed;inset:0;z-index:64;background:#fff;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
@@ -25732,6 +25770,7 @@ window.openKirimBarangYallaKurir = function() {
 window.closeKirimBarangYallaKurir = function() {
   document.getElementById('kirimBarangOverlay').style.display = 'none';
   document.body.style.overflow = '';
+  if (typeof _kbUnsubscribeOrderStatus === 'function') _kbUnsubscribeOrderStatus();
 };
 
 window._kbSelectJenis = function(btn) {
@@ -25864,6 +25903,7 @@ window._kbCariKurir = async function() {
     if (res.ok) {
       const rows = await res.json().catch(() => []);
       st.orderId = Array.isArray(rows) ? rows[0]?.id : rows?.id;
+      if (st.orderId) _kbSubscribeOrderStatus(st.orderId); // deteksi kurir ambil/selesai realtime
     } else {
       console.warn('[kirimBarang] simpan order gagal:', res.status);
     }
@@ -25881,7 +25921,163 @@ window._kbCancelSearch = async function() {
     } catch (e) { /* diamkan — UI tetap kembali ke form */ }
   }
   window._kbState.orderId = null;
+  _kbUnsubscribeOrderStatus();
   document.getElementById('kbFindingState').style.display = 'none';
+};
+
+// ══════════════════════════════════════════════════════════════════
+// SISI PENGIRIM: realtime pantau order → panel kurir + chat.
+// Kurir klik "Ambil Pesanan" (status→diambil) → panel kurir setengah layar.
+// Kurir "Pesanan Selesai" (status→selesai) → panel jadi state selesai + chat ditutup.
+// ══════════════════════════════════════════════════════════════════
+let _kbOrderChannel = null;
+function _kbSubscribeOrderStatus(orderId) {
+  if (!window.supabase || !orderId) return;
+  _kbUnsubscribeOrderStatus();
+  _kbOrderChannel = window.supabase.channel('yk_order_' + orderId)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'yallakurir_orders', filter: 'id=eq.' + orderId }, (payload) => {
+      const o = payload.new; if (!o) return;
+      if (o.status === 'diambil') _kbShowCourierPanel(o);
+      else if (o.status === 'selesai') _kbOrderCompleted(o);
+    })
+    .subscribe();
+}
+function _kbUnsubscribeOrderStatus() {
+  if (_kbOrderChannel) { try { window.supabase.removeChannel(_kbOrderChannel); } catch (e) {} _kbOrderChannel = null; }
+}
+
+// Isi bulatan avatar: foto (selfie_photo_url) kalau ada, jika tidak fallback ikon User (Lucide).
+function _kbSetAvatar(el, photoUrl) {
+  if (!el) return;
+  if (photoUrl) { el.innerHTML = '<img src="' + _sadEscHtml(photoUrl) + '" style="width:100%;height:100%;object-fit:cover" alt=""/>'; }
+  else { el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'; }
+}
+
+window._kbActiveOrder = null;
+async function _kbShowCourierPanel(order) {
+  window._kbActiveOrder = order;
+  document.getElementById('kbFindingState').style.display = 'none';
+  document.getElementById('kbCourierStatusIcon').innerHTML = '<i class="fa-solid fa-circle-check" style="color:#10B981;font-size:30px"></i>';
+  document.getElementById('kbCourierPanelTitle').textContent = 'Kurir ditemukan!';
+  document.getElementById('kbCourierPanelSub').textContent = 'Kurir sedang menuju lokasi penjemputan.';
+  document.getElementById('kbCourierName').textContent = order.courier_name || 'Kurir';
+  _kbSetAvatar(document.getElementById('kbCourierAvatar'), null);
+  document.getElementById('kbCourierPanel').style.display = 'flex';
+  try {
+    if (order.courier_id) {
+      const prof = await _ykFetchOwnProfile(order.courier_id);
+      if (prof) {
+        if (prof.name) document.getElementById('kbCourierName').textContent = prof.name;
+        _kbSetAvatar(document.getElementById('kbCourierAvatar'), prof.selfie_photo_url || '');
+      }
+    }
+  } catch (e) {}
+}
+
+function _kbOrderCompleted(order) {
+  window._kbActiveOrder = order;
+  const panel = document.getElementById('kbCourierPanel');
+  if (panel && panel.style.display !== 'none') {
+    document.getElementById('kbCourierStatusIcon').innerHTML = '<i class="fa-solid fa-flag-checkered" style="color:#059669;font-size:28px"></i>';
+    document.getElementById('kbCourierPanelTitle').textContent = 'Pesanan selesai';
+    document.getElementById('kbCourierPanelSub').textContent = 'Barang sudah diantar. Terima kasih!';
+  }
+  if (window._ykChatState && window._ykChatState.orderId === order.id) _ykChatApplyStatus('selesai');
+}
+
+window._kbCloseCourierPanel = function() {
+  document.getElementById('kbCourierPanel').style.display = 'none';
+  _kbUnsubscribeOrderStatus();
+  window._kbState.orderId = null;
+  if (typeof closeKirimBarangYallaKurir === 'function') closeKirimBarangYallaKurir();
+};
+
+window._kbOpenCourierChat = function() {
+  const o = window._kbActiveOrder; if (!o) return;
+  openYkChat(o.id, o.courier_name || 'Kurir', o.status);
+};
+
+// ── CHAT YALLAKURIR (pengirim <-> kurir) — satu percakapan per order, dipakai kedua sisi ──
+window._ykChatState = null;
+let _ykChatChannel = null;
+
+window.openYkChat = function(orderId, otherName, status) {
+  if (!window._S?.user?.uid) { showToast('Login dulu', 'red'); return; }
+  window._ykChatState = { orderId: orderId, otherName: otherName || 'Chat', status: status || 'diambil' };
+  document.getElementById('ykChatTitle').textContent = otherName || 'Chat';
+  document.getElementById('ykChatOverlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  _ykChatApplyStatus(window._ykChatState.status);
+  _ykChatLoadMessages();
+  _ykChatSubscribe(orderId);
+};
+window.closeYkChat = function() {
+  document.getElementById('ykChatOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+  if (_ykChatChannel) { try { window.supabase.removeChannel(_ykChatChannel); } catch (e) {} _ykChatChannel = null; }
+};
+
+// Order selesai/batal → sembunyikan kolom tulis, tampilkan catatan "chat ditutup".
+function _ykChatApplyStatus(status) {
+  if (window._ykChatState) window._ykChatState.status = status;
+  const open = status !== 'selesai' && status !== 'dibatalkan';
+  const bar = document.getElementById('ykChatInputBar');
+  const note = document.getElementById('ykChatClosedNote');
+  if (bar) bar.style.display = open ? 'flex' : 'none';
+  if (note) note.style.display = open ? 'none' : 'block';
+  const sub = document.getElementById('ykChatSubtitle');
+  if (sub) sub.textContent = open ? 'YallaKurir' : 'Pesanan selesai';
+}
+
+async function _ykChatLoadMessages() {
+  const box = document.getElementById('ykChatMessages');
+  const st = window._ykChatState; const uid = window._S?.user?.uid;
+  if (!box || !st) return;
+  try {
+    const r = await window._supaFetch('/rest/v1/yallakurir_chat_messages?order_id=eq.' + encodeURIComponent(st.orderId) + '&select=*&order=created_at.asc');
+    const rows = r.ok ? await r.json() : [];
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-300 text-xs py-6">Belum ada pesan. Sapa dulu yuk!</p>'; return; }
+    box.innerHTML = rows.map(m => {
+      const mine = m.sender_uid === uid;
+      const txt = (m.text || '').replace(/</g, '&lt;');
+      return '<div style="display:flex;justify-content:' + (mine ? 'flex-end' : 'flex-start') + '">'
+        + '<div style="max-width:78%;padding:8px 12px;border-radius:16px;font-size:13px;line-height:1.4;word-break:break-word;'
+        + (mine ? 'background:#10B981;color:#fff;border-bottom-right-radius:4px' : 'background:#fff;color:#111827;border:1px solid #f0f0f0;border-bottom-left-radius:4px') + '">' + txt + '</div></div>';
+    }).join('');
+    box.scrollTop = box.scrollHeight;
+  } catch (e) { /* diamkan */ }
+}
+
+window.ykChatSend = async function() {
+  const st = window._ykChatState; const user = window._S?.user;
+  if (!st || !user?.uid) return;
+  if (st.status === 'selesai' || st.status === 'dibatalkan') return;
+  const input = document.getElementById('ykChatInput');
+  const text = (input.value || '').trim();
+  if (!text) return;
+  input.value = ''; input.style.height = 'auto';
+  try {
+    const res = await window._supaFetch('/rest/v1/yallakurir_chat_messages', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify({ order_id: st.orderId, sender_uid: user.uid, sender_name: user.name || '', text: text })
+    });
+    if (!res.ok) { showToast('Gagal kirim pesan', 'red'); return; }
+    await _ykChatLoadMessages();
+  } catch (e) { showToast('Gagal kirim pesan', 'red'); }
+};
+
+function _ykChatSubscribe(orderId) {
+  if (!window.supabase) return;
+  if (_ykChatChannel) { try { window.supabase.removeChannel(_ykChatChannel); } catch (e) {} }
+  _ykChatChannel = window.supabase.channel('yk_chat_' + orderId)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'yallakurir_chat_messages', filter: 'order_id=eq.' + orderId }, () => { _ykChatLoadMessages(); })
+    .subscribe();
+}
+
+// Kurir buka chat dari kartu "Pesanan Saya Antar" (lawan bicara = pengirim).
+window._ykChatFromMine = function(orderId) {
+  const o = (window._ykMineById || {})[orderId]; if (!o) return;
+  openYkChat(o.id, o.sender_name || 'Pengirim', o.status);
 };
 
 // ── Pemilih titik di peta (Leaflet) untuk Dari/Ke ──
@@ -26519,6 +26715,7 @@ window.openYkCourierDashboard = async function() {
   document.getElementById('ykCourierDashboard').style.display = 'flex';
   document.body.style.overflow = 'hidden';
   await _ykLoadWaitingRoom();
+  await _ykLoadMyDeliveries();
   _ykSubscribeRealtime();
 };
 window.closeYkCourierDashboard = function() {
@@ -26570,9 +26767,71 @@ async function _ykLoadWaitingRoom() {
   }
 }
 
+// Pesanan yang SUDAH diambil kurir ini (status diambil/selesai). Tampil di bagian
+// "Pesanan Saya Antar" — mirror pola _kurirLoadMyDeliveries YallaFood.
+async function _ykLoadMyDeliveries() {
+  const box = document.getElementById('ykMyDeliveriesList');
+  const uid = window._S?.user?.uid;
+  if (!box || !uid) return;
+  box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
+  try {
+    const r = await window._supaFetch(`/rest/v1/yallakurir_orders?courier_id=eq.${encodeURIComponent(uid)}&status=in.(diambil,selesai)&select=*&order=created_at.desc&limit=20`);
+    const rows = r.ok ? await r.json() : [];
+    window._ykMineById = {}; rows.forEach(o => { window._ykMineById[o.id] = o; });
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan yang kamu antar.</p>'; return; }
+    box.innerHTML = rows.map(o => `
+      <div class="bg-white rounded-2xl p-3 border border-gray-100">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span class="text-[11px] font-bold text-primary bg-pl px-2.5 py-1 rounded-full"><i class="fa-solid ${_YK_ITEM_ICON[o.item_type] || 'fa-box'} mr-1"></i>${_sadEscHtml(o.item_type || '-')}</span>
+          <span class="text-[10px] font-bold px-2 py-1 rounded-full ${o.status === 'selesai' ? 'bg-gray-100 text-gray-500' : 'bg-pl text-primary'}">${_YK_STATUS_LABEL[o.status] || o.status}</span>
+        </div>
+        <div style="background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
+          <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:6px">
+            <i class="fa-solid fa-location-dot" style="color:#059669;font-size:13px;margin-top:2px;flex-shrink:0"></i>
+            <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Jemput: ${_sadEscHtml(o.from_address || '-')}</p>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:6px">
+            <i class="fa-solid fa-flag-checkered" style="color:#6b7280;font-size:13px;margin-top:2px;flex-shrink:0"></i>
+            <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Tujuan: ${_sadEscHtml(o.to_address || '-')}</p>
+          </div>
+          ${(o.from_lat != null && o.from_lng != null && o.to_lat != null && o.to_lng != null) ? `
+          <button onclick="_ykShowRoute('${o.id}')" style="margin-top:8px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
+            <i class="fa-solid fa-route"></i>Lihat Rute di Peta
+          </button>` : ''}
+        </div>
+        <p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${o.ongkir != null ? _yfFmtPrice(o.ongkir) : '-'}</span>${o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : ''}</p>
+        <div style="display:flex;gap:8px">
+          <button onclick="_ykChatFromMine('${o.id}')" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Pengirim</button>
+          ${o.status === 'diambil' ? `<button onclick="ykKurirCompleteOrder('${o.id}')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Tandai Selesai</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = '<p class="text-center text-red-400 text-xs py-4">Gagal memuat.</p>';
+  }
+}
+
+window.ykKurirCompleteOrder = async function(orderId) {
+  const user = window._S?.user;
+  if (!user?.uid) return;
+  try {
+    const res = await window._supaFetch(`/rest/v1/yallakurir_orders?id=eq.${encodeURIComponent(orderId)}&courier_id=eq.${encodeURIComponent(user.uid)}`, {
+      method: 'PATCH', prefer: 'return=representation',
+      body: JSON.stringify({ status: 'selesai', updated_at: new Date().toISOString() })
+    });
+    const updated = res.ok ? await res.json() : [];
+    if (!updated.length) throw new Error('tidak tersimpan');
+    showToast('Pesanan ditandai selesai!', 'green');
+    if (window._ykChatState && window._ykChatState.orderId === orderId) _ykChatApplyStatus('selesai');
+    await _ykLoadMyDeliveries();
+  } catch (e) {
+    showToast('Gagal menandai selesai', 'red');
+  }
+};
+
 // Preview rute pesanan: buka peta berisi titik Dari (hijau) → Ke (merah) + garis penghubung.
 window._ykShowRoute = function(orderId) {
-  const o = (window._ykWaitingById || {})[orderId];
+  const o = (window._ykWaitingById || {})[orderId] || (window._ykMineById || {})[orderId];
   if (!o) { showToast('Data pesanan tidak ditemukan', 'red'); return; }
   const fLat = +o.from_lat, fLng = +o.from_lng, tLat = +o.to_lat, tLng = +o.to_lng;
   if ([fLat, fLng, tLat, tLng].some(v => v == null || isNaN(v))) { showToast('Koordinat rute tidak lengkap', 'red'); return; }
@@ -26663,6 +26922,7 @@ window.ykKurirClaimOrder = async function(orderId) {
     if (!updated.length) { showToast('Pesanan sudah diambil kurir lain', 'red'); await _ykLoadWaitingRoom(); return; }
     showToast('Pesanan berhasil diambil!', 'green');
     await _ykLoadWaitingRoom();
+    await _ykLoadMyDeliveries(); // pesanan yang diambil langsung tampil di "Pesanan Saya Antar"
   } catch (e) {
     showToast('Gagal mengambil pesanan: ' + e.message, 'red');
   }
