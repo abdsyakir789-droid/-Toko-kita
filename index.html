@@ -2300,7 +2300,7 @@ h3.text-sm.font-bold.text-gray-800 {
     position: fixed;
     inset: 0;
     z-index: 99999;
-    background: radial-gradient(circle at 50% 45%, #16c98d 0%, #0d9268 45%, #065f46 100%);
+    background: #10B981;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2454,7 +2454,7 @@ h3.text-sm.font-bold.text-gray-800 {
   <!-- Bottom: spinner + credit -->
   <div id="splashBottom">
     <div id="splashSpinner"></div>
-    <p>Part of Yalla Group &nbsp;·&nbsp; Since 2024</p>
+    <p>Part of Yalla Group &nbsp;·&nbsp; Since 2026</p>
   </div>
 
 </div>
@@ -25844,7 +25844,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
         <p id="kbCourierName" class="font-bold text-sm text-gray-800 lc1" style="margin:0">Kurir</p>
         <p class="text-xs text-gray-500 lc1" style="margin:0">Mitra YallaKurir</p>
       </div>
-      <button id="kbCourierChatBtn" onclick="_kbOpenCourierChat()" title="Chat kurir" style="width:46px;height:46px;border-radius:50%;background:#10B981;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;position:relative"><i class="fa-solid fa-comment-dots" style="color:#fff;font-size:18px"></i></button>
+      <button id="kbCourierChatBtn" onclick="_kbOpenCourierChat()" title="Chat kurir" style="width:46px;height:46px;border-radius:50%;background:#10B981;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;position:relative"><i class="fa-solid fa-comment-dots" style="color:#fff;font-size:18px"></i><span id="kbCourierChatBadge" style="display:none;position:absolute;top:-3px;right:-3px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center;padding:0 3px;border:2px solid #fff"></span></button>
     </div>
     <button onclick="_kbCloseCourierPanel()" class="w-full mt-4 text-gray-500 text-sm font-semibold" style="background:none;border:none;padding:8px;cursor:pointer">Tutup</button>
   </div>
@@ -25860,7 +25860,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
     </div>
   </div>
   <div id="ykChatMessages" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:8px"></div>
-  <div id="ykChatInputBar" class="bg-white border-t border-gray-100 px-3 py-2.5" style="flex-shrink:0;display:flex;align-items:flex-end;gap:8px">
+  <div id="ykChatInputBar" class="bg-white border-t border-gray-100 px-3 pt-2.5" style="flex-shrink:0;display:flex;align-items:flex-end;gap:8px;padding-bottom:max(20px,env(safe-area-inset-bottom,20px))">
     <textarea id="ykChatInput" rows="1" placeholder="Tulis pesan..." oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,96)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ykChatSend();}" class="flex-1 border border-gray-200 rounded-2xl px-3.5 py-2.5 text-sm outline-none resize-none" style="max-height:96px"></textarea>
     <button onclick="ykChatSend()" style="width:42px;height:42px;border-radius:50%;background:#10B981;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0"><i class="fa-solid fa-paper-plane" style="color:#fff;font-size:15px"></i></button>
   </div>
@@ -26151,6 +26151,10 @@ function _kbSubscribeOrderStatus(orderId) {
       if (o.status === 'diambil') _kbShowCourierPanel(o);
       else if (o.status === 'selesai') _kbOrderCompleted(o);
     })
+    // Pesan baru dari kurir (order yang sama) → badge tombol chat di panel kurir muncul real-time.
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'yallakurir_chat_messages', filter: 'order_id=eq.' + orderId }, () => {
+      _kbRefreshCourierChatBadge();
+    })
     .subscribe();
 }
 function _kbUnsubscribeOrderStatus() {
@@ -26174,6 +26178,7 @@ async function _kbShowCourierPanel(order) {
   document.getElementById('kbCourierName').textContent = order.courier_name || 'Kurir';
   _kbSetAvatar(document.getElementById('kbCourierAvatar'), null);
   document.getElementById('kbCourierPanel').style.display = 'flex';
+  _kbRefreshCourierChatBadge();
   try {
     if (order.courier_id) {
       const prof = await _ykFetchOwnProfile(order.courier_id);
@@ -26183,6 +26188,25 @@ async function _kbShowCourierPanel(order) {
       }
     }
   } catch (e) {}
+}
+
+// Badge unread tombol 'Chat kurir' di panel kurir (sisi PENGIRIM/user) — pesan dari kurir
+// (bukan dari user sendiri) yang lebih baru dari last-read lokal. Reuse _ykChatGetLastRead
+// (key per-uid-per-order, sudah ada dari modul dashboard kurir, aman dipakai lintas sisi).
+async function _kbRefreshCourierChatBadge() {
+  const badge = document.getElementById('kbCourierChatBadge');
+  const o = window._kbActiveOrder;
+  const uid = window._S?.user?.uid;
+  if (!badge) return;
+  if (!o || !uid) { badge.style.display = 'none'; return; }
+  try {
+    const r = await window._supaFetch('/rest/v1/yallakurir_chat_messages?order_id=eq.' + encodeURIComponent(o.id) + '&sender_uid=neq.' + encodeURIComponent(uid) + '&select=created_at');
+    const rows = r.ok ? await r.json() : [];
+    const lastRead = _ykChatGetLastRead(o.id);
+    const unread = rows.filter(m => new Date(m.created_at).getTime() > lastRead).length;
+    badge.textContent = unread > 9 ? '9+' : String(unread);
+    badge.style.display = unread > 0 ? 'flex' : 'none';
+  } catch (e) { /* diamkan — badge tetap seperti sebelumnya */ }
 }
 
 function _kbOrderCompleted(order) {
@@ -26212,6 +26236,19 @@ window._kbOpenCourierChat = function() {
 window._ykChatState = null;
 let _ykChatChannel = null;
 
+// Last-read per-order per-uid (localStorage) — pola sama seperti badge unread YallaFood
+// (_yfChatGetLastRead/_yfChatSetLastRead), tapi modul & key terpisah total karena
+// yallakurir_chat_messages tidak punya konsep room, langsung per order_id.
+function _ykChatLastReadKey(uid, orderId) { return 'yk_chat_lastread_' + uid + '_' + orderId; }
+function _ykChatGetLastRead(orderId) {
+  const uid = window._S?.user?.uid; if (!uid) return 0;
+  try { return parseInt(localStorage.getItem(_ykChatLastReadKey(uid, orderId)) || '0'); } catch (e) { return 0; }
+}
+function _ykChatSetLastRead(orderId) {
+  const uid = window._S?.user?.uid; if (!uid) return;
+  try { localStorage.setItem(_ykChatLastReadKey(uid, orderId), Date.now().toString()); } catch (e) {}
+}
+
 window.openYkChat = function(orderId, otherName, status) {
   if (!window._S?.user?.uid) { showToast('Login dulu', 'red'); return; }
   window._ykChatState = { orderId: orderId, otherName: otherName || 'Chat', status: status || 'diambil' };
@@ -26221,6 +26258,12 @@ window.openYkChat = function(orderId, otherName, status) {
   _ykChatApplyStatus(window._ykChatState.status);
   _ykChatLoadMessages();
   _ykChatSubscribe(orderId);
+  // Buka chat = pesan di order ini sudah "dibaca" → badge unread tombol terkait hilang.
+  _ykChatSetLastRead(orderId);
+  const dash = document.getElementById('ykCourierDashboard');
+  if (dash && dash.style.display === 'flex' && typeof _ykLoadMyDeliveries === 'function') _ykLoadMyDeliveries();
+  const courierPanel = document.getElementById('kbCourierPanel');
+  if (courierPanel && courierPanel.style.display === 'flex' && typeof _kbRefreshCourierChatBadge === 'function') _kbRefreshCourierChatBadge();
 };
 window.closeYkChat = function() {
   document.getElementById('ykChatOverlay').style.display = 'none';
@@ -27139,12 +27182,29 @@ window.openYkCourierDashboard = async function() {
   await _ykLoadWaitingRoom();
   await _ykLoadMyDeliveries();
   _ykSubscribeRealtime();
+  _ykChatSubscribeUnread();
 };
 window.closeYkCourierDashboard = function() {
   document.getElementById('ykCourierDashboard').style.display = 'none';
   document.body.style.overflow = '';
   if (_ykChannel) { try { window.supabase.removeChannel(_ykChannel); } catch (e) {} _ykChannel = null; }
+  if (_ykChatUnreadChannel) { try { window.supabase.removeChannel(_ykChatUnreadChannel); } catch (e) {} _ykChatUnreadChannel = null; }
 };
+
+// Listener realtime KHUSUS yallakurir_chat_messages untuk badge 'Chat Pengirim' di dashboard
+// kurir — channel & modul terpisah total dari chat/notifikasi sistem utama maupun YallaFood.
+let _ykChatUnreadChannel = null;
+function _ykChatSubscribeUnread() {
+  const uid = window._S?.user?.uid;
+  if (!uid || !window.supabase) return;
+  if (_ykChatUnreadChannel) { try { window.supabase.removeChannel(_ykChatUnreadChannel); } catch (e) {} }
+  _ykChatUnreadChannel = window.supabase.channel('yk_chat_unread_' + uid)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'yallakurir_chat_messages' }, () => {
+      const dash = document.getElementById('ykCourierDashboard');
+      if (dash && dash.style.display === 'flex') _ykLoadMyDeliveries();
+    })
+    .subscribe();
+}
 
 const _YK_ITEM_ICON = { Elektronik: 'fa-laptop', Perhiasan: 'fa-gem', Dokumen: 'fa-file-lines', Uang: 'fa-money-bill-wave', Umum: 'fa-box' };
 const _YK_STATUS_LABEL = { mencari_kurir: 'Mencari Kurir', diambil: 'Sedang Diantar', selesai: 'Selesai', dibatalkan: 'Dibatalkan' };
@@ -27201,6 +27261,19 @@ async function _ykLoadMyDeliveries() {
     const rows = r.ok ? await r.json() : [];
     window._ykMineById = {}; rows.forEach(o => { window._ykMineById[o.id] = o; });
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan yang kamu antar.</p>'; return; }
+
+    // Badge unread PER TOMBOL 'Chat Pengirim' — pesan dari pengirim (bukan dari kurir sendiri)
+    // yang lebih baru dari last-read lokal. Pola sama seperti badge 'Chat Kurir' YallaFood.
+    const unreadMap = {};
+    try {
+      const orderIds = rows.map(o => o.id);
+      if (orderIds.length) {
+        const mr = await window._supaFetch(`/rest/v1/yallakurir_chat_messages?order_id=in.(${orderIds.join(',')})&sender_uid=neq.${encodeURIComponent(uid)}&select=order_id,created_at`);
+        const msgs = mr.ok ? await mr.json() : [];
+        msgs.forEach(m => { if (new Date(m.created_at).getTime() > _ykChatGetLastRead(m.order_id)) unreadMap[m.order_id] = (unreadMap[m.order_id] || 0) + 1; });
+      }
+    } catch (e) { console.warn('[YallaKurir] gagal hitung badge chat pengirim:', e.message); }
+
     box.innerHTML = rows.map(o => `
       <div class="bg-white rounded-2xl p-3 border border-gray-100">
         <div class="flex items-center justify-between gap-2 mb-2">
@@ -27223,7 +27296,7 @@ async function _ykLoadMyDeliveries() {
         </div>
         <p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${o.ongkir != null ? _yfFmtPrice(o.ongkir) : '-'}</span>${o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : ''}</p>
         <div style="display:flex;gap:8px">
-          <button onclick="_ykChatFromMine('${o.id}')" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Pengirim</button>
+          <button onclick="_ykChatFromMine('${o.id}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Pengirim${_yfBtnBadge(unreadMap[o.id] || 0)}</button>
           ${o.status === 'diambil' ? `<button onclick="ykKurirCompleteOrder('${o.id}')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Tandai Selesai</button>` : ''}
         </div>
       </div>
