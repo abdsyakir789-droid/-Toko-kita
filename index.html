@@ -26030,6 +26030,52 @@ async function _kbResumeActiveOrder() {
   } catch (e) { /* diamkan — gagal cek order aktif, biarkan form kosong seperti biasa */ }
 }
 
+// FIX: HP di-background (BUKAN swipe-close) saat "mencari kurir" → koneksi realtime
+// Supabase ditangguhkan → event 'diambil'/'selesai' TERLEWAT → UI nyangkut di pencarian
+// padahal kurir sudah ambil. Saat app kembali ke foreground, sinkronkan ulang status
+// order yang sedang berjalan di sesi ini (mirip _kbResumeActiveOrder tapi tanpa buka overlay).
+let _kbResyncLast = 0;
+async function _kbResyncOnResume() {
+  const now = Date.now();
+  if (now - _kbResyncLast < 800) return;   // throttle: visibilitychange+focus bisa dobel
+  _kbResyncLast = now;
+  const ov = document.getElementById('kirimBarangOverlay');
+  if (!ov || ov.style.display === 'none') return;   // overlay tidak terbuka → abaikan
+  const orderId = window._kbState?.orderId;
+  if (!orderId) return;                             // tidak ada order berjalan → abaikan
+  try {
+    const r = await window._supaFetch('/rest/v1/yallakurir_orders?id=eq.' + encodeURIComponent(orderId) + '&select=*&limit=1');
+    if (!r.ok) return;
+    const o = (await r.json())[0];
+    if (!o) return;
+    if (o.status === 'diambil') {
+      const panel = document.getElementById('kbCourierPanel');
+      if (!panel || panel.style.display === 'none' || window._kbActiveOrder?.id !== o.id) _kbShowCourierPanel(o);
+    } else if (o.status === 'selesai') {
+      const panel = document.getElementById('kbCourierPanel');
+      if (!panel || panel.style.display === 'none') await _kbShowCourierPanel(o);
+      _kbOrderCompleted(o);
+    } else if (o.status === 'dibatalkan') {
+      window._kbState.orderId = null;
+      _kbUnsubscribeOrderStatus();
+      document.getElementById('kbFindingState').style.display = 'none';
+      document.getElementById('kbCourierPanel').style.display = 'none';
+      showToast('Pencarian kurir dibatalkan', 'red');
+    } else {
+      // masih mencari_kurir → pastikan langganan realtime hidup kembali
+      _kbSubscribeOrderStatus(orderId);
+    }
+  } catch (e) { /* diamkan */ }
+}
+(function _kbBindResume() {
+  if (window._kbResumeBound) return; window._kbResumeBound = true;
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') _kbResyncOnResume();
+  });
+  window.addEventListener('focus', _kbResyncOnResume);
+  window.addEventListener('pageshow', _kbResyncOnResume);
+})();
+
 window.closeKirimBarangYallaKurir = function() {
   document.getElementById('kirimBarangOverlay').style.display = 'none';
   document.body.style.overflow = '';
