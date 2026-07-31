@@ -25158,7 +25158,9 @@ window.openYfChat = async function(foodOrderId, thread, otherName) {
       document.getElementById('yfChatInputBar').style.display = 'none';
       return;
     }
-    window._yfChatState = { roomId: room.id, status: room.status, thread, otherName: otherName || '' };
+    const _yfMyUid = window._S?.user?.uid;
+    const _yfOtherUid = (room.participant_a_uid === _yfMyUid) ? room.participant_b_uid : room.participant_a_uid;
+    window._yfChatState = { roomId: room.id, status: room.status, thread, otherName: otherName || '', otherUid: _yfOtherUid || '' };
     document.getElementById('yfChatInputBar').style.display = room.status === 'open' ? 'flex' : 'none';
     if (room.status !== 'open') {
       document.getElementById('yfChatSubtitle').textContent = 'Chat sudah ditutup (pesanan selesai/dibatalkan)';
@@ -25221,6 +25223,10 @@ window.yfChatSend = async function() {
     });
     if (!res.ok) throw new Error('Gagal mengirim pesan');
     await _yfChatLoadMessages();
+    // Push ke lawan bicara (muncul di layar walau app ditutup). Fire-and-forget.
+    if (window._yfChatState.otherUid) {
+      sendPushToUser(window._yfChatState.otherUid, user.name || 'Seseorang', '💬 ' + text, '/').catch(function(){});
+    }
   } catch (e) {
     showToast('Gagal mengirim pesan: ' + e.message, 'red');
   }
@@ -25792,7 +25798,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 
   window._bsChat = function(id){
     const o = _orders[id]; if(!o) return;
-    openYkChat(o.id, o.courier_name || 'Kurir', o.status);
+    openYkChat(o.id, o.courier_name || 'Kurir', o.status, (o.sender_id === window._S?.user?.uid ? o.courier_id : o.sender_id));
   };
 
   window._bsLoadOrders = async function(){
@@ -26168,18 +26174,30 @@ window._kbDetectLocation = function() {
 };
 
 // ============================================================
-// 🔔 NOTIFIKASI "CARI KURIR" KE BEL — kini ditangani SERVER-SIDE
-// oleh trigger database `trg_yk_fanout_order_notif` pada tabel
-// yallakurir_orders (fungsi yk_fanout_order_notif, SECURITY DEFINER).
-// Alasan: fan-out klien harus membaca yallakurir_profiles dulu, tapi
-// RLS-nya cuma izinkan pemilik/admin baca → pengirim BUKAN kurir/admin
-// dapat daftar kosong → notif tidak terkirim. Trigger jalan tanpa
-// terhalang RLS, jadi SIAPA PUN yang cari kurir → semua kurir aktif
-// dapat notif. Fungsi klien ini sengaja dikosongkan agar tidak dobel.
+// 🔔 NOTIFIKASI "CARI KURIR" — notif DALAM-APP (bel/badge) ditangani
+// SERVER-SIDE oleh trigger `trg_yk_fanout_order_notif`. Fungsi klien ini
+// kini bertugas kirim PUSH NOTIFICATION (muncul di layar walau app ditutup)
+// ke semua kurir aktif. Uid kurir diambil via RPC `yk_active_courier_uids`
+// (SECURITY DEFINER — klien tak bisa baca yallakurir_profiles karena RLS).
+// Push lewat sendPushToUser → edge function quick-responder.
 // ============================================================
 async function _ykNotifyActiveCouriers(order) {
-  // No-op: notifikasi dikirim oleh trigger database saat order di-INSERT.
-  return;
+  try {
+    const r = await window._supaFetch('/rest/v1/rpc/yk_active_courier_uids', {
+      method: 'POST',
+      body: JSON.stringify({ p_exclude: order.sender_id || '' })
+    });
+    if (!r.ok) return;
+    const rows = await r.json();
+    if (!Array.isArray(rows) || !rows.length) return;
+    const title = 'YallaKurir';
+    const body = (order.sender_name || 'Seseorang') + ' sedang mencari kurir untuk pengiriman '
+      + (order.item_type || 'barang') + ' menuju ' + (order.to_address || 'tujuan');
+    rows.forEach(function(row) {
+      const uid = (typeof row === 'string') ? row : (row && row.uid);
+      if (uid) sendPushToUser(uid, title, body, '/').catch(function() {});
+    });
+  } catch (e) { /* diamkan — push best-effort */ }
 }
 
 window._kbCariKurir = async function() {
@@ -26365,9 +26383,9 @@ function _ykChatSetLastRead(orderId) {
   try { localStorage.setItem(_ykChatLastReadKey(uid, orderId), Date.now().toString()); } catch (e) {}
 }
 
-window.openYkChat = function(orderId, otherName, status) {
+window.openYkChat = function(orderId, otherName, status, otherUid) {
   if (!window._S?.user?.uid) { showToast('Login dulu', 'red'); return; }
-  window._ykChatState = { orderId: orderId, otherName: otherName || 'Chat', status: status || 'diambil' };
+  window._ykChatState = { orderId: orderId, otherName: otherName || 'Chat', status: status || 'diambil', otherUid: otherUid || '' };
   document.getElementById('ykChatTitle').textContent = otherName || 'Chat';
   document.getElementById('ykChatOverlay').style.display = 'flex';
   document.body.style.overflow = 'hidden';
@@ -26433,6 +26451,10 @@ window.ykChatSend = async function() {
     });
     if (!res.ok) { showToast('Gagal kirim pesan', 'red'); return; }
     await _ykChatLoadMessages();
+    // Push ke lawan bicara (muncul di layar walau app ditutup). Fire-and-forget.
+    if (window._ykChatState && window._ykChatState.otherUid) {
+      sendPushToUser(window._ykChatState.otherUid, user.name || 'Seseorang', '💬 ' + text, '/').catch(function(){});
+    }
   } catch (e) { showToast('Gagal kirim pesan', 'red'); }
 };
 
@@ -26447,7 +26469,7 @@ function _ykChatSubscribe(orderId) {
 // Kurir buka chat dari kartu "Pesanan Saya Antar" (lawan bicara = pengirim).
 window._ykChatFromMine = function(orderId) {
   const o = (window._ykMineById || {})[orderId]; if (!o) return;
-  openYkChat(o.id, o.sender_name || 'Pengirim', o.status);
+  openYkChat(o.id, o.sender_name || 'Pengirim', o.status, (o.sender_id === window._S?.user?.uid ? o.courier_id : o.sender_id));
 };
 
 // ── Pemilih titik di peta (Leaflet) untuk Dari/Ke ──
