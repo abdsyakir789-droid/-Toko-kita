@@ -19303,13 +19303,12 @@ window.requirePin = function(callback) {
   setTimeout(() => tryOpenAd(0), 1000);
 })();
 
-// ── Deep-link tujuan PUSH NOTIFICATION (?go=...) ──
-// Saat push diklik & app dibuka dari keadaan TERTUTUP (service worker openWindow
-// ke url payload), arahkan ke tujuan sesuai jenis notif. Fungsi tujuan sama persis
-// dengan yang dipakai klik notif dalam-app (_runNotifCardDefault).
-(function handlePushDest() {
-  const go = new URLSearchParams(window.location.search).get('go');
-  if (!go) return;
+// ── Router tujuan PUSH NOTIFICATION (?go=...) ──
+// Dipakai OLEH DUA jalur klik push: (a) app TERTUTUP → service worker openWindow ke
+// url payload → dibaca dari ?go= di URL; (b) app di-BACKGROUND → service worker
+// focus window lama + postMessage {type:'PUSH_NAV', url} → dibaca dari pesan.
+// Fungsi tujuan sama persis dengan klik notif dalam-app (_runNotifCardDefault).
+window._routePushGo = function(go) {
   const fnMap = {
     ykdash:   'openYkCourierDashboard',    // notif "cari kurir" → dashboard kurir YallaKurir
     yfkurir:  'openKurirDashboard',        // notif pesanan YallaFood → dashboard kurir YallaFood
@@ -19320,13 +19319,31 @@ window.requirePin = function(callback) {
   (function tryGo(attempt) {
     // Butuh sesi login siap + fungsi tujuan sudah terdefinisi
     if (window._S && window._S.user && window._S.user.uid && typeof window[fnName] === 'function') {
-      history.replaceState(null, '', window.location.pathname);
       try { window[fnName](); } catch (e) {}
     } else if (attempt < 40) {
       setTimeout(() => tryGo(attempt + 1), 500);
     }
   })(0);
+};
+// (a) app dibuka dari TERTUTUP → ?go= ada di URL
+(function handlePushDest() {
+  const go = new URLSearchParams(window.location.search).get('go');
+  if (!go) return;
+  history.replaceState(null, '', window.location.pathname); // bersihkan URL
+  window._routePushGo(go);
 })();
+// (b) app di-BACKGROUND lalu push diklik → service worker kirim pesan PUSH_NAV
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', function(e) {
+    const d = e.data || {};
+    if (d.type === 'PUSH_NAV' && d.url) {
+      try {
+        const go = new URLSearchParams(new URL(d.url, location.origin).search).get('go');
+        if (go) window._routePushGo(go);
+      } catch (err) {}
+    }
+  });
+}
 
 // Billboard Manager — auto extract ID atau URL dari teks yang dipaste
 (function initBillAdIdInput() {
