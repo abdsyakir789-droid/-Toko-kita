@@ -8447,6 +8447,11 @@ function _runNotifCardDefault(card) {
     setTimeout(() => { if (window.openKelolaPesananYallaFood) openKelolaPesananYallaFood(); }, 150);
     return;
   }
+  if (type === 'yallakurir_order') {
+    closeNotifFullScreen();
+    setTimeout(() => { if (window.openYkCourierDashboard) openYkCourierDashboard(); }, 150);
+    return;
+  }
   if (adId) {
     closeNotifFullScreen();
     setTimeout(() => openDetail(adId), 150);
@@ -26082,6 +26087,33 @@ window._kbDetectLocation = function() {
   }, { enableHighAccuracy: true, timeout: 15000 });
 };
 
+// ============================================================
+// 🔔 PUSH NOTIFICATION KE BEL (tab Notifikasi bottom nav) — HANYA
+// menambahkan hook/insert. Tidak ada satu baris pun kode inti sistem
+// notifikasi (render/badge/klik/mark-read) yang diubah. Insert row ke
+// tabel `notifications` yang sudah ada, sama persis pola
+// _yfNotifyActiveCouriers (YallaFood) — supaya tampil lewat pipeline
+// bel yang sudah berjalan apa adanya. Hanya ke mitra YallaKurir yang
+// statusnya aktif (yallakurir_profiles.status='active').
+// ============================================================
+async function _ykNotifyActiveCouriers(order) {
+  try {
+    const cr = await window._supaFetch('/rest/v1/yallakurir_profiles?status=eq.active&select=uid');
+    const couriers = cr.ok ? await cr.json() : [];
+    if (!couriers.length) return;
+    const now = new Date().toISOString();
+    const payload = couriers
+      .filter(c => c.uid && c.uid !== order.sender_id)
+      .map(c => ({
+        to_uid: c.uid, user_id: c.uid, type: 'yallakurir_order',
+        message: (order.sender_name || 'Seseorang') + ' sedang mencari kurir untuk pengiriman ' + (order.item_type || 'barang') + ' menuju ' + (order.to_address || 'tujuan') + '. Segera ambil pesanan!',
+        sender_name: 'YallaKurir', is_read: false, created_at: now
+      }));
+    if (!payload.length) return;
+    await window._supaFetch('/rest/v1/notifications', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify(payload) });
+  } catch (e) { console.warn('[YallaKurir] gagal kirim notifikasi bel:', e.message); }
+}
+
 window._kbCariKurir = async function() {
   const user = window._S?.user;
   if (!user?.uid) { showToast('Login dulu', 'red'); return; }
@@ -26127,7 +26159,10 @@ window._kbCariKurir = async function() {
     if (res.ok) {
       const rows = await res.json().catch(() => []);
       st.orderId = Array.isArray(rows) ? rows[0]?.id : rows?.id;
-      if (st.orderId) _kbSubscribeOrderStatus(st.orderId); // deteksi kurir ambil/selesai realtime
+      if (st.orderId) {
+        _kbSubscribeOrderStatus(st.orderId); // deteksi kurir ambil/selesai realtime
+        _ykNotifyActiveCouriers({ sender_id: user.uid, sender_name: user.name || '', item_type: jenis, to_address: to }).catch(() => {});
+      }
     } else {
       console.warn('[kirimBarang] simpan order gagal:', res.status);
     }
