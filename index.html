@@ -19303,6 +19303,31 @@ window.requirePin = function(callback) {
   setTimeout(() => tryOpenAd(0), 1000);
 })();
 
+// ── Deep-link tujuan PUSH NOTIFICATION (?go=...) ──
+// Saat push diklik & app dibuka dari keadaan TERTUTUP (service worker openWindow
+// ke url payload), arahkan ke tujuan sesuai jenis notif. Fungsi tujuan sama persis
+// dengan yang dipakai klik notif dalam-app (_runNotifCardDefault).
+(function handlePushDest() {
+  const go = new URLSearchParams(window.location.search).get('go');
+  if (!go) return;
+  const fnMap = {
+    ykdash:   'openYkCourierDashboard',    // notif "cari kurir" → dashboard kurir YallaKurir
+    yfkurir:  'openKurirDashboard',        // notif pesanan YallaFood → dashboard kurir YallaFood
+    yfseller: 'openKelolaPesananYallaFood'  // notif pesanan YallaFood → kelola pesanan (seller)
+  };
+  const fnName = fnMap[go];
+  if (!fnName) return;
+  (function tryGo(attempt) {
+    // Butuh sesi login siap + fungsi tujuan sudah terdefinisi
+    if (window._S && window._S.user && window._S.user.uid && typeof window[fnName] === 'function') {
+      history.replaceState(null, '', window.location.pathname);
+      try { window[fnName](); } catch (e) {}
+    } else if (attempt < 40) {
+      setTimeout(() => tryGo(attempt + 1), 500);
+    }
+  })(0);
+})();
+
 // Billboard Manager — auto extract ID atau URL dari teks yang dipaste
 (function initBillAdIdInput() {
   document.addEventListener('DOMContentLoaded', () => {
@@ -25535,7 +25560,7 @@ async function _yfNotifyActiveCouriers(order) {
     await window._supaFetch('/rest/v1/notifications', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify(payload) });
     // Push (muncul di layar walau app ditutup) ke tiap kurir aktif. Fire-and-forget.
     targets.forEach(function(c) {
-      sendPushToUser(c.uid, 'YallaFood', 'Ada pesanan delivery menunggu diambil, cek sekarang!', '/').catch(function(){});
+      sendPushToUser(c.uid, 'YallaFood', 'Ada pesanan delivery menunggu diambil, cek sekarang!', '/?go=yfkurir').catch(function(){});
     });
   } catch (e) { console.warn('[YallaFood Kurir] gagal kirim notifikasi bel:', e.message); }
 }
@@ -25554,7 +25579,7 @@ async function _yfNotifySeller(order) {
       }])
     });
     // Push (muncul di layar walau app ditutup) ke seller. Fire-and-forget.
-    sendPushToUser(order.seller_id, 'YallaFood', 'Kamu mendapatkan pesanan baru, cek sekarang!', '/').catch(function(){});
+    sendPushToUser(order.seller_id, 'YallaFood', 'Kamu mendapatkan pesanan baru, cek sekarang!', '/?go=yfseller').catch(function(){});
   } catch (e) { console.warn('[YallaFood Seller] gagal kirim notifikasi bel:', e.message); }
 }
 
@@ -26234,7 +26259,7 @@ async function _ykNotifyActiveCouriers(order) {
       + (order.item_type || 'barang') + ' menuju ' + (order.to_address || 'tujuan');
     rows.forEach(function(row) {
       const uid = (typeof row === 'string') ? row : (row && row.uid);
-      if (uid) sendPushToUser(uid, title, body, '/').catch(function() {});
+      if (uid) sendPushToUser(uid, title, body, '/?go=ykdash').catch(function() {});
     });
   } catch (e) { /* diamkan — push best-effort */ }
 }
