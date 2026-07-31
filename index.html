@@ -25587,7 +25587,10 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
     <button onclick="closeKirimBarangYallaKurir()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">Kirim Barang</h2>
-    <span class="text-[11px] font-bold text-primary bg-pl px-2.5 py-1 rounded-full">YallaKurir</span>
+    <button onclick="openBarangSaya()" title="Barang Saya" class="flex items-center gap-1.5 text-primary bg-pl px-2.5 py-1.5 rounded-full hover:brightness-95 transition-all active:scale-95">
+      <i class="fa-solid fa-box-open text-[13px]"></i>
+      <span class="text-[11px] font-bold">Barang Saya</span>
+    </button>
   </div>
   <!-- Body -->
   <div class="flex-1 overflow-y-auto px-4 py-4">
@@ -25630,7 +25633,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
     <textarea id="kbNotesInput" rows="2" placeholder="Contoh: barang mudah pecah, hubungi sebelum jemput" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white outline-none resize-none"></textarea>
   </div>
   <!-- Footer -->
-  <div class="bg-white border-t border-gray-100 px-4 py-3" style="flex-shrink:0">
+  <div class="bg-white border-t border-gray-100 px-4 pt-3" style="flex-shrink:0;padding-bottom:max(20px,env(safe-area-inset-bottom,20px))">
     <div id="kbOngkirBox" class="rounded-2xl px-4 py-2.5 mb-2.5 bg-pl/60 flex items-center" style="min-height:44px">
       <span class="w-full text-center text-xs font-medium text-gray-400"><i class="fa-solid fa-circle-info mr-1"></i>Pilih titik Dari &amp; Ke untuk lihat estimasi ongkir</span>
     </div>
@@ -25651,6 +25654,180 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
     <button onclick="_kbCancelSearch()" class="text-sm font-bold text-red-500 border border-red-200 rounded-2xl py-2.5 px-6">Batalkan Pencarian</button>
   </div>
 </div>
+
+<!-- ═══ BARANG SAYA (riwayat kiriman, sisi PENGIRIM) — full-screen ═══ -->
+<style>
+  #barangSayaOverlay .bs-card{background:#fff;border:1px solid #eef0f2;border-radius:18px;padding:14px 14px 12px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  #barangSayaOverlay .bs-status{position:absolute;top:12px;right:12px;font-size:10.5px;font-weight:800;padding:4px 9px;border-radius:999px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  #barangSayaOverlay .bs-status .bs-dot{width:6px;height:6px;border-radius:50%}
+  #barangSayaOverlay .bs-itemicon{width:38px;height:38px;border-radius:11px;background:#ECFDF5;color:#059669;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+  #barangSayaOverlay .bs-route{border-left:2px dashed #e5e7eb;margin:12px 0 12px 6px;padding-left:15px}
+  #barangSayaOverlay .bs-rrow{position:relative;font-size:12px;color:#374151;line-height:1.35}
+  #barangSayaOverlay .bs-rrow + .bs-rrow{margin-top:9px}
+  #barangSayaOverlay .bs-rdot{position:absolute;left:-22px;top:4px;width:9px;height:9px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #e5e7eb}
+  #barangSayaOverlay .bs-rlabel{font-size:9.5px;font-weight:800;color:#9ca3af;letter-spacing:.04em}
+  #barangSayaOverlay .bs-avatar{width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#e5e7eb;display:flex;align-items:center;justify-content:center;color:#9ca3af}
+  #barangSayaOverlay .bs-chatbtn{width:34px;height:34px;border-radius:50%;background:#10B981;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+  #barangSayaOverlay .bs-chatbtn:active{transform:scale(.94)}
+  #barangSayaOverlay .bs-time{font-size:10.5px;color:#9ca3af;font-weight:600;white-space:nowrap;margin-left:auto}
+</style>
+<div id="barangSayaOverlay" style="display:none;position:fixed;inset:0;z-index:65;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeBarangSaya()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Barang Saya</h2>
+    <button onclick="_bsLoadOrders()" title="Muat ulang" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-rotate-right text-gray-500 text-sm"></i></button>
+  </div>
+  <div id="bsListWrap" class="flex-1 overflow-y-auto px-4 py-4" style="display:flex;flex-direction:column;gap:12px"></div>
+</div>
+<script>
+// ── BARANG SAYA: riwayat kiriman (sisi pengirim) ──────────────────
+// Baca order milik user dari yallakurir_orders → kartu detail barang +
+// rute Dari/Ke + badge status + profil kurir + chat + waktu relatif
+// dinamis. Reuse _ykFetchOwnProfile & openYkChat (modul YallaKurir).
+(function(){
+  const STATUS = {
+    mencari_kurir: { label:'Mencari Kurir', bg:'#FEF3C7', fg:'#B45309', dot:'#F59E0B' },
+    diambil:       { label:'Menuju Lokasi', bg:'#DBEAFE', fg:'#1D4ED8', dot:'#3B82F6' },
+    selesai:       { label:'Selesai',       bg:'#D1FAE5', fg:'#047857', dot:'#10B981' },
+    dibatalkan:    { label:'Dibatalkan',    bg:'#F3F4F6', fg:'#6B7280', dot:'#9CA3AF' }
+  };
+  const ICONS = { Elektronik:'fa-laptop', Perhiasan:'fa-gem', Dokumen:'fa-file-lines', Uang:'fa-money-bill-wave', Umum:'fa-box' };
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // Waktu relatif dinamis: "5 detik", "3 menit", "2 jam", "4 hari yang lalu"
+  function timeAgo(iso){
+    if(!iso) return '';
+    const t = new Date(iso).getTime(); if(isNaN(t)) return '';
+    const s = Math.max(0, Math.floor((Date.now()-t)/1000));
+    if(s<60) return s+' detik yang lalu';
+    const m=Math.floor(s/60); if(m<60) return m+' menit yang lalu';
+    const h=Math.floor(m/60); if(h<24) return h+' jam yang lalu';
+    const d=Math.floor(h/24); if(d<30) return d+' hari yang lalu';
+    const mo=Math.floor(d/30); if(mo<12) return mo+' bulan yang lalu';
+    return Math.floor(mo/12)+' tahun yang lalu';
+  }
+
+  function fallbackAvatar(){
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  }
+
+  const _orders = {};
+  let _timer = null, _channel = null;
+
+  window.openBarangSaya = function(){
+    if(!window._S?.user?.uid){ showToast('Login dulu ya!','red'); return; }
+    document.getElementById('barangSayaOverlay').style.display='flex';
+    document.body.style.overflow='hidden';
+    _bsLoadOrders();
+    _bsSubscribe();
+    if(_timer) clearInterval(_timer);
+    _timer = setInterval(_bsRefreshTimes, 15000);
+  };
+
+  window.closeBarangSaya = function(){
+    document.getElementById('barangSayaOverlay').style.display='none';
+    document.body.style.overflow='hidden'; // overlay Kirim Barang masih terbuka di belakang
+    if(_timer){ clearInterval(_timer); _timer=null; }
+    _bsUnsubscribe();
+  };
+
+  function _bsRefreshTimes(){
+    document.querySelectorAll('#bsListWrap .bs-time[data-ts]').forEach(el=>{
+      el.textContent = timeAgo(el.getAttribute('data-ts'));
+    });
+  }
+
+  window._bsChat = function(id){
+    const o = _orders[id]; if(!o) return;
+    openYkChat(o.id, o.courier_name || 'Kurir', o.status);
+  };
+
+  window._bsLoadOrders = async function(){
+    const uid = window._S?.user?.uid; if(!uid) return;
+    const wrap = document.getElementById('bsListWrap');
+    if(!wrap.dataset.loaded){
+      wrap.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:40px 0"><i class="fa-solid fa-spinner fa-spin fa-lg"></i></div>';
+    }
+    try{
+      const r = await window._supaFetch('/rest/v1/yallakurir_orders?sender_id=eq.'+encodeURIComponent(uid)+'&select=*&order=created_at.desc&limit=50');
+      const rows = r.ok ? await r.json() : [];
+      wrap.dataset.loaded = '1';
+      if(!rows.length){
+        wrap.innerHTML = '<div style="text-align:center;padding:56px 24px"><i class="fa-solid fa-box-open" style="font-size:40px;color:#d1d5db"></i><p class="text-sm font-bold text-gray-500" style="margin:14px 0 4px">Belum ada kiriman</p><p class="text-xs text-gray-400">Barang yang kamu kirim lewat YallaKurir akan muncul di sini.</p></div>';
+        return;
+      }
+      wrap.innerHTML = rows.map(_bsCardHtml).join('');
+      rows.forEach(o=>{ if(o.courier_id) _bsHydrateCourier(o); });
+    }catch(e){
+      if(!wrap.dataset.loaded) wrap.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px 0" class="text-sm">Gagal memuat. <button onclick="_bsLoadOrders()" class="font-bold underline">Coba lagi</button></div>';
+    }
+  };
+
+  function _bsCardHtml(o){
+    _orders[o.id] = o;
+    const st = STATUS[o.status] || STATUS.mencari_kurir;
+    const icon = ICONS[o.item_type] || 'fa-box';
+    const hasCourier = !!(o.courier_id || o.courier_name);
+    const chatBtn = (hasCourier && o.status!=='dibatalkan')
+      ? '<button class="bs-chatbtn" title="Chat kurir" onclick="_bsChat(\''+esc(o.id)+'\')"><i class="fa-solid fa-comment-dots" style="color:#fff;font-size:14px"></i></button>'
+      : '';
+    const courierBlock = hasCourier
+      ? '<p class="lc1" style="margin:0;font-size:12.5px;font-weight:700;color:#1f2937">'+esc(o.courier_name||'Kurir')+'</p><p style="margin:0;font-size:10px;color:#9ca3af">Mitra YallaKurir</p>'
+      : '<p style="margin:0;font-size:12px;font-weight:600;color:#9ca3af">Menunggu kurir…</p>';
+    const notesLine = o.notes ? '<p class="lc1" style="margin:3px 0 0;font-size:11px;color:#9ca3af"><i class="fa-solid fa-note-sticky" style="margin-right:4px"></i>'+esc(o.notes)+'</p>' : '';
+    const ongkirLine = (o.ongkir!=null && window._yfFmtPrice) ? '<div style="margin-top:3px;font-size:11px;color:#059669;font-weight:700"><i class="fa-solid fa-motorcycle" style="margin-right:4px"></i>'+esc(_yfFmtPrice(o.ongkir))+'</div>' : '';
+    return ''
+      +'<div class="bs-card">'
+      +  '<span class="bs-status" style="background:'+st.bg+';color:'+st.fg+'"><span class="bs-dot" style="background:'+st.dot+'"></span>'+st.label+'</span>'
+      +  '<div style="display:flex;align-items:flex-start;gap:11px;padding-right:104px">'
+      +    '<div class="bs-itemicon"><i class="fa-solid '+icon+'"></i></div>'
+      +    '<div style="min-width:0;flex:1">'
+      +      '<p style="margin:0;font-size:13.5px;font-weight:800;color:#111827">'+esc(o.item_type||'Barang')+'</p>'
+      +      ongkirLine
+      +      notesLine
+      +    '</div>'
+      +  '</div>'
+      +  '<div class="bs-route">'
+      +    '<div class="bs-rrow"><span class="bs-rdot" style="background:#10B981"></span><span class="bs-rlabel">DARI</span><br>'+esc(o.from_address||'-')+'</div>'
+      +    '<div class="bs-rrow"><span class="bs-rdot" style="background:#ef4444"></span><span class="bs-rlabel">KE</span><br>'+esc(o.to_address||'-')+'</div>'
+      +  '</div>'
+      +  '<div style="display:flex;align-items:center;gap:9px;border-top:1px solid #f1f3f5;padding-top:11px">'
+      +    '<div class="bs-avatar" id="bsAv_'+esc(o.id)+'">'+fallbackAvatar()+'</div>'
+      +    '<div style="min-width:0">'+courierBlock+'</div>'
+      +    chatBtn
+      +    '<span class="bs-time" data-ts="'+esc(o.created_at||'')+'">'+timeAgo(o.created_at)+'</span>'
+      +  '</div>'
+      +'</div>';
+  }
+
+  async function _bsHydrateCourier(o){
+    try{
+      if(typeof _ykFetchOwnProfile !== 'function') return;
+      const prof = await _ykFetchOwnProfile(o.courier_id);
+      if(!prof) return;
+      const el = document.getElementById('bsAv_'+o.id);
+      if(el && prof.selfie_photo_url){
+        el.innerHTML = '<img src="'+esc(prof.selfie_photo_url)+'" style="width:100%;height:100%;object-fit:cover" alt=""/>';
+      }
+    }catch(e){}
+  }
+
+  function _bsSubscribe(){
+    const uid = window._S?.user?.uid;
+    if(!window.supabase || !uid) return;
+    _bsUnsubscribe();
+    try{
+      _channel = window.supabase.channel('bs_orders_'+uid)
+        .on('postgres_changes', { event:'*', schema:'public', table:'yallakurir_orders', filter:'sender_id=eq.'+uid }, ()=>{ _bsLoadOrders(); })
+        .subscribe();
+    }catch(e){}
+  }
+  function _bsUnsubscribe(){
+    if(_channel){ try{ window.supabase.removeChannel(_channel); }catch(e){} _channel=null; }
+  }
+})();
+</script>
 
 <!-- YALLAKURIR: panel kurir ditemukan (bottom sheet setengah layar, sisi PENGIRIM) -->
 <div id="kbCourierPanel" style="display:none;position:fixed;inset:0;z-index:63;background:rgba(17,24,39,.35);align-items:flex-end;justify-content:center">
@@ -26292,18 +26469,97 @@ window._kbOpenMap = function(target) {
     map.on('click', (e) => { marker.setLatLng(e.latlng); st._selPatokan = null; const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none'; });
     marker.on('dragend', () => { st._selPatokan = null; });
     st._map = map; st._marker = marker;
+    _attachBuildingFootprints(map); // jejak bangunan asli (OSM) — biar area kosong di peta terlihat natural
     _kbLoadPatokanMarkers(map); // tampilkan patokan sebagai pin tetap di peta
     map.invalidateSize();
     setTimeout(() => { if (st._map) st._map.invalidateSize(); }, 400);
   }, 60);
 };
 
+// ── Visibilitas berjenjang pin patokan (dipakai bersama peta Kirim Barang & Rute Pengantaran) ──
+// zoom <16          → semua disembunyikan.
+// 16 <= zoom <20     → hanya yang TIDAK berdempetan (jarak piksel ke pin lain >= threshold) yang tampil.
+// zoom >=20          → semua tampil, termasuk yang berdempetan.
+// Dihitung pakai map.project(latlng, zoom) — murni fungsi lat/lng+zoom, tidak bergantung pan/posisi peta.
+const _PATOKAN_ZOOM_SPARSE = 16;
+const _PATOKAN_ZOOM_DENSE = 18;
+const _PATOKAN_CROWD_PX = 70;
+function _patokanVisibleAtZoom(map, points, zoom) {
+  if (zoom < _PATOKAN_ZOOM_SPARSE) return points.map(() => false);
+  if (zoom >= _PATOKAN_ZOOM_DENSE) return points.map(() => true);
+  const px = points.map(p => map.project([p.lat, p.lng], zoom));
+  return points.map((p, i) => {
+    for (let j = 0; j < px.length; j++) {
+      if (j !== i && px[i].distanceTo(px[j]) < _PATOKAN_CROWD_PX) return false; // berdempetan → tunggu zoom 20
+    }
+    return true;
+  });
+}
+
+// ── Building footprints (jejak bangunan asli) — dipakai bersama peta Kirim Barang & Rute
+// Pengantaran. Ambil poligon bangunan sungguhan dari OpenStreetMap (Overpass API) sesuai
+// area peta yang sedang dilihat, digambar transparan/lembut biar area kosong di basemap
+// terlihat natural (bukan hasil generate acak — mengikuti data bangunan asli lapangan).
+// Debounce di 'moveend' + cache per-bbox kasar biar tak query berulang waktu geser dikit.
+const _BUILD_MIN_ZOOM = 16;
+const _buildFootprintCache = new Map();
+function _buildCacheKey(b) {
+  const r = v => Math.round(v * 200) / 200; // grid ~0.005° (~500m) — cukup kasar utk cache berguna
+  return [r(b.getSouth()), r(b.getWest()), r(b.getNorth()), r(b.getEast())].join(',');
+}
+async function _fetchBuildingFootprints(bounds) {
+  const key = _buildCacheKey(bounds);
+  if (_buildFootprintCache.has(key)) return _buildFootprintCache.get(key);
+  const bbox = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
+  const q = '[out:json][timeout:12];way["building"](' + bbox + ');out geom;';
+  const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('overpass status ' + res.status);
+    const data = await res.json();
+    const polys = (data.elements || [])
+      .filter(el => el.type === 'way' && Array.isArray(el.geometry) && el.geometry.length > 2)
+      .map(el => el.geometry.map(g => [g.lat, g.lon]));
+    _buildFootprintCache.set(key, polys);
+    return polys;
+  } catch (e) {
+    clearTimeout(timer);
+    return null; // gagal/timeout — diamkan, peta tetap jalan tanpa layer bangunan
+  }
+}
+// Pasang layer bangunan di sebuah peta Leaflet. Otomatis refresh saat peta digeser/di-zoom
+// (di atas _BUILD_MIN_ZOOM saja — di zoom jauh area terlalu luas, query jadi berat & tak perlu).
+function _attachBuildingFootprints(map) {
+  const layer = L.layerGroup().addTo(map);
+  let seq = 0, debounceTimer = null, destroyed = false;
+  map.on('unload', () => { destroyed = true; });
+  const refresh = async () => {
+    if (destroyed) return;
+    if (map.getZoom() < _BUILD_MIN_ZOOM) { layer.clearLayers(); return; }
+    const mySeq = ++seq;
+    const polys = await _fetchBuildingFootprints(map.getBounds());
+    if (destroyed || mySeq !== seq || !polys) return; // peta sudah ditutup / geser lagi / gagal
+    layer.clearLayers();
+    polys.forEach(coords => {
+      L.polygon(coords, {
+        color: '#c7c0af', weight: 1, opacity: .45,
+        fillColor: '#efece2', fillOpacity: .5,
+        interactive: false
+      }).addTo(layer);
+    });
+  };
+  map.on('moveend', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(refresh, 700); });
+  refresh();
+  return layer;
+}
+
 // Render semua patokan aktif sebagai PIN TETAP (non-draggable) di peta map picker.
 // Tap pin → set marker seleksi ke titik patokan itu. Titik patokan permanen —
 // tidak bisa digeser user; hanya admin yang bisa ubah datanya (RLS admin-only).
-// Pin patokan hanya tampil saat zoom cukup dekat (>=16, jalan/blok mulai jelas),
-// biar tak menumpuk saat tampilan luas. Toggle via listener 'zoomend'.
-const _KB_PATOKAN_MIN_ZOOM = 16;
+// Visibilitas per-pin bertingkat lihat _patokanVisibleAtZoom di atas. Toggle via listener 'zoomend'.
 async function _kbLoadPatokanMarkers(map) {
   const st = window._kbState;
   if (st._patokanLayer) { try { map.removeLayer(st._patokanLayer); } catch (e) {} st._patokanLayer = null; }
@@ -26312,7 +26568,8 @@ async function _kbLoadPatokanMarkers(map) {
     const r = await window._supaFetch('/rest/v1/patokan?status=eq.active&select=name,category,lat,lng&limit=500');
     const rows = r.ok ? await r.json() : [];
     if (!st._map || st._map !== map) return; // overlay keburu ditutup
-    const layer = L.layerGroup();
+    const layer = L.layerGroup().addTo(map);
+    const entries = [];
     rows.forEach(p => {
       if (p.lat == null || p.lng == null) return;
       const cat = _patokanCat(p.category);
@@ -26321,7 +26578,7 @@ async function _kbLoadPatokanMarkers(map) {
         html: '<div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto">'
           + '<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:' + cat.color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center">'
           + '<i class="fa-solid ' + cat.icon + '" style="color:#fff;font-size:12px;transform:rotate(45deg)"></i></div>'
-          + '<span style="margin-top:1px;font-size:9px;font-weight:700;color:#111827;background:rgba(255,255,255,.9);padding:1px 4px;border-radius:4px;text-align:center;white-space:normal;word-break:break-word;max-width:96px;line-height:1.2">' + _sadEscHtml(p.name) + '</span>'
+          + '<span style="margin-top:2px;font-size:9.5px;font-weight:800;color:' + cat.color + ';text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 1px 2px rgba(0,0,0,.2);text-align:center;white-space:normal;word-break:break-word;max-width:96px;line-height:1.15">' + _sadEscHtml(p.name) + '</span>'
           + '</div>',
         iconSize: [96, 44], iconAnchor: [48, 26]
       });
@@ -26333,15 +26590,17 @@ async function _kbLoadPatokanMarkers(map) {
         const inp = document.getElementById('kbMapSearchInput'); if (inp) inp.value = p.name;
         const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none';
       });
-      m.addTo(layer);
+      entries.push({ lat: p.lat, lng: p.lng, marker: m });
     });
     st._patokanLayer = layer;
-    // Toggle berdasar zoom: <16 sembunyikan (removeLayer), >=16 tampilkan (addLayer).
     const applyZoom = () => {
       if (!st._patokanLayer || !st._map || st._map !== map) return;
-      const show = map.getZoom() >= _KB_PATOKAN_MIN_ZOOM;
-      if (show && !map.hasLayer(st._patokanLayer)) map.addLayer(st._patokanLayer);
-      else if (!show && map.hasLayer(st._patokanLayer)) map.removeLayer(st._patokanLayer);
+      const visible = _patokanVisibleAtZoom(map, entries, map.getZoom());
+      entries.forEach((e, i) => {
+        const has = layer.hasLayer(e.marker);
+        if (visible[i] && !has) layer.addLayer(e.marker);
+        else if (!visible[i] && has) layer.removeLayer(e.marker);
+      });
     };
     st._patokanZoomHandler = applyZoom;
     map.on('zoomend', applyZoom);
@@ -26941,6 +27200,8 @@ window._ykShowRoute = function(orderId) {
     // Garis lurus putus-putus dulu (tampil instan) → diganti rute JALAN dari ORS bila berhasil.
     let line = L.polyline([[fLat, fLng], [tLat, tLng]], { color: '#10B981', weight: 4, opacity: .5, dashArray: '6,8' }).addTo(map);
     map.fitBounds(line.getBounds(), { padding: [60, 60], maxZoom: 17 });
+    _attachBuildingFootprints(map); // jejak bangunan asli (OSM) — biar area kosong di peta terlihat natural
+    _ykLoadPatokanMarkers(map); // pin patokan admin di rute — hanya tampil saat zoom dekat
     map.invalidateSize();
     setTimeout(() => { if (window._ykRouteMap === map) map.invalidateSize(); }, 400);
     _ykFetchRoadRoute(fLat, fLng, tLat, tLng).then(path => {
@@ -26952,6 +27213,46 @@ window._ykShowRoute = function(orderId) {
     });
   }, 60);
 };
+
+// Render patokan aktif sebagai pin non-interaktif di peta rute pengantaran (sisi kurir).
+// Visibilitas per-pin bertingkat: lihat _patokanVisibleAtZoom (dipakai bersama dengan
+// map picker Kirim Barang) — zoom 16 tampilkan yang longgar, zoom 20 tampilkan semua.
+async function _ykLoadPatokanMarkers(map) {
+  try {
+    const r = await window._supaFetch('/rest/v1/patokan?status=eq.active&select=name,category,lat,lng&limit=500');
+    const rows = r.ok ? await r.json() : [];
+    if (window._ykRouteMap !== map) return; // overlay keburu ditutup / map lain sudah dibuat
+    const layer = L.layerGroup().addTo(map);
+    const entries = [];
+    rows.forEach(p => {
+      if (p.lat == null || p.lng == null) return;
+      const cat = _patokanCat(p.category);
+      const icon = L.divIcon({
+        className: 'yk-patokan-pin',
+        html: '<div style="display:flex;flex-direction:column;align-items:center">'
+          + '<div style="width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:' + cat.color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center">'
+          + '<i class="fa-solid ' + cat.icon + '" style="color:#fff;font-size:10px;transform:rotate(45deg)"></i></div>'
+          + '<span style="margin-top:2px;font-size:8.5px;font-weight:800;color:' + cat.color + ';text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 1px 2px rgba(0,0,0,.2);text-align:center;white-space:normal;word-break:break-word;max-width:88px;line-height:1.15">' + _sadEscHtml(p.name) + '</span>'
+          + '</div>',
+        iconSize: [88, 40], iconAnchor: [44, 22]
+      });
+      const m = L.marker([p.lat, p.lng], { icon, draggable: false, keyboard: false, interactive: false });
+      entries.push({ lat: p.lat, lng: p.lng, marker: m });
+    });
+    if (window._ykRouteMap !== map) return;
+    const applyZoom = () => {
+      if (window._ykRouteMap !== map) return;
+      const visible = _patokanVisibleAtZoom(map, entries, map.getZoom());
+      entries.forEach((e, i) => {
+        const has = layer.hasLayer(e.marker);
+        if (visible[i] && !has) layer.addLayer(e.marker);
+        else if (!visible[i] && has) layer.removeLayer(e.marker);
+      });
+    };
+    map.on('zoomend', applyZoom);
+    applyZoom(); // set kondisi awal sesuai zoom saat ini
+  } catch (e) { /* diamkan — peta rute tetap jalan tanpa pin patokan */ }
+}
 
 // Ambil geometri rute JALAN (mengikuti jalan) dari OpenRouteService — key & endpoint
 // sama seperti _yfGetDistanceKm. Balikin array [lat,lng] utk polyline, atau null bila
