@@ -26457,12 +26457,62 @@ window._kbSelectSearchResult = function(i) {
   // Titik dari PATOKAN (punya nama) → kolom Dari/Ke nanti pakai nama patokan.
   // Hasil Photon (bukan patokan) dianggap titik biasa → koordinat.
   st._selPatokan = (it.source === 'patokan') ? { name: it.name || it.label, lat: it.lat, lng: it.lng } : null;
-  if (st._map && st._marker) { st._map.setView([it.lat, it.lng], 16); st._marker.setLatLng([it.lat, it.lng]); }
+  if (st._map && st._marker) { st._map.setView([it.lat, it.lng], 16); st._marker.setLatLng([it.lat, it.lng]); _kbRefreshRouteOverlay(); }
   const input = document.getElementById('kbMapSearchInput');
   if (input) input.value = it.label;
   const box = document.getElementById('kbMapSearchResults');
   if (box) box.style.display = 'none';
 };
+
+// Ikon "tongkat bendera" untuk titik Dari (bendera putih polos) & Ke (bendera kotak-kotak) —
+// dipasang di peta pemilihan lokasi supaya kedua titik rute terlihat jelas sekaligus, mirip
+// penanda start/finish rute pada umumnya. Anchor di dasar tongkat (bukan tengah ikon).
+function _kbFlagIcon(kind) {
+  const finish = kind === 'finish';
+  const iconClass = finish ? 'fa-flag-checkered' : 'fa-flag';
+  const color = finish ? '#111827' : '#ffffff';
+  const outline = finish ? '' : 'text-shadow:-1px -1px 0 #374151,1px -1px 0 #374151,-1px 1px 0 #374151,1px 1px 0 #374151;';
+  return L.divIcon({
+    className: 'kb-flag-pin',
+    html: '<div style="display:flex;flex-direction:column;align-items:center">'
+      + '<i class="fa-solid ' + iconClass + '" style="font-size:20px;color:' + color + ';' + outline + 'filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))"></i>'
+      + '<div style="width:2px;height:15px;background:#374151;margin-top:-2px"></div>'
+      + '</div>',
+    iconSize: [26, 38], iconAnchor: [5, 36]
+  });
+}
+
+// Gambar ulang garis rute (Dari → Ke) di peta picker: titik yang SUDAH dikonfirmasi (tersimpan
+// di _kbState) + titik yang SEDANG dipilih (posisi live marker draggable). Pola sama seperti
+// _ykShowRoute (sisi kurir): garis lurus putus-putus dulu (instan) → diganti rute JALAN dari
+// ORS via _ykFetchRoadRoute bila berhasil. Dipanggil tiap posisi marker berubah.
+let _kbRouteSeq = 0;
+async function _kbRefreshRouteOverlay() {
+  const st = window._kbState;
+  const map = st._map, marker = st._marker;
+  if (!map || !marker) return;
+  const cur = marker.getLatLng();
+  const t = st.mapTarget;
+  const fLat = t === 'from' ? cur.lat : st.fromLat;
+  const fLng = t === 'from' ? cur.lng : st.fromLng;
+  const tLat = t === 'to' ? cur.lat : st.toLat;
+  const tLng = t === 'to' ? cur.lng : st.toLng;
+  if (st._routeLine) { try { map.removeLayer(st._routeLine); } catch (e) {} st._routeLine = null; }
+  if (fLat == null || fLng == null || tLat == null || tLng == null) return; // salah satu titik belum ada
+  if (Math.abs(fLat - tLat) < 1e-7 && Math.abs(fLng - tLng) < 1e-7) return; // titik masih sama — belum ada rute berarti
+  const mySeq = ++_kbRouteSeq;
+  st._routeLine = L.polyline([[fLat, fLng], [tLat, tLng]], { color: '#10B981', weight: 4, opacity: .5, dashArray: '6,8' }).addTo(map);
+  try {
+    const path = await _ykFetchRoadRoute(fLat, fLng, tLat, tLng);
+    if (mySeq !== _kbRouteSeq || st._map !== map) return; // picker keburu ditutup/ganti sebelum ORS selesai
+    if (path) {
+      try { map.removeLayer(st._routeLine); } catch (e) {}
+      st._routeLine = L.polyline(path, { color: '#10B981', weight: 5, opacity: .9 }).addTo(map);
+    } else {
+      st._routeLine.setStyle({ opacity: .85, dashArray: null }); // ORS gagal → garis lurus solid
+    }
+  } catch (e) {}
+}
 
 window._kbOpenMap = function(target) {
   const st = window._kbState;
@@ -26496,13 +26546,22 @@ window._kbOpenMap = function(target) {
       }
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
     });
-    const marker = L.marker([clat, clng], { draggable: true }).addTo(map);
+    const marker = L.marker([clat, clng], { draggable: true, icon: _kbFlagIcon(target === 'from' ? 'start' : 'finish') }).addTo(map);
     // Taruh/geser pin sendiri = bukan patokan lagi → kolom nanti pakai koordinat.
-    map.on('click', (e) => { marker.setLatLng(e.latlng); st._selPatokan = null; const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none'; });
-    marker.on('dragend', () => { st._selPatokan = null; });
-    st._map = map; st._marker = marker;
+    map.on('click', (e) => { marker.setLatLng(e.latlng); st._selPatokan = null; const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none'; _kbRefreshRouteOverlay(); });
+    marker.on('dragend', () => { st._selPatokan = null; _kbRefreshRouteOverlay(); });
+    st._map = map; st._marker = marker; st._routeLine = null;
+    // Titik LAIN yang sudah dikonfirmasi sebelumnya (Dari kalau lagi pilih Ke, atau sebaliknya)
+    // tetap ditampilkan sebagai pin tetap, supaya kedua titik rute terlihat bersamaan.
+    const otherIsFrom = target === 'to';
+    const otherLat = otherIsFrom ? st.fromLat : st.toLat;
+    const otherLng = otherIsFrom ? st.fromLng : st.toLng;
+    if (otherLat != null && otherLng != null) {
+      L.marker([otherLat, otherLng], { icon: _kbFlagIcon(otherIsFrom ? 'start' : 'finish'), interactive: false }).addTo(map);
+    }
     _attachBuildingFootprints(map); // jejak bangunan asli (OSM) — biar area kosong di peta terlihat natural
     _kbLoadPatokanMarkers(map); // tampilkan patokan sebagai pin tetap di peta
+    _kbRefreshRouteOverlay(); // gambar rute kalau kedua titik (lama + baru) sudah ada
     map.invalidateSize();
     setTimeout(() => { if (st._map) st._map.invalidateSize(); }, 400);
   }, 60);
@@ -26621,6 +26680,7 @@ async function _kbLoadPatokanMarkers(map) {
         map.setView([p.lat, p.lng], Math.max(map.getZoom(), 16));
         const inp = document.getElementById('kbMapSearchInput'); if (inp) inp.value = p.name;
         const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none';
+        _kbRefreshRouteOverlay();
       });
       entries.push({ lat: p.lat, lng: p.lng, marker: m });
     });
@@ -26651,7 +26711,7 @@ window._kbMapUseGps = function() {
   const st = window._kbState;
   navigator.geolocation.getCurrentPosition((pos) => {
     const lat = pos.coords.latitude, lng = pos.coords.longitude;
-    if (st._map && st._marker) { st._map.setView([lat, lng], 16); st._marker.setLatLng([lat, lng]); st._selPatokan = null; }
+    if (st._map && st._marker) { st._map.setView([lat, lng], 16); st._marker.setLatLng([lat, lng]); st._selPatokan = null; _kbRefreshRouteOverlay(); }
   }, () => { showToast('Gagal ambil lokasi GPS', 'red'); }, { enableHighAccuracy: true, timeout: 15000 });
 };
 
