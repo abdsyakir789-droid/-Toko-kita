@@ -184,7 +184,7 @@ self.addEventListener('fetch', event => {
 });
 
 // ══════════════════════════════════════════
-// PUSH NOTIFICATION — tidak diubah
+// PUSH NOTIFICATION
 // ══════════════════════════════════════════
 
 self.addEventListener('push', event => {
@@ -209,11 +209,11 @@ self.addEventListener('push', event => {
     renotify: true,
     data    : { chatId, url },
     actions : chatId ? [
-      { action: 'open',    title: '\uD83D\uDCAC Buka Chat' },
-      { action: 'dismiss', title: '\u2715 Tutup' }
+      { action: 'open',    title: '💬 Buka Chat' },
+      { action: 'dismiss', title: '✕ Tutup' }
     ] : [
-      { action: 'open',    title: '\uD83D\uDED2 Lihat Sekarang' },
-      { action: 'dismiss', title: '\u2715 Tutup' }
+      { action: 'open',    title: '🛒 Lihat Sekarang' },
+      { action: 'dismiss', title: '✕ Tutup' }
     ]
   };
 
@@ -235,6 +235,9 @@ self.addEventListener('notificationclick', event => {
           try {
             if (new URL(c.url).origin === self.location.origin) {
               if (chatId) c.postMessage({ type: 'OPEN_CHAT', chatId });
+              // Kirim tujuan navigasi ke app yang sudah terbuka (kasus app di-BACKGROUND).
+              // App punya listener 'message' → PUSH_NAV → _routePushGo(?go=...).
+              c.postMessage({ type: 'PUSH_NAV', url });
               return c.focus();
             }
           } catch(e) {}
