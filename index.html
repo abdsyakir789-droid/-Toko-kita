@@ -13294,11 +13294,11 @@ window.uploadProfileCover = async function(input) {
 window.checkFollowNotifications = async function(uid) {
   try {
     const { data } = await window.supabase.from('notifications')
-      .select('id,message').eq('to_uid', uid).eq('is_read', false).limit(1);
+      .select('id,message').eq('to_uid', uid).eq('type', 'follow').eq('is_read', false).limit(1);
     if(data && data.length > 0) {
       showToast('🔔 ' + data[0].message, 'green');
       await window.supabase.from('notifications').update({ is_read: true, read: true })
-        .eq('to_uid', uid).eq('is_read', false);
+        .eq('to_uid', uid).eq('type', 'follow').eq('is_read', false);
     }
   } catch(e){}
 };
