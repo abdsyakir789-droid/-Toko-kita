@@ -16,6 +16,8 @@
   window._KV_ENABLED = false;   // staging: KV cache dimatikan (production: true)
   window._SKIP_REG_OTP = true;  // staging only: lewati verifikasi OTP saat daftar akun baru (production: false/hapus)
   window._ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFkMDc5MzAxMjBhZTQ1ZTJiNDI1ZWFjN2I1MTVlYTllIiwiaCI6Im11cm11cjY0In0='; // OpenRouteService — hitung jarak jalan sungguhan untuk ongkir YallaFood
+  // VAPID public key untuk Web Push — HARUS berpasangan dgn VAPID_PRIVATE_KEY (secret) di edge function environment yg sama.
+  window._VAPID_PUB = 'BGGgCA4G-q0zFcpCrAzgJGR1NTlIp4YxOFiq_AWANAXHlnhvWRI3szItAbcwuZezkEzPS1zAh4VJndrKrWQPCE8'; // staging (production: 'BP6twOL2T7JcnN-99X13ZBNQVq14vHKTpajimdAoJpfAOlQRSLnsp5wSVoWT-jv17pb4BelRTUtL98mt160e2AI')
 </script>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-9VPFMLYW9G"></script>
@@ -5461,7 +5463,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
         var raw = atob(base); var out = new Uint8Array(raw.length);
         for (var i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i); return out;
       }
-      var VPUB = 'BP6twOL2T7JcnN-99X13ZBNQVq14vHKTpajimdAoJpfAOlQRSLnsp5wSVoWT-jv17pb4BelRTUtL98mt160e2AI';
+      var VPUB = window._VAPID_PUB;
       navigator.serviceWorker.ready.then(function(swReg) {
         function saveSub(sub) {
           var sj = sub.toJSON();
@@ -5536,7 +5538,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
             return swReg.pushManager.getSubscription().then(function(existingSub) {
             if(!existingSub) {
               // Subscription mati — buat ulang
-              var VAPID_PUBLIC_KEY = 'BP6twOL2T7JcnN-99X13ZBNQVq14vHKTpajimdAoJpfAOlQRSLnsp5wSVoWT-jv17pb4BelRTUtL98mt160e2AI';
+              var VAPID_PUBLIC_KEY = window._VAPID_PUB;
               function urlBase64ToUint8Array(b) {
                 var b64 = b.replace(/-/g,'+').replace(/_/g,'/');
                 var pad = b64.length % 4;
@@ -17415,6 +17417,37 @@ window.ycSendChat = async function() {
     }).catch(function(e) {
     });
   }
+// ── SELF-HEAL VAPID KEY ────────────────────────────────────────
+// Kalau langganan push yang ada dibuat dengan VAPID public key BERBEDA dari
+// `window._VAPID_PUB` saat ini (mis. setelah pindah environment staging<->prod),
+// buang langganan itu supaya blok subscribe otomatis membuatnya ULANG dengan key
+// yang benar. ADDITIF & AMAN: kalau key sudah cocok (kasus normal termasuk prod),
+// atau langganan tidak ada, atau browser tak expose applicationServerKey (iOS lama),
+// fungsi ini tidak melakukan apa-apa.
+(function _pushSelfHealVapidKey() {
+  try {
+    if (!('serviceWorker' in navigator) || typeof PushManager === 'undefined') return;
+    navigator.serviceWorker.ready.then(function(reg) {
+      return reg.pushManager.getSubscription().then(function(sub) {
+        if (!sub || !window._VAPID_PUB) return;
+        var cur = sub.options && sub.options.applicationServerKey;
+        if (!cur) return; // tak bisa dibaca → jangan sentuh
+        var a = new Uint8Array(cur);
+        var b64 = window._VAPID_PUB.replace(/-/g, '+').replace(/_/g, '/');
+        var pad = b64.length % 4; if (pad) b64 += '===='.slice(0, 4 - pad);
+        var raw = atob(b64); var b = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) b[i] = raw.charCodeAt(i);
+        var match = a.length === b.length;
+        if (match) { for (var j = 0; j < a.length; j++) { if (a[j] !== b[j]) { match = false; break; } } }
+        if (!match) {
+          console.warn('[push] VAPID key berubah → unsubscribe langganan lama');
+          sub.unsubscribe().catch(function() {});
+        }
+      });
+    }).catch(function() {});
+  } catch (e) {}
+})();
+
 window.activateWebpushrNotif = function() {
   var statusEl = document.getElementById('notifSettingStatus');
 
@@ -17441,7 +17474,7 @@ window.activateWebpushrNotif = function() {
     return arr;
   }
 
-  var VAPID_PUBLIC_KEY = 'BP6twOL2T7JcnN-99X13ZBNQVq14vHKTpajimdAoJpfAOlQRSLnsp5wSVoWT-jv17pb4BelRTUtL98mt160e2AI';
+  var VAPID_PUBLIC_KEY = window._VAPID_PUB;
 
   Notification.requestPermission().then(function(p) {
     if (p !== 'granted') {
@@ -20526,7 +20559,7 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
     for (var i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i); return out;
   }
 
-  var VPUB = 'BP6twOL2T7JcnN-99X13ZBNQVq14vHKTpajimdAoJpfAOlQRSLnsp5wSVoWT-jv17pb4BelRTUtL98mt160e2AI';
+  var VPUB = window._VAPID_PUB;
   var SUPA_URL = window._SUPA_URL;
   var SUPA_KEY = window._SUPA_ANON;
 
