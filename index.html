@@ -25929,7 +25929,7 @@ window._ykState = { profile: null };
 // ── KIRIM BARANG (sisi pengirim) — full-screen form → cari kurir ──
 window._kbState = { jenis: null, fromLat: null, fromLng: null, toLat: null, toLng: null, ongkir: null, distanceKm: null, _ongkirKey: null, orderId: null, mapTarget: null, _map: null, _marker: null };
 
-window.openKirimBarangYallaKurir = function() {
+window.openKirimBarangYallaKurir = async function() {
   if (!window._S?.user?.uid) { showToast('Login dulu ya!', 'red'); return; }
   const ov = document.getElementById('kirimBarangOverlay');
   ov.style.display = 'flex';
@@ -25943,8 +25943,40 @@ window.openKirimBarangYallaKurir = function() {
   const fh = document.getElementById('kbFromCoordHint'); if (fh) { fh.textContent = 'Pakai GPS atau pilih titik di peta untuk lokasi akurat.'; fh.style.color = ''; fh.style.fontWeight = ''; }
   const th = document.getElementById('kbToCoordHint'); if (th) { th.textContent = 'Pilih titik tujuan di peta untuk lokasi akurat.'; th.style.color = ''; th.style.fontWeight = ''; }
   document.getElementById('kbFindingState').style.display = 'none';
+  document.getElementById('kbCourierPanel').style.display = 'none';
   _kbValidate();
+  // Cek pesanan aktif (anti double-order + lanjutkan proses kalau app sempat ditutup/swipe close)
+  await _kbResumeActiveOrder();
 };
+
+// Cek apakah user masih punya order Kirim Barang berstatus aktif (mencari_kurir/diambil).
+// Kalau ada, lanjutkan tampilan sesuai status TERAKHIR-nya (bukan form kosong) — mencegah
+// user bikin order baru selagi yang lama masih berjalan di latar belakang (anti double-order),
+// dan tetap "nyambung" walau aplikasi sempat ditutup/swipe close di tengah pencarian.
+async function _kbResumeActiveOrder() {
+  const uid = window._S?.user?.uid; if (!uid) return;
+  try {
+    const r = await window._supaFetch('/rest/v1/yallakurir_orders?sender_id=eq.' + encodeURIComponent(uid) + '&status=in.(mencari_kurir,diambil)&select=*&order=created_at.desc&limit=1');
+    const rows = r.ok ? await r.json() : [];
+    const o = rows[0];
+    if (!o) return; // tidak ada order aktif — biarkan form kosong seperti biasa
+    window._kbState.orderId = o.id;
+    window._kbState.ongkir = o.ongkir;
+    window._kbState.distanceKm = o.distance_km;
+    _kbSubscribeOrderStatus(o.id); // tetap pantau realtime lanjutan (diambil/selesai)
+    if (o.status === 'diambil') {
+      _kbShowCourierPanel(o);
+    } else {
+      document.getElementById('kbFindingState').style.display = 'flex';
+      const ongkirEl = document.getElementById('kbFindingOngkir');
+      if (ongkirEl) {
+        ongkirEl.innerHTML = (o.ongkir != null)
+          ? ('Estimasi ongkir <b>' + _yfFmtPrice(o.ongkir) + '</b> &middot; ' + (o.distance_km || 0).toFixed(1) + ' km')
+          : 'Ongkir dihitung saat kurir mengambil';
+      }
+    }
+  } catch (e) { /* diamkan — gagal cek order aktif, biarkan form kosong seperti biasa */ }
+}
 
 window.closeKirimBarangYallaKurir = function() {
   document.getElementById('kirimBarangOverlay').style.display = 'none';
