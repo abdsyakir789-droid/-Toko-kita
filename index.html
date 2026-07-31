@@ -8448,13 +8448,45 @@ function _runNotifCardDefault(card) {
     return;
   }
   if (type === 'yallakurir_order') {
-    closeNotifFullScreen();
-    setTimeout(() => { if (window.openYkCourierDashboard) openYkCourierDashboard(); }, 150);
+    // Cek status order dulu: kalau masih tersedia → buka dashboard (default aman);
+    // kalau sudah diambil kurir LAIN / dibatalkan → beri tahu, jangan buka dashboard.
+    _ykHandleOrderNotifClick(card.getAttribute('data-ad-id') || '');
     return;
   }
   if (adId) {
     closeNotifFullScreen();
     setTimeout(() => openDetail(adId), 150);
+  }
+}
+
+// Klik notif "cari kurir": cek status order dulu supaya tidak tumpang tindih.
+// DEFAULT AMAN → buka dashboard. Pesan "sudah diambil" HANYA muncul kalau
+// database mengonfirmasi order sudah diambil kurir LAIN / dibatalkan. Kalau
+// order masih 'mencari_kurir', tak ada orderId, atau query gagal → buka dashboard.
+async function _ykHandleOrderNotifClick(orderId) {
+  const _openDash = () => {
+    closeNotifFullScreen();
+    setTimeout(() => { if (window.openYkCourierDashboard) openYkCourierDashboard(); }, 150);
+  };
+  if (!orderId) { _openDash(); return; }
+  let status = null, courierId = null;
+  try {
+    const r = await window._supaFetch('/rest/v1/yallakurir_orders?id=eq.' + encodeURIComponent(orderId) + '&select=status,courier_id&limit=1');
+    if (r.ok) {
+      const rows = await r.json();
+      if (rows && rows[0]) { status = rows[0].status; courierId = rows[0].courier_id; }
+    }
+  } catch (e) { _openDash(); return; }              // gagal cek → default aman
+  const myUid = window._S?.user?.uid || '';
+  // Masih tersedia, atau baris tak ketemu → buka dashboard seperti biasa.
+  if (!status || status === 'mencari_kurir') { _openDash(); return; }
+  // Order ini SAYA yang ambil → buka dashboard (lihat di "Pesanan Saya Antar").
+  if (courierId && courierId === myUid) { _openDash(); return; }
+  // Sudah diambil kurir lain / selesai / dibatalkan → beri tahu, jangan buka dashboard.
+  if (status === 'dibatalkan') {
+    showToast('Pesanan ini sudah dibatalkan pengirim', 'red');
+  } else {
+    showToast('Maaf, pesanan ini sudah diambil kurir lain', 'red');
   }
 }
 
@@ -26088,30 +26120,18 @@ window._kbDetectLocation = function() {
 };
 
 // ============================================================
-// 🔔 PUSH NOTIFICATION KE BEL (tab Notifikasi bottom nav) — HANYA
-// menambahkan hook/insert. Tidak ada satu baris pun kode inti sistem
-// notifikasi (render/badge/klik/mark-read) yang diubah. Insert row ke
-// tabel `notifications` yang sudah ada, sama persis pola
-// _yfNotifyActiveCouriers (YallaFood) — supaya tampil lewat pipeline
-// bel yang sudah berjalan apa adanya. Hanya ke mitra YallaKurir yang
-// statusnya aktif (yallakurir_profiles.status='active').
+// 🔔 NOTIFIKASI "CARI KURIR" KE BEL — kini ditangani SERVER-SIDE
+// oleh trigger database `trg_yk_fanout_order_notif` pada tabel
+// yallakurir_orders (fungsi yk_fanout_order_notif, SECURITY DEFINER).
+// Alasan: fan-out klien harus membaca yallakurir_profiles dulu, tapi
+// RLS-nya cuma izinkan pemilik/admin baca → pengirim BUKAN kurir/admin
+// dapat daftar kosong → notif tidak terkirim. Trigger jalan tanpa
+// terhalang RLS, jadi SIAPA PUN yang cari kurir → semua kurir aktif
+// dapat notif. Fungsi klien ini sengaja dikosongkan agar tidak dobel.
 // ============================================================
 async function _ykNotifyActiveCouriers(order) {
-  try {
-    const cr = await window._supaFetch('/rest/v1/yallakurir_profiles?status=eq.active&select=uid');
-    const couriers = cr.ok ? await cr.json() : [];
-    if (!couriers.length) return;
-    const now = new Date().toISOString();
-    const payload = couriers
-      .filter(c => c.uid && c.uid !== order.sender_id)
-      .map(c => ({
-        to_uid: c.uid, user_id: c.uid, type: 'yallakurir_order',
-        message: (order.sender_name || 'Seseorang') + ' sedang mencari kurir untuk pengiriman ' + (order.item_type || 'barang') + ' menuju ' + (order.to_address || 'tujuan') + '. Segera ambil pesanan!',
-        sender_name: 'YallaKurir', is_read: false, created_at: now
-      }));
-    if (!payload.length) return;
-    await window._supaFetch('/rest/v1/notifications', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify(payload) });
-  } catch (e) { console.warn('[YallaKurir] gagal kirim notifikasi bel:', e.message); }
+  // No-op: notifikasi dikirim oleh trigger database saat order di-INSERT.
+  return;
 }
 
 window._kbCariKurir = async function() {
