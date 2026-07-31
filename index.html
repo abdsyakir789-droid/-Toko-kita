@@ -19308,7 +19308,46 @@ window.requirePin = function(callback) {
 // url payload → dibaca dari ?go= di URL; (b) app di-BACKGROUND → service worker
 // focus window lama + postMessage {type:'PUSH_NAV', url} → dibaca dari pesan.
 // Fungsi tujuan sama persis dengan klik notif dalam-app (_runNotifCardDefault).
-window._routePushGo = function(go) {
+// Retry sampai sesi login siap + fungsi ready, lalu jalankan cb sekali.
+function _routeWhenReady(readyFn, cb) {
+  (function t(attempt) {
+    if (window._S && window._S.user && window._S.user.uid && readyFn()) { try { cb(); } catch (e) {} }
+    else if (attempt < 40) setTimeout(() => t(attempt + 1), 500);
+  })(0);
+}
+window._routePushGo = function(params) {
+  const go = params.get('go');
+  const chatId = params.get('chatId'); // push chat MARKETPLACE pakai url lama /?chatId=
+
+  // ── CHAT: buka percakapan yang dituju ──
+  if (chatId) { // marketplace
+    _routeWhenReady(() => typeof window.openChatRoom === 'function', function() {
+      const myUid = window._S.user.uid;
+      const parts = String(chatId).split('_');
+      const otherUid = parts[0] === myUid ? parts[1] : parts[0];
+      if (!otherUid) return;
+      window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(otherUid) + '&select=name,photo_url&limit=1')
+        .then(r => r.ok ? r.json() : []).then(rows => {
+          const u = (rows && rows[0]) || {};
+          window.openChatRoom('', otherUid, u.name || 'Pengguna', u.photo_url || '', 'Chat', '', 0);
+        }).catch(() => {});
+    });
+    return;
+  }
+  if (go === 'yfchat') {
+    _routeWhenReady(() => typeof window.openYfChat === 'function', function() {
+      window.openYfChat(params.get('fid'), params.get('th'), params.get('nm') || 'Chat');
+    });
+    return;
+  }
+  if (go === 'ykchat') {
+    _routeWhenReady(() => typeof window.openYkChat === 'function', function() {
+      window.openYkChat(params.get('oid'), params.get('nm') || 'Chat', params.get('st') || 'diambil', params.get('ou') || '');
+    });
+    return;
+  }
+
+  // ── DASHBOARD / halaman ──
   const fnMap = {
     ykdash:   'openYkCourierDashboard',    // notif "cari kurir" → dashboard kurir YallaKurir
     yfkurir:  'openKurirDashboard',        // notif pesanan YallaFood → dashboard kurir YallaFood
@@ -19316,31 +19355,21 @@ window._routePushGo = function(go) {
   };
   const fnName = fnMap[go];
   if (!fnName) return;
-  (function tryGo(attempt) {
-    // Butuh sesi login siap + fungsi tujuan sudah terdefinisi
-    if (window._S && window._S.user && window._S.user.uid && typeof window[fnName] === 'function') {
-      try { window[fnName](); } catch (e) {}
-    } else if (attempt < 40) {
-      setTimeout(() => tryGo(attempt + 1), 500);
-    }
-  })(0);
+  _routeWhenReady(() => typeof window[fnName] === 'function', function() { window[fnName](); });
 };
-// (a) app dibuka dari TERTUTUP → ?go= ada di URL
+// (a) app dibuka dari TERTUTUP → param ada di URL
 (function handlePushDest() {
-  const go = new URLSearchParams(window.location.search).get('go');
-  if (!go) return;
+  const params = new URLSearchParams(window.location.search);
+  if (!params.get('go') && !params.get('chatId')) return;
   history.replaceState(null, '', window.location.pathname); // bersihkan URL
-  window._routePushGo(go);
+  window._routePushGo(params);
 })();
 // (b) app di-BACKGROUND lalu push diklik → service worker kirim pesan PUSH_NAV
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', function(e) {
     const d = e.data || {};
     if (d.type === 'PUSH_NAV' && d.url) {
-      try {
-        const go = new URLSearchParams(new URL(d.url, location.origin).search).get('go');
-        if (go) window._routePushGo(go);
-      } catch (err) {}
+      try { window._routePushGo(new URL(d.url, location.origin).searchParams); } catch (err) {}
     }
   });
 }
@@ -25235,7 +25264,7 @@ window.openYfChat = async function(foodOrderId, thread, otherName) {
     }
     const _yfMyUid = window._S?.user?.uid;
     const _yfOtherUid = (room.participant_a_uid === _yfMyUid) ? room.participant_b_uid : room.participant_a_uid;
-    window._yfChatState = { roomId: room.id, status: room.status, thread, otherName: otherName || '', otherUid: _yfOtherUid || '' };
+    window._yfChatState = { roomId: room.id, status: room.status, thread, otherName: otherName || '', otherUid: _yfOtherUid || '', foodOrderId: (room.food_order_id || foodOrderId || '') };
     document.getElementById('yfChatInputBar').style.display = room.status === 'open' ? 'flex' : 'none';
     if (room.status !== 'open') {
       document.getElementById('yfChatSubtitle').textContent = 'Chat sudah ditutup (pesanan selesai/dibatalkan)';
@@ -25298,9 +25327,13 @@ window.yfChatSend = async function() {
     });
     if (!res.ok) throw new Error('Gagal mengirim pesan');
     // Push ke lawan bicara (muncul di layar walau app ditutup) — kirim SEBELUM reload
-    // supaya tidak menambah delay. Fire-and-forget.
+    // supaya tidak menambah delay. Fire-and-forget. url membawa data agar klik push
+    // langsung membuka chat ini.
     if (window._yfChatState.otherUid) {
-      sendPushToUser(window._yfChatState.otherUid, user.name || 'Seseorang', '💬 ' + text, '/').catch(function(){});
+      const _u = '/?go=yfchat&fid=' + encodeURIComponent(window._yfChatState.foodOrderId || '')
+        + '&th=' + encodeURIComponent(window._yfChatState.thread || '')
+        + '&nm=' + encodeURIComponent(user.name || 'Seseorang');
+      sendPushToUser(window._yfChatState.otherUid, user.name || 'Seseorang', '💬 ' + text, _u).catch(function(){});
     }
     await _yfChatLoadMessages();
   } catch (e) {
@@ -26532,9 +26565,14 @@ window.ykChatSend = async function() {
     });
     if (!res.ok) { showToast('Gagal kirim pesan', 'red'); return; }
     // Push ke lawan bicara (muncul di layar walau app ditutup) — kirim SEBELUM reload
-    // supaya tidak menambah delay. Fire-and-forget.
+    // supaya tidak menambah delay. Fire-and-forget. url membawa data agar klik push
+    // langsung membuka chat ini.
     if (window._ykChatState && window._ykChatState.otherUid) {
-      sendPushToUser(window._ykChatState.otherUid, user.name || 'Seseorang', '💬 ' + text, '/').catch(function(){});
+      const _u = '/?go=ykchat&oid=' + encodeURIComponent(window._ykChatState.orderId || '')
+        + '&nm=' + encodeURIComponent(user.name || 'Seseorang')
+        + '&st=' + encodeURIComponent(window._ykChatState.status || 'diambil')
+        + '&ou=' + encodeURIComponent(user.uid || '');
+      sendPushToUser(window._ykChatState.otherUid, user.name || 'Seseorang', '💬 ' + text, _u).catch(function(){});
     }
     await _ykChatLoadMessages();
   } catch (e) { showToast('Gagal kirim pesan', 'red'); }
