@@ -14714,11 +14714,13 @@ window.nextSlide=()=>{goSlide(cSlide+1);resetCAuto();};
 window.prevSlide=()=>{goSlide(cSlide-1);resetCAuto();};
 function resetCAuto(){clearInterval(cAuto);cAuto=setInterval(()=>goSlide(cSlide+1),5000);}
 // Default billboard images (shown when no custom image uploaded)
+// Solid Emerald Green #10B981 (data URI SVG — tajam di ukuran berapa pun, tanpa hosting eksternal)
+const _DEFAULT_BILLBOARD_SOLID = 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'1200\' height=\'390\'%3E%3Crect width=\'1200\' height=\'390\' fill=\'%2310B981\'/%3E%3C/svg%3E';
 const DEFAULT_BILLBOARDS = [
-  'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&q=80', // shopping
-  'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80', // sale
-  'https://images.unsplash.com/photo-1607082349566-187342175e2f?w=800&q=80', // delivery
-  'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&q=80', // market
+  _DEFAULT_BILLBOARD_SOLID,
+  _DEFAULT_BILLBOARD_SOLID,
+  _DEFAULT_BILLBOARD_SOLID,
+  _DEFAULT_BILLBOARD_SOLID,
 ];
 
 // ── Cache billboard di IndexedDB — pola identik dengan _readAdsCache/_writeAdsCache.
