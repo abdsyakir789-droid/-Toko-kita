@@ -25255,11 +25255,12 @@ window.yfChatSend = async function() {
       body: JSON.stringify({ room_id: window._yfChatState.roomId, sender_uid: user.uid, sender_name: user.name || '', text })
     });
     if (!res.ok) throw new Error('Gagal mengirim pesan');
-    await _yfChatLoadMessages();
-    // Push ke lawan bicara (muncul di layar walau app ditutup). Fire-and-forget.
+    // Push ke lawan bicara (muncul di layar walau app ditutup) — kirim SEBELUM reload
+    // supaya tidak menambah delay. Fire-and-forget.
     if (window._yfChatState.otherUid) {
       sendPushToUser(window._yfChatState.otherUid, user.name || 'Seseorang', '💬 ' + text, '/').catch(function(){});
     }
+    await _yfChatLoadMessages();
   } catch (e) {
     showToast('Gagal mengirim pesan: ' + e.message, 'red');
   }
@@ -25524,15 +25525,18 @@ async function _yfNotifyActiveCouriers(order) {
     const couriers = cr.ok ? await cr.json() : [];
     if (!couriers.length) return;
     const now = new Date().toISOString();
-    const payload = couriers
-      .filter(c => c.uid && c.uid !== order.buyer_id)
-      .map(c => ({
-        to_uid: c.uid, user_id: c.uid, type: 'yallafood_kurir',
-        message: 'Ada pesanan deliveri menunggu diambil, cek sekarang sebelum keduluan yang lain!',
-        sender_name: 'YallaFood', is_read: false, created_at: now
-      }));
+    const targets = couriers.filter(c => c.uid && c.uid !== order.buyer_id);
+    const payload = targets.map(c => ({
+      to_uid: c.uid, user_id: c.uid, type: 'yallafood_kurir',
+      message: 'Ada pesanan deliveri menunggu diambil, cek sekarang sebelum keduluan yang lain!',
+      sender_name: 'YallaFood', is_read: false, created_at: now
+    }));
     if (!payload.length) return;
     await window._supaFetch('/rest/v1/notifications', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify(payload) });
+    // Push (muncul di layar walau app ditutup) ke tiap kurir aktif. Fire-and-forget.
+    targets.forEach(function(c) {
+      sendPushToUser(c.uid, 'YallaFood', 'Ada pesanan delivery menunggu diambil, cek sekarang!', '/').catch(function(){});
+    });
   } catch (e) { console.warn('[YallaFood Kurir] gagal kirim notifikasi bel:', e.message); }
 }
 
@@ -25549,6 +25553,8 @@ async function _yfNotifySeller(order) {
         sender_name: 'YallaFood', is_read: false, created_at: new Date().toISOString()
       }])
     });
+    // Push (muncul di layar walau app ditutup) ke seller. Fire-and-forget.
+    sendPushToUser(order.seller_id, 'YallaFood', 'Kamu mendapatkan pesanan baru, cek sekarang!', '/').catch(function(){});
   } catch (e) { console.warn('[YallaFood Seller] gagal kirim notifikasi bel:', e.message); }
 }
 
@@ -26396,7 +26402,7 @@ window._kbCloseCourierPanel = function() {
 
 window._kbOpenCourierChat = function() {
   const o = window._kbActiveOrder; if (!o) return;
-  openYkChat(o.id, o.courier_name || 'Kurir', o.status);
+  openYkChat(o.id, o.courier_name || 'Kurir', o.status, (o.sender_id === window._S?.user?.uid ? o.courier_id : o.sender_id));
 };
 
 // ── CHAT YALLAKURIR (pengirim <-> kurir) — satu percakapan per order, dipakai kedua sisi ──
@@ -26483,11 +26489,12 @@ window.ykChatSend = async function() {
       body: JSON.stringify({ order_id: st.orderId, sender_uid: user.uid, sender_name: user.name || '', text: text })
     });
     if (!res.ok) { showToast('Gagal kirim pesan', 'red'); return; }
-    await _ykChatLoadMessages();
-    // Push ke lawan bicara (muncul di layar walau app ditutup). Fire-and-forget.
+    // Push ke lawan bicara (muncul di layar walau app ditutup) — kirim SEBELUM reload
+    // supaya tidak menambah delay. Fire-and-forget.
     if (window._ykChatState && window._ykChatState.otherUid) {
       sendPushToUser(window._ykChatState.otherUid, user.name || 'Seseorang', '💬 ' + text, '/').catch(function(){});
     }
+    await _ykChatLoadMessages();
   } catch (e) { showToast('Gagal kirim pesan', 'red'); }
 };
 
