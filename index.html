@@ -8302,17 +8302,19 @@ window.renderNotifFull = function(notifs) {
 
     actList.innerHTML = sorted.slice(0,30).map(n => {
       const isUnread = !n.read;
-      const icon = n.type==='follow'         ? 'fa-user-plus'
-                 : n.type==='chat'           ? 'fa-comment-dots'
-                 : n.type==='review'         ? 'fa-star'
-                 : n.type==='peringatan'     ? 'fa-triangle-exclamation'
-                 : n.type==='iklan_dihapus'  ? 'fa-trash-can'
+      const icon = n.type==='follow'          ? 'fa-user-plus'
+                 : n.type==='chat'            ? 'fa-comment-dots'
+                 : n.type==='review'          ? 'fa-star'
+                 : n.type==='peringatan'      ? 'fa-triangle-exclamation'
+                 : n.type==='iklan_dihapus'   ? 'fa-trash-can'
+                 : n.type==='yallakurir_order'? 'fa-user'
                  : 'fa-bell';
-      const iconBg = n.type==='follow'        ? 'bg-emerald-100 text-emerald-600'
-                   : n.type==='chat'          ? 'bg-blue-100 text-blue-500'
-                   : n.type==='review'        ? 'bg-amber-100 text-amber-500'
-                   : n.type==='peringatan'    ? 'bg-amber-100 text-amber-600'
-                   : n.type==='iklan_dihapus' ? 'bg-red-100 text-red-500'
+      const iconBg = n.type==='follow'         ? 'bg-emerald-100 text-emerald-600'
+                   : n.type==='chat'           ? 'bg-blue-100 text-blue-500'
+                   : n.type==='review'         ? 'bg-amber-100 text-amber-500'
+                   : n.type==='peringatan'     ? 'bg-amber-100 text-amber-600'
+                   : n.type==='iklan_dihapus'  ? 'bg-red-100 text-red-500'
+                   : n.type==='yallakurir_order'? 'bg-emerald-100 text-emerald-600'
                    : 'bg-gray-100 text-gray-500';
       const timeStr = n.createdAt?.seconds
         ? _relativeTimeShort(n.createdAt.seconds)
@@ -8332,8 +8334,9 @@ window.renderNotifFull = function(notifs) {
         if(found) resolvedAdId = found.id;
       }
 
-      // Status pill untuk notif pesanan
-      const isOrderNotif = n.type === 'order_status' || (n.message||'').includes('pesanan');
+      // Status pill untuk notif pesanan — TIDAK untuk notif YallaKurir (label "Pesanan" dihilangkan)
+      const isOrderNotif = n.type !== 'yallakurir_order'
+        && (n.type === 'order_status' || (n.message||'').includes('pesanan'));
       const statusPill = isOrderNotif
         ? `<div style="flex-shrink:0;padding:5px 10px;border-radius:8px;border:1px solid #e5e7eb;font-size:11px;font-weight:600;color:#374151;white-space:nowrap">Pesanan</div>`
         : '';
