@@ -24781,7 +24781,7 @@ window.loadKurirAdminUI = async function() {
           <p class="font-bold text-sm text-gray-800 min-w-0 truncate">${c.name}</p>
           <div class="flex items-center gap-2 flex-shrink-0">
             ${c.status === 'active' ? `<button onclick="kurirAdminSetStatus('${c.id}','blocked')" class="text-[10px] font-bold px-3 py-1 rounded-full bg-red-500 text-white shadow-sm active:scale-95 transition-transform">Blokir</button>` : ''}
-            ${c.status === 'blocked' ? `<button onclick="kurirAdminSetStatus('${c.id}','active')" class="text-[10px] font-bold px-3 py-1 rounded-full bg-primary text-white shadow-sm active:scale-95 transition-transform">Buka Blokir</button>` : ''}
+            ${c.status === 'blocked' ? `<button onclick="kurirAdminSetStatus('${c.id}','active','blocked')" class="text-[10px] font-bold px-3 py-1 rounded-full bg-primary text-white shadow-sm active:scale-95 transition-transform">Buka Blokir</button>` : ''}
             <span class="text-[10px] font-bold px-2 py-1 rounded-full ${c.status === 'active' ? 'bg-pl text-primary' : (c.status === 'rejected' || c.status === 'blocked') ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}">${_kurirStatusLabel(c.status)}</span>
           </div>
         </div>
@@ -24798,7 +24798,7 @@ window.loadKurirAdminUI = async function() {
   }
 };
 
-window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
+window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus) {
   try {
     const admin = window._S?.user;
     // return=representation supaya bisa deteksi PATCH 0-baris (RLS/senyap), bukan hanya res.ok
@@ -24809,6 +24809,29 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus) {
     if (!res.ok) throw new Error('Gagal update status kurir');
     const updated = await res.json().catch(() => []);
     if (!Array.isArray(updated) || !updated.length) throw new Error('Perubahan tidak tersimpan (0 baris)');
+    // ── Sinkronkan BLOKIR AKUN (users.is_blocked = gerbang transaksi + shops.is_active =
+    // visibilitas toko), sama seperti Dashboard Toko Baru. Biar "Blokir kurir" = akun
+    // benar-benar terkunci, dan "Buka Blokir" = akun kembali NORMAL (bisa transaksi lagi).
+    // HANYA untuk transisi blokir/buka-blokir — TIDAK menyentuh saat Setujui/Tolak pendaftaran
+    // (prevStatus tak dikirim dari tombol itu), supaya alur approve tidak terganggu.
+    let wantBlocked = null;
+    if (newStatus === 'blocked') wantBlocked = true;
+    else if (newStatus === 'active' && prevStatus === 'blocked') wantBlocked = false;
+    const courierUid = updated[0] && updated[0].uid;
+    if (courierUid && wantBlocked !== null) {
+      try {
+        await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(courierUid), {
+          method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ is_blocked: wantBlocked })
+        });
+        if (window._S?.user?.uid === courierUid) window._S.user.is_blocked = wantBlocked;
+      } catch (e) {}
+      try {
+        // Kalau kurir punya toko, samakan visibilitasnya (0 baris kalau tak punya toko — aman).
+        await window._supaFetch('/rest/v1/shops?user_id=eq.' + encodeURIComponent(courierUid), {
+          method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ is_active: !wantBlocked })
+        });
+      } catch (e) {}
+    }
     const msg = { active: 'Kurir diaktifkan!', rejected: 'Kurir ditolak', blocked: 'Kurir diblokir' }[newStatus] || 'Status kurir diperbarui';
     showToast(msg, 'green');
     await window.loadKurirAdminUI();
@@ -27545,9 +27568,14 @@ async function _ykLoadWaitingRoom() {
             <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Tujuan: ${_sadEscHtml(o.to_address || '-')}</p>
           </div>
           ${(o.from_lat != null && o.from_lng != null && o.to_lat != null && o.to_lng != null) ? `
-          <button onclick="_ykShowRoute('${o.id}')" style="margin-top:8px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
-            <i class="fa-solid fa-route"></i>Lihat Rute di Peta
-          </button>` : ''}
+          <div style="margin-top:8px;display:flex;gap:6px">
+            <button onclick="_ykShowRoute('${o.id}')" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
+              <i class="fa-solid fa-route"></i>Lihat Rute
+            </button>
+            <button onclick="_ykOpenGoogleMaps('${o.id}')" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
+              <i class="fa-solid fa-map-location-dot"></i>Google Maps
+            </button>
+          </div>` : ''}
         </div>
         ${o.notes ? `<p class="text-xs text-gray-500 mb-2">Catatan: ${_sadEscHtml(o.notes)}</p>` : ''}
         <p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${o.ongkir != null ? _yfFmtPrice(o.ongkir) : 'Dihitung saat diambil'}</span>${o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : ''}</p>
@@ -27600,9 +27628,14 @@ async function _ykLoadMyDeliveries() {
             <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Tujuan: ${_sadEscHtml(o.to_address || '-')}</p>
           </div>
           ${(o.from_lat != null && o.from_lng != null && o.to_lat != null && o.to_lng != null) ? `
-          <button onclick="_ykShowRoute('${o.id}')" style="margin-top:8px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
-            <i class="fa-solid fa-route"></i>Lihat Rute di Peta
-          </button>` : ''}
+          <div style="margin-top:8px;display:flex;gap:6px">
+            <button onclick="_ykShowRoute('${o.id}')" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
+              <i class="fa-solid fa-route"></i>Lihat Rute
+            </button>
+            <button onclick="_ykOpenGoogleMaps('${o.id}')" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
+              <i class="fa-solid fa-map-location-dot"></i>Google Maps
+            </button>
+          </div>` : ''}
         </div>
         <p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${o.ongkir != null ? _yfFmtPrice(o.ongkir) : '-'}</span>${o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : ''}</p>
         <div style="display:flex;gap:8px">
@@ -27635,6 +27668,18 @@ window.ykKurirCompleteOrder = async function(orderId) {
 };
 
 // Preview rute pesanan: buka peta berisi titik Dari (hijau) → Ke (merah) + garis penghubung.
+// Buka Google Maps (app di HP / web di desktop) dengan rute JEMPUT → TUJUAN + pin lokasi.
+window._ykOpenGoogleMaps = function(orderId) {
+  const o = (window._ykWaitingById || {})[orderId] || (window._ykMineById || {})[orderId];
+  if (!o) { showToast('Data pesanan tidak ditemukan', 'red'); return; }
+  const fLat = +o.from_lat, fLng = +o.from_lng, tLat = +o.to_lat, tLng = +o.to_lng;
+  if ([fLat, fLng, tLat, tLng].some(v => v == null || isNaN(v))) { showToast('Koordinat rute tidak lengkap', 'red'); return; }
+  const url = 'https://www.google.com/maps/dir/?api=1'
+    + '&origin=' + fLat + ',' + fLng
+    + '&destination=' + tLat + ',' + tLng
+    + '&travelmode=driving';
+  window.open(url, '_blank');
+};
 window._ykShowRoute = function(orderId) {
   const o = (window._ykWaitingById || {})[orderId] || (window._ykMineById || {})[orderId];
   if (!o) { showToast('Data pesanan tidak ditemukan', 'red'); return; }
