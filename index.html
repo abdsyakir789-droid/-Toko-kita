@@ -25921,6 +25921,13 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   <div class="flex-1 overflow-y-auto px-4 py-4">
     <p class="text-sm text-gray-500 mb-4">Titip antar barang ke tujuan lewat mitra kurir YallaMart. Isi lokasi & jenis barang, lalu cari kurir terdekat.</p>
 
+    <!-- Catatan penting: batas berat + pengecekan barang -->
+    <div style="text-align:center;background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:11px 12px;margin-bottom:16px">
+      <p style="color:#DC2626;font-size:13px;font-weight:700;line-height:1.55;margin:0">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-right:5px"></i>Berat barang maksimal 25 kg. Kurir akan mengecek &amp; memastikan barang apa yang dikirim.
+      </p>
+    </div>
+
     <!-- Lokasi -->
     <label class="text-xs font-bold text-gray-700 mb-1.5 block">Dari (lokasi penjemputan)</label>
     <div class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 bg-white mb-1.5">
@@ -25945,13 +25952,31 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 
     <!-- Jenis barang -->
     <label class="text-xs font-bold text-gray-700 mb-2 block">Jenis Barang</label>
-    <div id="kbJenisGrid" class="grid grid-cols-5 gap-1.5 mb-4">
-      <button type="button" data-jenis="Elektronik" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-laptop"></i><span>Elektronik</span></button>
-      <button type="button" data-jenis="Perhiasan" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-gem"></i><span>Perhiasan</span></button>
-      <button type="button" data-jenis="Dokumen" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-file-lines"></i><span>Dokumen</span></button>
-      <button type="button" data-jenis="Uang" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-money-bill-wave"></i><span>Uang</span></button>
-      <button type="button" data-jenis="Umum" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-box"></i><span>Umum</span></button>
+    <div id="kbJenisGrid" class="grid grid-cols-5 gap-1.5 mb-3">
+      <button type="button" data-jenis="Elektronik" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-laptop"></i><span>Elektronik</span><span style="font-size:8px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+100/200</span></button>
+      <button type="button" data-jenis="Perhiasan" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-gem"></i><span>Perhiasan</span><span style="font-size:8px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+200</span></button>
+      <button type="button" data-jenis="Dokumen" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-file-lines"></i><span>Dokumen</span><span style="font-size:8px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+50</span></button>
+      <button type="button" data-jenis="Uang" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-money-bill-wave"></i><span>Uang</span><span style="font-size:8px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+50</span></button>
+      <button type="button" data-jenis="Umum" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-box"></i><span>Umum</span><span style="font-size:8px;font-weight:800;color:#059669;line-height:1;white-space:nowrap">Gratis</span></button>
     </div>
+
+    <!-- Sub-tipe Elektronik (muncul saat Elektronik dipilih) -->
+    <div id="kbElecSubRow" style="display:none;margin-bottom:16px">
+      <label class="text-xs font-bold text-gray-700 mb-2 block">Tipe Elektronik</label>
+      <div class="grid grid-cols-2 gap-1.5">
+        <button type="button" data-elec="Laptop" onclick="_kbSelectElecSub(this)" class="kb-chip"><i class="fa-solid fa-laptop"></i><span>Laptop</span><span style="font-size:9px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+200 LE</span></button>
+        <button type="button" data-elec="HP" onclick="_kbSelectElecSub(this)" class="kb-chip"><i class="fa-solid fa-mobile-screen-button"></i><span>HP</span><span style="font-size:9px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+100 LE</span></button>
+      </div>
+    </div>
+    <div id="kbJenisSpacer" style="height:4px"></div>
+
+    <!-- No. WhatsApp penerima (WAJIB) -->
+    <label class="text-xs font-bold text-gray-700 mb-1.5 block">No. WhatsApp Penerima <span style="color:#ef4444">*</span></label>
+    <div class="relative">
+      <i class="fa-brands fa-whatsapp absolute left-3.5 top-1/2 -translate-y-1/2 text-green-500 text-sm pointer-events-none"></i>
+      <input id="kbRecipientPhone" type="tel" inputmode="tel" oninput="_kbValidate()" placeholder="cth: +20 100 123 4567" class="w-full border border-gray-200 rounded-xl pl-10 pr-3 py-2.5 text-sm bg-white outline-none"/>
+    </div>
+    <p class="text-[10px] text-gray-400 mt-1 mb-4">Wajib &amp; pakai kode negara mana pun (mis. +20 Mesir, +62 Indonesia) supaya penerima bisa dihubungi via WhatsApp.</p>
 
     <!-- Catatan -->
     <label class="text-xs font-bold text-gray-700 mb-1.5 block">Catatan untuk kurir (opsional)</label>
@@ -26101,7 +26126,9 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
       ? '<p class="lc1" style="margin:0;font-size:12.5px;font-weight:700;color:#1f2937">'+esc(o.courier_name||'Kurir')+'</p><p style="margin:0;font-size:10px;color:#9ca3af">Mitra YallaKurir</p>'
       : '<p style="margin:0;font-size:12px;font-weight:600;color:#9ca3af">Menunggu kurir…</p>';
     const notesLine = o.notes ? '<p class="lc1" style="margin:3px 0 0;font-size:11px;color:#9ca3af"><i class="fa-solid fa-note-sticky" style="margin-right:4px"></i>'+esc(o.notes)+'</p>' : '';
-    const ongkirLine = (o.ongkir!=null && window._yfFmtPrice) ? '<div style="margin-top:3px;font-size:11px;color:#059669;font-weight:700"><i class="fa-solid fa-motorcycle" style="margin-right:4px"></i>'+esc(_yfFmtPrice(o.ongkir))+'</div>' : '';
+    const _bsFee = Number(o.item_fee||0);
+    const _bsTotal = (o.ongkir!=null) ? Number(o.ongkir)+_bsFee : null;
+    const ongkirLine = (_bsTotal!=null && window._yfFmtPrice) ? '<div style="margin-top:3px;font-size:11px;color:#059669;font-weight:700"><i class="fa-solid fa-motorcycle" style="margin-right:4px"></i>'+esc(_yfFmtPrice(_bsTotal))+(_bsFee>0?'<span style="color:#9ca3af;font-weight:500"> · ongkir '+esc(_yfFmtPrice(Number(o.ongkir)))+' + keamanan '+esc(_yfFmtPrice(_bsFee))+'</span>':'')+'</div>' : '';
     return ''
       +'<div class="bs-card">'
       +  '<span class="bs-status" style="background:'+st.bg+';color:'+st.fg+'"><span class="bs-dot" style="background:'+st.dot+'"></span>'+st.label+'</span>'
@@ -26268,7 +26295,10 @@ window.openKirimBarangYallaKurir = async function() {
   document.getElementById('kbFromInput').value = '';
   document.getElementById('kbToInput').value = '';
   const notes = document.getElementById('kbNotesInput'); if (notes) notes.value = '';
+  const rp = document.getElementById('kbRecipientPhone'); if (rp) rp.value = '';
   document.querySelectorAll('#kbJenisGrid [data-jenis]').forEach(b => b.classList.remove('kb-chip-active'));
+  document.querySelectorAll('#kbElecSubRow [data-elec]').forEach(b => b.classList.remove('kb-chip-active'));
+  { const _er = document.getElementById('kbElecSubRow'); if (_er) _er.style.display = 'none'; }
   const fh = document.getElementById('kbFromCoordHint'); if (fh) { fh.textContent = 'Pakai GPS atau pilih titik di peta untuk lokasi akurat.'; fh.style.color = ''; fh.style.fontWeight = ''; }
   const th = document.getElementById('kbToCoordHint'); if (th) { th.textContent = 'Pilih titik tujuan di peta untuk lokasi akurat.'; th.style.color = ''; th.style.fontWeight = ''; }
   document.getElementById('kbFindingState').style.display = 'none';
@@ -26361,17 +26391,48 @@ window.closeKirimBarangYallaKurir = function() {
   if (typeof _kbUnsubscribeOrderStatus === 'function') _kbUnsubscribeOrderStatus();
 };
 
+// Biaya Keamanan per jenis barang (LE). Elektronik = null → ditentukan sub-tipe (Laptop/HP).
+const _KB_ITEM_FEE = { Elektronik: null, Perhiasan: 200, Uang: 50, Dokumen: 50, Umum: 0 };
+const _KB_ELEC_FEE = { Laptop: 200, HP: 100 };
+
 window._kbSelectJenis = function(btn) {
   document.querySelectorAll('#kbJenisGrid [data-jenis]').forEach(b => b.classList.remove('kb-chip-active'));
   btn.classList.add('kb-chip-active');
-  window._kbState.jenis = btn.getAttribute('data-jenis');
+  const jenis = btn.getAttribute('data-jenis');
+  const st = window._kbState;
+  st.jenis = jenis;
+  const subRow = document.getElementById('kbElecSubRow');
+  if (jenis === 'Elektronik') {
+    if (subRow) subRow.style.display = 'block';
+    // Biaya belum final sampai Laptop/HP dipilih (pakai yang sudah terpilih kalau ada)
+    st.itemFee = (st.itemSub && _KB_ELEC_FEE[st.itemSub] != null) ? _KB_ELEC_FEE[st.itemSub] : null;
+  } else {
+    if (subRow) subRow.style.display = 'none';
+    document.querySelectorAll('#kbElecSubRow [data-elec]').forEach(b => b.classList.remove('kb-chip-active'));
+    st.itemSub = null;
+    st.itemFee = _KB_ITEM_FEE[jenis] != null ? _KB_ITEM_FEE[jenis] : 0;
+  }
   _kbValidate();
+  if (window._kbRenderOngkirBox) _kbRenderOngkirBox();
+};
+
+window._kbSelectElecSub = function(btn) {
+  document.querySelectorAll('#kbElecSubRow [data-elec]').forEach(b => b.classList.remove('kb-chip-active'));
+  btn.classList.add('kb-chip-active');
+  const sub = btn.getAttribute('data-elec');
+  window._kbState.itemSub = sub;
+  window._kbState.itemFee = _KB_ELEC_FEE[sub] != null ? _KB_ELEC_FEE[sub] : 0;
+  _kbValidate();
+  if (window._kbRenderOngkirBox) _kbRenderOngkirBox();
 };
 
 window._kbValidate = function() {
-  // Butuh koordinat Dari & Ke (untuk hitung jarak/ongkir) + jenis barang
+  // Butuh koordinat Dari & Ke (untuk hitung jarak/ongkir) + jenis barang + No. WA penerima (wajib)
   const st = window._kbState;
-  const ok = st.fromLat != null && st.fromLng != null && st.toLat != null && st.toLng != null && !!st.jenis;
+  const phoneEl = document.getElementById('kbRecipientPhone');
+  const phoneOk = phoneEl ? (phoneEl.value.replace(/[^\d]/g, '').length >= 8) : true;
+  const jenisOk = !!st.jenis && !(st.jenis === 'Elektronik' && !st.itemSub); // Elektronik wajib pilih Laptop/HP
+  const ok = st.fromLat != null && st.fromLng != null && st.toLat != null && st.toLng != null && jenisOk && phoneOk;
   const btn = document.getElementById('kbCariKurirBtn');
   if (btn) {
     btn.disabled = !ok;
@@ -26396,7 +26457,7 @@ window._kbRefreshOngkir = async function() {
     return;
   }
   const key = st.fromLat + ',' + st.fromLng + ',' + st.toLat + ',' + st.toLng;
-  if (key === st._ongkirKey && st.ongkir != null) return; // titik sama, sudah dihitung
+  if (key === st._ongkirKey && st.ongkir != null) { _kbRenderOngkirBox(); return; } // titik sama → cukup render ulang (fee bisa berubah)
   st._ongkirKey = key;
   const seq = ++_kbOngkirSeq;
   box.innerHTML = '<span class="w-full text-center text-xs font-medium text-gray-500"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Menghitung ongkir…</span>';
@@ -26406,12 +26467,36 @@ window._kbRefreshOngkir = async function() {
     const ongkir = _yfCalcOngkir(distanceKm, cfg);
     if (seq !== _kbOngkirSeq) return; // titik keburu berubah lagi
     st.ongkir = ongkir; st.distanceKm = distanceKm;
-    box.innerHTML = '<div class="w-full flex items-center justify-between gap-2"><span class="text-xs font-semibold text-gray-600"><i class="fa-solid fa-motorcycle mr-1 text-primary"></i>Estimasi Ongkir</span><span class="text-right"><b class="text-primary text-base">' + _yfFmtPrice(ongkir) + '</b> <span class="text-[11px] text-gray-400 font-medium">· ' + distanceKm.toFixed(1) + ' km</span></span></div>';
+    _kbRenderOngkirBox();
   } catch (e) {
     if (seq !== _kbOngkirSeq) return;
     st.ongkir = null; st.distanceKm = null;
     box.innerHTML = '<span class="w-full text-center text-xs font-medium text-gray-400">Ongkir dihitung saat kurir mengambil</span>';
   }
+};
+
+// Render kotak biaya BERTAHAP: Ongkir → Biaya Keamanan → Total (biar pengirim tak kaget
+// lihat total besar). Dipanggil ulang saat jenis/sub-tipe berubah (tanpa hitung ulang ongkir).
+window._kbRenderOngkirBox = function() {
+  const st = window._kbState;
+  const box = document.getElementById('kbOngkirBox');
+  if (!box) return;
+  if (st.ongkir == null) {
+    box.innerHTML = '<span class="w-full text-center text-xs font-medium text-gray-400"><i class="fa-solid fa-circle-info mr-1"></i>Pilih titik Dari &amp; Ke untuk lihat estimasi ongkir</span>';
+    return;
+  }
+  const resolved = !!st.jenis && !(st.jenis === 'Elektronik' && !st.itemSub);
+  const fee = resolved ? (st.itemFee != null ? st.itemFee : 0) : 0;
+  const total = st.ongkir + fee;
+  const bkVal = !resolved ? '<span style="color:#9ca3af;font-weight:600">pilih jenis</span>'
+    : (fee > 0 ? _yfFmtPrice(fee) : '<span style="color:#059669">Gratis</span>');
+  const bkSub = (resolved && st.itemSub) ? ' <span style="font-weight:500;color:#9ca3af">(' + st.itemSub + ')</span>' : '';
+  box.innerHTML =
+    '<div class="w-full" style="display:flex;flex-direction:column;gap:2px">'
+    + '<div class="flex items-center justify-between"><span class="text-[11px] font-medium text-gray-500"><i class="fa-solid fa-motorcycle mr-1 text-primary"></i>Ongkir</span><span class="text-xs font-semibold text-gray-700">' + _yfFmtPrice(st.ongkir) + ' <span class="text-[10px] text-gray-400 font-medium">· ' + st.distanceKm.toFixed(1) + ' km</span></span></div>'
+    + '<div class="flex items-center justify-between"><span class="text-[11px] font-medium text-gray-500"><i class="fa-solid fa-shield-halved mr-1 text-primary"></i>Biaya Keamanan' + bkSub + '</span><span class="text-xs font-semibold text-gray-700">' + bkVal + '</span></div>'
+    + '<div class="flex items-center justify-between" style="border-top:1px dashed #d1d5db;margin-top:2px;padding-top:3px"><span class="text-xs font-bold text-gray-800">Total</span><b class="text-primary text-base">' + _yfFmtPrice(total) + '</b></div>'
+    + '</div>';
 };
 
 window._kbDetectLocation = function() {
@@ -26480,8 +26565,11 @@ window._kbCariKurir = async function() {
   const from = document.getElementById('kbFromInput').value.trim();
   const to = document.getElementById('kbToInput').value.trim();
   const notes = (document.getElementById('kbNotesInput')?.value || '').trim();
+  const recipientPhone = (document.getElementById('kbRecipientPhone')?.value || '').trim();
   const jenis = st.jenis;
   if (st.fromLat == null || st.toLat == null || !jenis) { showToast('Pilih titik jemput & tujuan di peta, dan jenis barang', 'red'); return; }
+  if (recipientPhone.replace(/[^\d]/g, '').length < 8) { showToast('Isi No. WhatsApp penerima yang valid (pakai kode negara)', 'red'); document.getElementById('kbRecipientPhone')?.focus(); return; }
+  if (jenis === 'Elektronik' && !st.itemSub) { showToast('Pilih tipe elektronik: Laptop atau HP', 'red'); return; }
 
   // Tampilkan state pencarian kurir
   document.getElementById('kbFindingState').style.display = 'flex';
@@ -26510,7 +26598,9 @@ window._kbCariKurir = async function() {
         sender_id: user.uid, sender_name: user.name || '', sender_phone: user.phone || '',
         from_address: from, from_lat: st.fromLat, from_lng: st.fromLng,
         to_address: to, to_lat: st.toLat, to_lng: st.toLng,
-        item_type: jenis, notes: notes,
+        item_type: jenis, item_detail: st.itemSub || null, item_fee: (st.itemFee != null ? st.itemFee : 0),
+        notes: notes,
+        recipient_phone: recipientPhone || null,
         ongkir: ongkir, distance_km: distanceKm,
         status: 'mencari_kurir'
       })
@@ -27746,6 +27836,23 @@ function _ykChatSubscribeUnread() {
 
 const _YK_ITEM_ICON = { Elektronik: 'fa-laptop', Perhiasan: 'fa-gem', Dokumen: 'fa-file-lines', Uang: 'fa-money-bill-wave', Umum: 'fa-box' };
 const _YK_STATUS_LABEL = { mencari_kurir: 'Mencari Kurir', diambil: 'Sedang Diantar', selesai: 'Selesai', dibatalkan: 'Dibatalkan' };
+// Link wa.me dari nomor WA penerima (buang non-digit; sender wajib pakai kode negara).
+function _ykWaHref(phone) { return 'https://wa.me/' + String(phone || '').replace(/[^\d]/g, ''); }
+
+// Rincian biaya kartu kurir: Ongkir → Biaya Keamanan → Total (o.item_fee = biaya keamanan).
+function _ykFeeBreakdownHtml(o) {
+  if (o.ongkir == null) {
+    return '<p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">Dihitung saat diambil</span></p>';
+  }
+  const ongkir = Number(o.ongkir), fee = Number(o.item_fee || 0), total = ongkir + fee;
+  const km = o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : '';
+  const detail = o.item_detail ? ' (' + _sadEscHtml(o.item_detail) + ')' : '';
+  return '<div class="mb-2" style="font-size:12px">'
+    + `<div style="display:flex;justify-content:space-between"><span style="color:#6b7280">Ongkir</span><span style="color:#111827;font-weight:600">${_yfFmtPrice(ongkir)}${km}</span></div>`
+    + `<div style="display:flex;justify-content:space-between"><span style="color:#6b7280">Biaya Keamanan${detail}</span><span style="color:#111827;font-weight:600">${fee > 0 ? _yfFmtPrice(fee) : 'Gratis'}</span></div>`
+    + `<div style="display:flex;justify-content:space-between;border-top:1px dashed #e5e7eb;margin-top:2px;padding-top:2px"><span style="color:#111827;font-weight:700">Total</span><span class="text-primary" style="font-weight:800">${_yfFmtPrice(total)}</span></div>`
+    + '</div>';
+}
 
 async function _ykLoadWaitingRoom() {
   const box = document.getElementById('ykWaitingRoomList');
@@ -27775,6 +27882,10 @@ async function _ykLoadWaitingRoom() {
             <i class="fa-solid fa-flag-checkered" style="color:#6b7280;font-size:13px;margin-top:2px;flex-shrink:0"></i>
             <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Tujuan: ${_sadEscHtml(o.to_address || '-')}</p>
           </div>
+          ${o.recipient_phone ? `<div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+            <i class="fa-brands fa-whatsapp" style="color:#25D366;font-size:14px;flex-shrink:0"></i>
+            <a href="${_ykWaHref(o.recipient_phone)}" target="_blank" rel="noopener" style="font-size:12px;font-weight:700;color:#059669;text-decoration:none;word-break:break-word">WA Penerima: ${_sadEscHtml(o.recipient_phone)}</a>
+          </div>` : ''}
           ${(o.from_lat != null && o.from_lng != null && o.to_lat != null && o.to_lng != null) ? `
           <div style="margin-top:8px;display:flex;gap:6px">
             <button onclick="_ykShowRoute('${o.id}')" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
@@ -27789,7 +27900,7 @@ async function _ykLoadWaitingRoom() {
           </button>` : ''}
         </div>
         ${o.notes ? `<p class="text-xs text-gray-500 mb-2">Catatan: ${_sadEscHtml(o.notes)}</p>` : ''}
-        <p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${o.ongkir != null ? _yfFmtPrice(o.ongkir) : 'Dihitung saat diambil'}</span>${o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : ''}</p>
+        ${_ykFeeBreakdownHtml(o)}
         <button onclick="ykKurirClaimOrder('${o.id}')" class="w-full bg-primary text-white text-xs font-bold rounded-xl py-2">Ambil Pesanan</button>
       </div>
     `).join('');
@@ -27838,6 +27949,10 @@ async function _ykLoadMyDeliveries() {
             <i class="fa-solid fa-flag-checkered" style="color:#6b7280;font-size:13px;margin-top:2px;flex-shrink:0"></i>
             <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0;word-break:break-word;min-width:0">Tujuan: ${_sadEscHtml(o.to_address || '-')}</p>
           </div>
+          ${o.recipient_phone ? `<div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+            <i class="fa-brands fa-whatsapp" style="color:#25D366;font-size:14px;flex-shrink:0"></i>
+            <a href="${_ykWaHref(o.recipient_phone)}" target="_blank" rel="noopener" style="font-size:12px;font-weight:700;color:#059669;text-decoration:none;word-break:break-word">WA Penerima: ${_sadEscHtml(o.recipient_phone)}</a>
+          </div>` : ''}
           ${(o.from_lat != null && o.from_lng != null && o.to_lat != null && o.to_lng != null) ? `
           <div style="margin-top:8px;display:flex;gap:6px">
             <button onclick="_ykShowRoute('${o.id}')" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
@@ -27851,7 +27966,7 @@ async function _ykLoadMyDeliveries() {
             <i class="fa-solid fa-location-arrow"></i>Jemput
           </button>` : ''}
         </div>
-        <p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${o.ongkir != null ? _yfFmtPrice(o.ongkir) : '-'}</span>${o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : ''}</p>
+        ${_ykFeeBreakdownHtml(o)}
         <div style="display:flex;gap:8px">
           <button onclick="_ykChatFromMine('${o.id}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Pengirim${_yfBtnBadge(unreadMap[o.id] || 0)}</button>
           ${o.status === 'diambil' ? `<button onclick="ykKurirCompleteOrder('${o.id}')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Tandai Selesai</button>` : ''}
