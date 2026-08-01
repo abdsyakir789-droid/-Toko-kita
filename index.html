@@ -23218,6 +23218,66 @@ function _yfBuyerAddressBlock(o) {
         </div>`;
 }
 
+// Ambil lokasi mat'am (resto) untuk sejumlah seller_id sekaligus — satu query ke tabel
+// shops (public read, sama seperti fitur mat'am terdekat). Balikin map: seller_id → {alamat,lat,lng,nama}.
+async function _yfFetchShopLocs(sellerIds) {
+  const ids = [...new Set((sellerIds || []).filter(Boolean))];
+  if (!ids.length) return {};
+  const inList = ids.map(u => '"' + String(u).replace(/"/g, '') + '"').join(',');
+  try {
+    const r = await window._supaFetch(`/rest/v1/shops?user_id=in.(${inList})&select=user_id,nama_toko,alamat,lat,lng`);
+    const rows = r.ok ? await r.json() : [];
+    const map = {};
+    rows.forEach(s => { map[s.user_id] = { alamat: s.alamat || '', lat: s.lat, lng: s.lng, nama: s.nama_toko || '' }; });
+    return map;
+  } catch (e) { return {}; }
+}
+
+// Blok 'Alamat Mat'am' pada kartu kurir — tampil TEPAT DI BAWAH Alamat Pembeli, gaya sama
+// (kotak abu, ikon titik peta di depan). Diklik → _yfNavigateToMatam (rute kurir → mat'am).
+// Koordinat mat'am dari shopMap (via seller_id). Kalau koordinat tak ada, blok tetap tampil
+// tapi tidak clickable. Kalau alamat kosong, jatuh ke nama mat'am sebagai teks.
+function _yfMatamAddressBlock(o, shopMap) {
+  const s = (shopMap && shopMap[o.seller_id]) || null;
+  const alamat = (s && s.alamat) || '';
+  const text = alamat || o.seller_name || (s && s.nama) || '';
+  if (!text) return '';
+  const hasLoc = s && s.lat != null && s.lng != null;
+  const color = hasLoc ? '#059669' : '#111827';
+  const attr = hasLoc
+    ? `onclick="_yfNavigateToMatam(${Number(s.lat)},${Number(s.lng)})" style="display:flex;align-items:flex-start;gap:6px;cursor:pointer"`
+    : `style="display:flex;align-items:flex-start;gap:6px"`;
+  return `
+        <div style="background:#f9fafb;border-radius:10px;padding:8px 10px;margin-top:-6px;margin-bottom:8px">
+          <div ${attr}>
+            <i class="fa-solid fa-location-dot" style="color:${color};font-size:13px;margin-top:2px;flex-shrink:0"></i>
+            <p style="font-size:12px;font-weight:600;color:${color};line-height:1.5;margin:0;word-break:break-word;min-width:0">Alamat Mat'am: ${_sadEscHtml(text)}</p>
+          </div>
+        </div>`;
+}
+
+// Alamat Mat'am diklik: minta izin lokasi kurir → begitu aktif, buka Google Maps rute
+// POSISI KURIR SEKARANG → ALAMAT MAT'AM (dua titik, mode driving). Kalau izin lokasi
+// ditolak/gagal, TIDAK dibuka ke Maps (origin akan ngawur) — ingatkan aktifkan lokasi.
+window._yfNavigateToMatam = function(mLat, mLng) {
+  mLat = +mLat; mLng = +mLng;
+  if ([mLat, mLng].some(v => v == null || isNaN(v))) { showToast('Titik mat\'am tidak ada koordinat', 'red'); return; }
+  if (!navigator.geolocation) { showToast('Perangkat tidak mendukung lokasi', 'red'); return; }
+  showToast('Mengaktifkan lokasi kamu...', 'green');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const cLat = pos.coords.latitude, cLng = pos.coords.longitude;
+      const url = 'https://www.google.com/maps/dir/?api=1'
+        + '&origin=' + cLat + ',' + cLng
+        + '&destination=' + mLat + ',' + mLng
+        + '&travelmode=driving';
+      window.open(url, '_blank');
+    },
+    () => { showToast('Lokasi belum aktif — aktifkan izin lokasi dulu ya', 'red'); },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+};
+
 // Waktu relatif sederhana untuk kartu pesanan Dashboard Kurir ("1 menit lalu", "5 menit lalu", "1 hari lalu")
 // — murni tampilan, dihitung dari food_orders.created_at yang sudah ada, tidak menyentuh data apapun.
 function _yfTimeAgo(dateStr) {
@@ -24622,6 +24682,7 @@ async function _kurirLoadWaitingRoom() {
     const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir&select=*&order=created_at.desc');
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan menunggu kurir.</p>'; return; }
+    const _shopLocs = await _yfFetchShopLocs(rows.map(o => o.seller_id)); // lokasi mat'am utk blok Alamat Mat'am
     box.innerHTML = rows.map(o => `
       <div class="bg-white rounded-2xl p-3 border border-gray-100" data-order-id="${o.id}" style="position:relative">
         ${(window._yfCancelledOrderIds && window._yfCancelledOrderIds.has(o.id)) ? '<span class="yf-cancel-badge" style="position:absolute;top:8px;right:8px;background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;z-index:2">Dibatalkan</span>' : ''}
@@ -24639,10 +24700,11 @@ async function _kurirLoadWaitingRoom() {
           </div>
         </div>
         ${_yfBuyerAddressBlock(o)}
+        ${_yfMatamAddressBlock(o, _shopLocs)}
         <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
           <span style="font-size:10px;font-weight:600;color:#111827">${_yfTimeAgo(o.created_at)}</span>
         </div>
-        <button onclick="yfKurirClaimOrder('${o.id}')" class="w-full bg-primary text-white text-xs font-bold rounded-xl py-2">Ambil Pesanan</button>
+        <button onclick="yfKurirClaimOrder('${o.id}')" class="w-full bg-primary text-white text-xs font-bold rounded-xl py-2" style="margin-top:-6px">Ambil Pesanan</button>
       </div>
     `).join('');
   } catch (e) {
@@ -24676,6 +24738,7 @@ async function _kurirLoadMyDeliveries() {
       }
     } catch (e) { console.warn('[YallaFood Kurir] gagal hitung badge chat per-tombol:', e.message); }
 
+    const _shopLocs = await _yfFetchShopLocs(rows.map(o => o.seller_id)); // lokasi mat'am utk blok Alamat Mat'am
     box.innerHTML = rows.map(o => {
       const buyerUnread = unreadMap[o.id + '_buyer_kurir'] || 0;
       const sellerUnread = unreadMap[o.id + '_kurir_seller'] || 0;
@@ -24701,6 +24764,7 @@ async function _kurirLoadMyDeliveries() {
           </div>
         </div>
         ${_yfBuyerAddressBlock(o)}
+        ${_yfMatamAddressBlock(o, _shopLocs)}
         <div style="display:flex;gap:8px;margin-top:8px">
           <button onclick="openYfChat('${o.id}','buyer_kurir','${(o.buyer_name||'Buyer').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Buyer${_yfBtnBadge(buyerUnread)}</button>
           <button onclick="openYfChat('${o.id}','kurir_seller','${(o.seller_name||'Seller').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Seller${_yfBtnBadge(sellerUnread)}</button>
@@ -25803,8 +25867,15 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   </div>
   <div style="position:relative;flex:1;min-height:0">
     <div id="ykRouteMap" style="position:absolute;inset:0"></div>
+    <button id="ykRouteRecenter" onclick="_ykRecenterLive()" title="Fokus ke posisi saya" style="display:none;position:absolute;right:12px;bottom:12px;z-index:500;width:42px;height:42px;border-radius:50%;background:#fff;border:none;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;align-items:center;justify-content:center">
+      <i class="fa-solid fa-location-crosshairs" style="color:#2563EB;font-size:18px"></i>
+    </button>
   </div>
   <div class="bg-white border-t border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <div id="ykRouteMeRow" style="display:none;align-items:flex-start;gap:8px;margin-bottom:6px">
+      <span style="width:12px;height:12px;border-radius:50%;background:#2563EB;flex-shrink:0;margin-top:2px"></span>
+      <p id="ykRouteMe" style="font-size:12px;font-weight:600;color:#111827;line-height:1.4;margin:0;word-break:break-word">Posisi kamu</p>
+    </div>
     <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
       <span style="width:12px;height:12px;border-radius:50%;background:#10B981;flex-shrink:0;margin-top:2px"></span>
       <p id="ykRouteFrom" style="font-size:12px;font-weight:600;color:#111827;line-height:1.4;margin:0;word-break:break-word">Titik jemput</p>
@@ -26077,8 +26148,12 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 </script>
 
 <!-- YALLAKURIR: panel kurir ditemukan (bottom sheet setengah layar, sisi PENGIRIM) -->
-<div id="kbCourierPanel" style="display:none;position:fixed;inset:0;z-index:63;background:rgba(17,24,39,.35);align-items:flex-end;justify-content:center">
-  <div style="background:#fff;width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:18px 18px 26px;box-shadow:0 -10px 34px rgba(0,0,0,.18)">
+<div id="kbCourierPanel" style="display:none;position:fixed;inset:0;z-index:63;background:transparent;align-items:flex-end;justify-content:center">
+  <div id="kbCourierMap" style="position:absolute;inset:0;z-index:0;background:#e5e7eb"></div>
+  <button id="kbCourierRecenter" onclick="_kbRecenterCourier()" title="Fokus ke kurir" style="display:none;position:absolute;top:14px;right:14px;z-index:3;width:42px;height:42px;border-radius:50%;background:#fff;border:none;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;align-items:center;justify-content:center">
+    <i class="fa-solid fa-location-crosshairs" style="color:#2563EB;font-size:18px"></i>
+  </button>
+  <div style="position:relative;z-index:2;background:#fff;width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:18px 18px 26px;box-shadow:0 -10px 34px rgba(0,0,0,.18)">
     <div style="width:52px;height:5px;background:#e5e7eb;border-radius:3px;margin:0 auto 16px"></div>
     <div style="text-align:center;margin-bottom:16px">
       <div id="kbCourierStatusIcon" style="width:58px;height:58px;margin:0 auto 10px;border-radius:50%;background:#D1FAE5;display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-circle-check" style="color:#10B981;font-size:30px"></i></div>
@@ -26191,6 +26266,7 @@ window.openKirimBarangYallaKurir = async function() {
   const th = document.getElementById('kbToCoordHint'); if (th) { th.textContent = 'Pilih titik tujuan di peta untuk lokasi akurat.'; th.style.color = ''; th.style.fontWeight = ''; }
   document.getElementById('kbFindingState').style.display = 'none';
   document.getElementById('kbCourierPanel').style.display = 'none';
+  if (typeof _kbDestroyCourierMap === 'function') _kbDestroyCourierMap();
   _kbValidate();
   // Cek pesanan aktif (anti double-order + lanjutkan proses kalau app sempat ditutup/swipe close)
   await _kbResumeActiveOrder();
@@ -26255,6 +26331,7 @@ async function _kbResyncOnResume() {
       _kbUnsubscribeOrderStatus();
       document.getElementById('kbFindingState').style.display = 'none';
       document.getElementById('kbCourierPanel').style.display = 'none';
+      _kbDestroyCourierMap();
       showToast('Pencarian kurir dibatalkan', 'red');
     } else {
       // masih mencari_kurir → pastikan langganan realtime hidup kembali
@@ -26501,6 +26578,7 @@ async function _kbShowCourierPanel(order) {
   document.getElementById('kbCourierName').textContent = order.courier_name || 'Kurir';
   _kbSetAvatar(document.getElementById('kbCourierAvatar'), null);
   document.getElementById('kbCourierPanel').style.display = 'flex';
+  _kbInitCourierMap(order); // peta live di belakang kartu (rute + patokan + posisi kurir realtime)
   _kbRefreshCourierChatBadge();
   try {
     if (order.courier_id) {
@@ -26545,6 +26623,7 @@ function _kbOrderCompleted(order) {
 
 window._kbCloseCourierPanel = function() {
   document.getElementById('kbCourierPanel').style.display = 'none';
+  _kbDestroyCourierMap(); // lepas peta + langganan broadcast posisi kurir
   _kbUnsubscribeOrderStatus();
   window._kbState.orderId = null;
   if (typeof closeKirimBarangYallaKurir === 'function') closeKirimBarangYallaKurir();
@@ -26553,6 +26632,122 @@ window._kbCloseCourierPanel = function() {
 window._kbOpenCourierChat = function() {
   const o = window._kbActiveOrder; if (!o) return;
   openYkChat(o.id, o.courier_name || 'Kurir', o.status, (o.sender_id === window._S?.user?.uid ? o.courier_id : o.sender_id));
+};
+
+// ══════════════════════════════════════════════════════════════════
+// PETA LIVE DI BELAKANG KARTU "KURIR DITEMUKAN" (sisi PENGIRIM)
+// Peta sama seperti rute pengantaran: basemap + pin Jemput/Tujuan + rute A→B +
+// patokan admin. Posisi kurir diterima realtime lewat Supabase BROADCAST channel
+// 'yk_track_<orderId>' (ephemeral, tanpa tulis DB) → titik biru + garis kurir→jemput.
+// ══════════════════════════════════════════════════════════════════
+window._kbCourierMap = null;
+window._kbCourierMapOrderId = null;
+let _kbTrackChannel = null;
+let _kbCourierDot = null, _kbCourierLine = null, _kbCourierLineOrigin = null, _kbCourierLast = null;
+
+function _kbDestroyCourierMap() {
+  if (_kbTrackChannel) { try { window.supabase.removeChannel(_kbTrackChannel); } catch (e) {} _kbTrackChannel = null; }
+  if (window._kbCourierMap) { try { window._kbCourierMap.remove(); } catch (e) {} window._kbCourierMap = null; }
+  window._kbCourierMapOrderId = null;
+  _kbCourierDot = null; _kbCourierLine = null; _kbCourierLineOrigin = null; _kbCourierLast = null;
+  const rc = document.getElementById('kbCourierRecenter'); if (rc) rc.style.display = 'none';
+}
+
+function _kbInitCourierMap(order) {
+  if (!order || order.from_lat == null || order.to_lat == null) return;
+  if (window._kbCourierMapOrderId === order.id && window._kbCourierMap) return; // sudah dibangun utk order ini
+  _kbDestroyCourierMap();
+  window._kbCourierMapOrderId = order.id;
+  const fLat = +order.from_lat, fLng = +order.from_lng, tLat = +order.to_lat, tLng = +order.to_lng;
+  setTimeout(() => {
+    const el = document.getElementById('kbCourierMap');
+    if (!el || window._kbCourierMapOrderId !== order.id) return;
+    const map = L.map(el, { zoomControl: false, attributionControl: false });
+    window._kbCourierMap = map;
+    const alive = () => window._kbCourierMap === map;
+    // Basemap: OpenFreeMap vektor (label Latin) → fallback raster CARTO (pola sama peta rute)
+    _kbEnsureMapLibre().then(ok => {
+      if (!alive()) return;
+      if (ok && L.maplibreGL) {
+        try {
+          const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(map);
+          const mm = gl.getMaplibreMap ? gl.getMaplibreMap() : gl._glMap;
+          if (mm) mm.on('load', () => _kbForceLatinLabels(mm));
+          return;
+        } catch (e) {}
+      }
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20 }).addTo(map);
+    });
+    const mkIcon = (color, label) => L.divIcon({
+      className: 'yk-route-pin',
+      html: '<div style="display:flex;flex-direction:column;align-items:center">'
+        + '<div style="width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:' + color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></div>'
+        + '<span style="margin-top:1px;font-size:9px;font-weight:800;color:#111827;background:rgba(255,255,255,.92);padding:0 5px;border-radius:4px">' + label + '</span>'
+        + '</div>',
+      iconSize: [40, 40], iconAnchor: [20, 24]
+    });
+    L.marker([fLat, fLng], { icon: mkIcon('#10B981', 'Jemput') }).addTo(map);
+    L.marker([tLat, tLng], { icon: mkIcon('#EF4444', 'Tujuan') }).addTo(map);
+    // Padding bawah besar supaya rute/pin tidak ketutupan kartu profil yang menutup separuh bawah.
+    const fitAll = () => { try { map.fitBounds(L.latLngBounds([[fLat, fLng], [tLat, tLng]]), { paddingTopLeft: [40, 60], paddingBottomRight: [40, 300] }); } catch (e) {} };
+    let line = L.polyline([[fLat, fLng], [tLat, tLng]], { color: '#10B981', weight: 4, opacity: .5, dashArray: '6,8' }).addTo(map);
+    fitAll();
+    _attachBuildingFootprints(map);
+    _ykLoadPatokanMarkers(map, alive); // pin patokan admin di peta pengirim
+    map.invalidateSize();
+    setTimeout(() => { if (alive()) map.invalidateSize(); }, 400);
+    _ykFetchRoadRoute(fLat, fLng, tLat, tLng).then(path => {
+      if (!alive()) return;
+      if (!path) { line.setStyle({ opacity: .85, dashArray: null }); return; }
+      try { map.removeLayer(line); } catch (e) {}
+      line = L.polyline(path, { color: '#10B981', weight: 5, opacity: .9 }).addTo(map);
+      fitAll();
+    });
+    _kbSubscribeCourierLoc(order.id, map, fLat, fLng); // terima posisi kurir realtime
+  }, 80);
+}
+
+// Langganan BROADCAST posisi kurir. Tiap payload {lat,lng}: geser titik biru (buat sekali),
+// perbarui subtitle jarak (Haversine lokal), dan gambar garis kurir→jemput (hitung ulang
+// hanya bila kurir melenceng > 250 m — hemat panggilan rute, sama seperti _ykStartLiveDot).
+function _kbSubscribeCourierLoc(orderId, map, pickupLat, pickupLng) {
+  if (!window.supabase) return;
+  if (_kbTrackChannel) { try { window.supabase.removeChannel(_kbTrackChannel); } catch (e) {} _kbTrackChannel = null; }
+  const meIcon = L.divIcon({
+    className: 'yk-live-dot',
+    html: '<div style="width:16px;height:16px;border-radius:50%;background:#2563EB;border:3px solid #fff;box-shadow:0 0 0 4px rgba(37,99,235,.25),0 1px 4px rgba(0,0,0,.35)"></div>',
+    iconSize: [16, 16], iconAnchor: [8, 8]
+  });
+  _kbTrackChannel = window.supabase.channel('yk_track_' + orderId, { config: { broadcast: { self: false } } })
+    .on('broadcast', { event: 'loc' }, (msg) => {
+      const payload = msg && msg.payload;
+      if (window._kbCourierMap !== map || !payload) return;
+      const lat = +payload.lat, lng = +payload.lng;
+      if (isNaN(lat) || isNaN(lng)) return;
+      _kbCourierLast = { lat, lng };
+      if (!_kbCourierDot) _kbCourierDot = L.marker([lat, lng], { icon: meIcon, interactive: false, keyboard: false }).addTo(map);
+      else _kbCourierDot.setLatLng([lat, lng]);
+      const rc = document.getElementById('kbCourierRecenter'); if (rc) rc.style.display = 'flex';
+      const km = _yfHaversineKm(lat, lng, pickupLat, pickupLng);
+      const sub = document.getElementById('kbCourierPanelSub');
+      if (sub) sub.textContent = 'Kurir ' + (km < 1 ? Math.round(km * 1000) + ' m' : km.toFixed(1) + ' km') + ' dari titik jemput';
+      const o = _kbCourierLineOrigin;
+      const movedM = o ? _yfHaversineKm(o.lat, o.lng, lat, lng) * 1000 : Infinity;
+      if (!_kbCourierLine || movedM > 250) {
+        _kbCourierLineOrigin = { lat, lng };
+        _ykFetchRoadRoute(lat, lng, pickupLat, pickupLng).then(pathC => {
+          if (window._kbCourierMap !== map) return;
+          if (_kbCourierLine) { try { map.removeLayer(_kbCourierLine); } catch (e) {} }
+          const pts = pathC || [[lat, lng], [pickupLat, pickupLng]];
+          _kbCourierLine = L.polyline(pts, { color: '#2563EB', weight: 4, opacity: .85, dashArray: pathC ? null : '6,8' }).addTo(map);
+        });
+      }
+    })
+    .subscribe();
+}
+window._kbRecenterCourier = function() {
+  const m = window._kbCourierMap, p = _kbCourierLast;
+  if (m && p) m.setView([p.lat, p.lng], Math.max(m.getZoom(), 16));
 };
 
 // ── CHAT YALLAKURIR (pengirim <-> kurir) — satu percakapan per order, dipakai kedua sisi ──
@@ -27520,6 +27715,7 @@ window.openYkCourierDashboard = async function() {
 window.closeYkCourierDashboard = function() {
   document.getElementById('ykCourierDashboard').style.display = 'none';
   document.body.style.overflow = '';
+  if (typeof _ykAutoShareStop === 'function') _ykAutoShareStop(); // hentikan siaran posisi otomatis
   if (_ykChannel) { try { window.supabase.removeChannel(_ykChannel); } catch (e) {} _ykChannel = null; }
   if (_ykChatUnreadChannel) { try { window.supabase.removeChannel(_ykChatUnreadChannel); } catch (e) {} _ykChatUnreadChannel = null; }
 };
@@ -27575,7 +27771,10 @@ async function _ykLoadWaitingRoom() {
             <button onclick="_ykOpenGoogleMaps('${o.id}')" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
               <i class="fa-solid fa-map-location-dot"></i>Google Maps
             </button>
-          </div>` : ''}
+          </div>
+          <button onclick="_ykNavigateToPickup('${o.id}')" style="margin-top:6px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:#10B981;border:none;color:#fff;font-size:11px;font-weight:800;border-radius:8px;padding:7px 8px;cursor:pointer">
+            <i class="fa-solid fa-location-arrow"></i>Jemput
+          </button>` : ''}
         </div>
         ${o.notes ? `<p class="text-xs text-gray-500 mb-2">Catatan: ${_sadEscHtml(o.notes)}</p>` : ''}
         <p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${o.ongkir != null ? _yfFmtPrice(o.ongkir) : 'Dihitung saat diambil'}</span>${o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : ''}</p>
@@ -27598,7 +27797,7 @@ async function _ykLoadMyDeliveries() {
     const r = await window._supaFetch(`/rest/v1/yallakurir_orders?courier_id=eq.${encodeURIComponent(uid)}&status=in.(diambil,selesai)&select=*&order=created_at.desc&limit=20`);
     const rows = r.ok ? await r.json() : [];
     window._ykMineById = {}; rows.forEach(o => { window._ykMineById[o.id] = o; });
-    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan yang kamu antar.</p>'; return; }
+    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan yang kamu antar.</p>'; _ykSyncAutoShare([]); return; }
 
     // Badge unread PER TOMBOL 'Chat Pengirim' — pesan dari pengirim (bukan dari kurir sendiri)
     // yang lebih baru dari last-read lokal. Pola sama seperti badge 'Chat Kurir' YallaFood.
@@ -27635,17 +27834,71 @@ async function _ykLoadMyDeliveries() {
             <button onclick="_ykOpenGoogleMaps('${o.id}')" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
               <i class="fa-solid fa-map-location-dot"></i>Google Maps
             </button>
-          </div>` : ''}
+          </div>
+          <button onclick="_ykNavigateToPickup('${o.id}')" style="margin-top:6px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:#10B981;border:none;color:#fff;font-size:11px;font-weight:800;border-radius:8px;padding:7px 8px;cursor:pointer">
+            <i class="fa-solid fa-location-arrow"></i>Jemput
+          </button>` : ''}
         </div>
         <p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${o.ongkir != null ? _yfFmtPrice(o.ongkir) : '-'}</span>${o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : ''}</p>
+        ${o.status === 'diambil' ? `<div style="width:100%;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;padding:7px;font-size:10.5px;font-weight:700;border:1px solid #dbeafe;background:#eff6ff;color:#2563EB"><i class="fa-solid fa-satellite-dish"></i>Lokasimu dibagikan otomatis ke pengirim</div>` : ''}
         <div style="display:flex;gap:8px">
           <button onclick="_ykChatFromMine('${o.id}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Pengirim${_yfBtnBadge(unreadMap[o.id] || 0)}</button>
           ${o.status === 'diambil' ? `<button onclick="ykKurirCompleteOrder('${o.id}')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Tandai Selesai</button>` : ''}
         </div>
       </div>
     `).join('');
+    // Auto-share posisi: siarkan utk semua order yang masih 'diambil' (tanpa tombol)
+    _ykSyncAutoShare(rows.filter(o => o.status === 'diambil').map(o => o.id));
   } catch (e) {
     box.innerHTML = '<p class="text-center text-red-400 text-xs py-4">Gagal memuat.</p>';
+  }
+}
+
+// ── BROADCAST posisi kurir → pengirim (sisi KURIR) — OTOMATIS, TANPA TOMBOL ──
+// Selama kurir punya antaran berstatus 'diambil' dan dashboard terbuka, posisinya
+// otomatis disiarkan lewat Supabase BROADCAST channel 'yk_track_<orderId>' per order
+// (ephemeral, TANPA tulis DB). Satu watchPosition (GPS lokal) → dikirim ke semua channel
+// order aktif. Hemat bandwidth: hanya dikirim kalau geser > 20 m ATAU > 6 dtk sejak kirim
+// terakhir. Berhenti sendiri saat tak ada antaran aktif / dashboard ditutup / app ditutup.
+window._ykAutoShare = { watchId: null, channels: {}, last: null }; // channels: orderId -> {channel,subscribed}
+function _ykAutoShareStop() {
+  const a = window._ykAutoShare;
+  if (a.watchId != null && navigator.geolocation) { try { navigator.geolocation.clearWatch(a.watchId); } catch (e) {} }
+  a.watchId = null;
+  Object.keys(a.channels).forEach(id => { try { window.supabase.removeChannel(a.channels[id].channel); } catch (e) {} });
+  a.channels = {}; a.last = null;
+}
+function _ykSyncAutoShare(activeOrderIds) {
+  if (!window.supabase || !navigator.geolocation) return;
+  const a = window._ykAutoShare;
+  const want = new Set(activeOrderIds || []);
+  // buang channel order yang sudah tak aktif
+  Object.keys(a.channels).forEach(id => {
+    if (!want.has(id)) { try { window.supabase.removeChannel(a.channels[id].channel); } catch (e) {} delete a.channels[id]; }
+  });
+  // tambah channel order baru
+  want.forEach(id => {
+    if (!a.channels[id]) {
+      const ch = window.supabase.channel('yk_track_' + id, { config: { broadcast: { self: false } } });
+      const entry = { channel: ch, subscribed: false };
+      ch.subscribe((status) => { if (status === 'SUBSCRIBED') entry.subscribed = true; });
+      a.channels[id] = entry;
+    }
+  });
+  const hasActive = Object.keys(a.channels).length > 0;
+  if (hasActive && a.watchId == null) {
+    a.watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude, now = Date.now();
+        if (a.last && _yfHaversineKm(a.last.lat, a.last.lng, lat, lng) * 1000 < 20 && (now - a.last.t) < 6000) return; // throttle
+        a.last = { lat, lng, t: now };
+        Object.keys(a.channels).forEach(id => { const c = a.channels[id]; if (c.subscribed) { try { c.channel.send({ type: 'broadcast', event: 'loc', payload: { lat, lng, t: now } }); } catch (e) {} } });
+      },
+      () => { /* izin lokasi ditolak — diamkan; peta pengirim tetap tampil rute+patokan tanpa titik kurir */ },
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 20000 }
+    );
+  } else if (!hasActive && a.watchId != null) {
+    _ykAutoShareStop();
   }
 }
 
@@ -27680,6 +27933,103 @@ window._ykOpenGoogleMaps = function(orderId) {
     + '&travelmode=driving';
   window.open(url, '_blank');
 };
+
+// Tombol "Jemput": minta izin lokasi kurir → begitu lokasi aktif, buka Google Maps
+// dengan rute POSISI KURIR SEKARANG → TITIK JEMPUT (A). Beda dari _ykOpenGoogleMaps
+// (yang A→B): origin di sini = GPS kurir realtime, tujuan = titik jemput pengirim.
+// Kalau izin lokasi ditolak/gagal, TIDAK dibuka ke Maps (origin akan ngawur) —
+// cukup ingatkan kurir mengaktifkan lokasi.
+window._ykNavigateToPickup = function(orderId) {
+  const o = (window._ykWaitingById || {})[orderId] || (window._ykMineById || {})[orderId];
+  if (!o) { showToast('Data pesanan tidak ditemukan', 'red'); return; }
+  const fLat = +o.from_lat, fLng = +o.from_lng;
+  if ([fLat, fLng].some(v => v == null || isNaN(v))) { showToast('Titik jemput tidak ada koordinat', 'red'); return; }
+  if (!navigator.geolocation) { showToast('Perangkat tidak mendukung lokasi', 'red'); return; }
+  showToast('Mengaktifkan lokasi kamu...', 'green');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const cLat = pos.coords.latitude, cLng = pos.coords.longitude;
+      const url = 'https://www.google.com/maps/dir/?api=1'
+        + '&origin=' + cLat + ',' + cLng
+        + '&destination=' + fLat + ',' + fLng
+        + '&travelmode=driving';
+      window.open(url, '_blank');
+    },
+    () => { showToast('Lokasi belum aktif — aktifkan izin lokasi dulu ya', 'red'); },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+};
+// ── Titik kurir HIDUP di peta rute in-app ──────────────────────────────────
+// Hemat bandwidth by design:
+//  • Koordinat dibaca dari GPS lokal (watchPosition) — bukan dari internet.
+//  • Marker biru dibuat SEKALI, update berikutnya cuma setLatLng (tanpa jaringan).
+//  • Rute kurir→jemput digambar sekali; dihitung ulang HANYA bila kurir melenceng
+//    > _YK_LIVE_REROUTE_M meter (ambil rute jalan via ORS, sama seperti A→B).
+//  • Label jarak pakai Haversine lokal (_yfHaversineKm) — gratis, tanpa API.
+//  • watch dibersihkan (_ykStopLiveDot) saat overlay ditutup / rute lain dibuka.
+const _YK_LIVE_REROUTE_M = 250;
+function _ykStartLiveDot(map, pickupLat, pickupLng) {
+  _ykStopLiveDot();
+  if (!navigator.geolocation) return;
+  const meIcon = L.divIcon({
+    className: 'yk-live-dot',
+    html: '<div style="width:16px;height:16px;border-radius:50%;background:#2563EB;border:3px solid #fff;box-shadow:0 0 0 4px rgba(37,99,235,.25),0 1px 4px rgba(0,0,0,.35)"></div>',
+    iconSize: [16, 16], iconAnchor: [8, 8]
+  });
+  let firstFix = true;
+  window._ykLiveWatchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      if (window._ykRouteMap !== map) return; // overlay sudah ditutup / map diganti
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      window._ykLiveLast = { lat, lng };
+      // 1) Marker biru — buat sekali, selanjutnya cuma digeser (tanpa jaringan)
+      if (!window._ykLiveMarker) {
+        window._ykLiveMarker = L.marker([lat, lng], { icon: meIcon, interactive: false, keyboard: false }).addTo(map);
+      } else {
+        window._ykLiveMarker.setLatLng([lat, lng]);
+      }
+      // 2) Label jarak ke titik jemput (Haversine lokal — gratis)
+      const km = _yfHaversineKm(lat, lng, pickupLat, pickupLng);
+      const meEl = document.getElementById('ykRouteMe');
+      if (meEl) meEl.textContent = 'Posisi kamu · ' + (km < 1 ? Math.round(km * 1000) + ' m' : km.toFixed(1) + ' km') + ' ke titik jemput';
+      const meRow = document.getElementById('ykRouteMeRow'); if (meRow) meRow.style.display = 'flex';
+      const rc = document.getElementById('ykRouteRecenter'); if (rc) rc.style.display = 'flex';
+      // 3) Rute kurir→jemput — gambar sekali; hitung ulang hanya bila melenceng jauh
+      const orig = window._ykLiveRouteOrigin;
+      const movedM = orig ? _yfHaversineKm(orig.lat, orig.lng, lat, lng) * 1000 : Infinity;
+      if (!window._ykLiveRouteLine || movedM > _YK_LIVE_REROUTE_M) {
+        window._ykLiveRouteOrigin = { lat, lng };
+        _ykFetchRoadRoute(lat, lng, pickupLat, pickupLng).then(path => {
+          if (window._ykRouteMap !== map) return;
+          if (window._ykLiveRouteLine) { try { map.removeLayer(window._ykLiveRouteLine); } catch (e) {} }
+          const pts = path || [[lat, lng], [pickupLat, pickupLng]];
+          window._ykLiveRouteLine = L.polyline(pts, { color: '#2563EB', weight: 4, opacity: .85, dashArray: path ? null : '6,8' }).addTo(map);
+        });
+      }
+      // 4) Sekali: rapatkan tampilan agar kurir + titik jemput sama-sama terlihat
+      if (firstFix) {
+        firstFix = false;
+        try { map.fitBounds(L.latLngBounds([[lat, lng], [pickupLat, pickupLng]]), { padding: [60, 60], maxZoom: 17 }); } catch (e) {}
+      }
+    },
+    () => { /* izin ditolak / GPS gagal — peta rute A→B tetap jalan tanpa titik kurir */ },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 }
+  );
+}
+function _ykStopLiveDot() {
+  if (window._ykLiveWatchId != null && navigator.geolocation) {
+    try { navigator.geolocation.clearWatch(window._ykLiveWatchId); } catch (e) {}
+  }
+  window._ykLiveWatchId = null;
+  window._ykLiveMarker = null;
+  window._ykLiveRouteLine = null;
+  window._ykLiveRouteOrigin = null;
+  window._ykLiveLast = null;
+}
+window._ykRecenterLive = function() {
+  const m = window._ykRouteMap, p = window._ykLiveLast;
+  if (m && p) m.setView([p.lat, p.lng], Math.max(m.getZoom(), 16));
+};
 window._ykShowRoute = function(orderId) {
   const o = (window._ykWaitingById || {})[orderId] || (window._ykMineById || {})[orderId];
   if (!o) { showToast('Data pesanan tidak ditemukan', 'red'); return; }
@@ -27689,6 +28039,10 @@ window._ykShowRoute = function(orderId) {
   document.body.style.overflow = 'hidden';
   document.getElementById('ykRouteFrom').textContent = 'Jemput: ' + (o.from_address || 'Titik jemput');
   document.getElementById('ykRouteTo').textContent = 'Tujuan: ' + (o.to_address || 'Titik tujuan');
+  // Reset UI titik-kurir-hidup (order sebelumnya bisa menyisakan label/tombol)
+  _ykStopLiveDot();
+  { const r = document.getElementById('ykRouteMeRow'); if (r) r.style.display = 'none'; }
+  { const b = document.getElementById('ykRouteRecenter'); if (b) b.style.display = 'none'; }
   setTimeout(() => {
     const el = document.getElementById('ykRouteMap');
     if (window._ykRouteMap) { try { window._ykRouteMap.remove(); } catch (e) {} window._ykRouteMap = null; }
@@ -27731,17 +28085,19 @@ window._ykShowRoute = function(orderId) {
       line = L.polyline(path, { color: '#10B981', weight: 5, opacity: .9 }).addTo(map);
       map.fitBounds(line.getBounds(), { padding: [60, 60], maxZoom: 17 });
     });
+    _ykStartLiveDot(map, fLat, fLng); // titik kurir hidup + rute kurir→jemput (hemat bandwidth)
   }, 60);
 };
 
 // Render patokan aktif sebagai pin non-interaktif di peta rute pengantaran (sisi kurir).
 // Visibilitas per-pin bertingkat: lihat _patokanVisibleAtZoom (dipakai bersama dengan
 // map picker Kirim Barang) — zoom 16 tampilkan yang longgar, zoom 20 tampilkan semua.
-async function _ykLoadPatokanMarkers(map) {
+async function _ykLoadPatokanMarkers(map, aliveFn) {
+  const alive = (typeof aliveFn === 'function') ? aliveFn : (() => window._ykRouteMap === map);
   try {
     const r = await window._supaFetch('/rest/v1/patokan?status=eq.active&select=name,category,lat,lng&limit=500');
     const rows = r.ok ? await r.json() : [];
-    if (window._ykRouteMap !== map) return; // overlay keburu ditutup / map lain sudah dibuat
+    if (!alive()) return; // overlay keburu ditutup / map lain sudah dibuat
     const layer = L.layerGroup().addTo(map);
     const entries = [];
     rows.forEach(p => {
@@ -27759,9 +28115,9 @@ async function _ykLoadPatokanMarkers(map) {
       const m = L.marker([p.lat, p.lng], { icon, draggable: false, keyboard: false, interactive: false });
       entries.push({ lat: p.lat, lng: p.lng, marker: m });
     });
-    if (window._ykRouteMap !== map) return;
+    if (!alive()) return;
     const applyZoom = () => {
-      if (window._ykRouteMap !== map) return;
+      if (!alive()) return;
       const visible = _patokanVisibleAtZoom(map, entries, map.getZoom());
       entries.forEach((e, i) => {
         const has = layer.hasLayer(e.marker);
@@ -27797,6 +28153,9 @@ async function _ykFetchRoadRoute(fLat, fLng, tLat, tLng) {
   }
 }
 window._ykCloseRoute = function() {
+  _ykStopLiveDot(); // hentikan watchPosition GPS — biar tak jalan di latar
+  { const r = document.getElementById('ykRouteMeRow'); if (r) r.style.display = 'none'; }
+  { const b = document.getElementById('ykRouteRecenter'); if (b) b.style.display = 'none'; }
   if (window._ykRouteMap) { try { window._ykRouteMap.remove(); } catch (e) {} window._ykRouteMap = null; }
   document.getElementById('ykRouteMapOverlay').style.display = 'none';
   document.body.style.overflow = 'hidden'; // dashboard di belakang tetap fullscreen
