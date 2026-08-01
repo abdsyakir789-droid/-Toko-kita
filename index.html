@@ -25999,8 +25999,9 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
       </div>
     </div>
     <p class="font-black text-lg text-gray-800 mb-1">Mencari kurir terdekat...</p>
-    <p class="text-sm text-gray-500 mb-4" style="max-width:280px">Kami sedang menghubungkan kamu dengan mitra YallaKurir aktif di sekitar. Mohon tunggu sebentar ya.</p>
-    <div id="kbFindingOngkir" class="text-sm font-semibold text-primary bg-pl rounded-2xl px-4 py-2 mb-8">Menghitung ongkir...</div>
+    <p class="text-sm text-gray-500 mb-8" style="max-width:280px">Kami sedang menghubungkan kamu dengan mitra YallaKurir aktif di sekitar. Mohon tunggu sebentar ya.</p>
+    <!-- Estimasi ongkir disembunyikan (display:none) — perhitungan & penyimpanan ongkir TETAP jalan lewat JS -->
+    <div id="kbFindingOngkir" class="text-sm font-semibold text-primary bg-pl rounded-2xl px-4 py-2 mb-8" style="display:none">Menghitung ongkir...</div>
     <button onclick="_kbCancelSearch()" class="text-sm font-bold text-red-500 border border-red-200 rounded-2xl py-2.5 px-6">Batalkan Pencarian</button>
   </div>
 </div>
@@ -27895,7 +27896,7 @@ async function _ykLoadWaitingRoom() {
               <i class="fa-solid fa-map-location-dot"></i>Google Maps
             </button>
           </div>
-          <button onclick="_ykNavigateToPickup('${o.id}')" style="margin-top:6px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:#10B981;border:none;color:#fff;font-size:11px;font-weight:800;border-radius:8px;padding:7px 8px;cursor:pointer">
+          <button onclick="_ykNavigateToPickup('${o.id}')" style="margin-top:6px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
             <i class="fa-solid fa-location-arrow"></i>Jemput
           </button>` : ''}
         </div>
@@ -27962,7 +27963,7 @@ async function _ykLoadMyDeliveries() {
               <i class="fa-solid fa-map-location-dot"></i>Google Maps
             </button>
           </div>
-          <button onclick="_ykNavigateToPickup('${o.id}')" style="margin-top:6px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:#10B981;border:none;color:#fff;font-size:11px;font-weight:800;border-radius:8px;padding:7px 8px;cursor:pointer">
+          <button onclick="_ykNavigateToPickup('${o.id}')" style="margin-top:6px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:#fff;border:1px solid #10B981;color:#059669;font-size:11px;font-weight:700;border-radius:8px;padding:6px 8px;cursor:pointer">
             <i class="fa-solid fa-location-arrow"></i>Jemput
           </button>` : ''}
         </div>
