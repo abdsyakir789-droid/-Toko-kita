@@ -23256,35 +23256,25 @@ function _yfMatamAddressBlock(o, shopMap) {
         </div>`;
 }
 
-// Buka Google Maps NAVIGASI ke satu tujuan, pola ROBUST ala YallaFood (pesan makanan):
-//  • Coba deteksi lokasi kurir dulu (origin akurat) + tampilkan feedback "Mendeteksi lokasi...".
-//  • Timer PENGAMAN: sebagian HP tak menghormati opsi timeout bawaan → jangan sampai menggantung.
-//  • TIDAK dead-end: kalau GPS gagal/ditolak/timeout, TETAP buka Google Maps tanpa origin →
-//    Google Maps pakai lokasi perangkatnya sendiri (jalan walau geolocation web diblok, mis. iOS PWA).
+// Buka Google Maps NAVIGASI ke satu tujuan (kurir → titik jemput / mat'am).
+// PENTING (iOS): window.open HARUS dipanggil SINKRON di dalam gesture klik. Kalau ditaruh
+// di dalam callback async (mis. getCurrentPosition) → konteks gesture hilang → iOS Safari
+// blokir sebagai popup → tombol "tidak ada respon". Maka JANGAN deteksi lokasi sendiri di sini;
+// buka Maps langsung dengan tujuan saja, dan biar GOOGLE MAPS yang deteksi lokasi kurir sebagai
+// origin (akurat + tetap jalan di iOS PWA yang memblokir geolocation web). Origin default
+// Google Maps = "Lokasi Anda" → tetap 2 titik (posisi kurir → tujuan).
 // Dipakai bersama tombol "Jemput" (YallaKurir) & "Alamat Mat'am" (YallaFood).
 window._openNavToGoogleMaps = function(destLat, destLng) {
   destLat = +destLat; destLng = +destLng;
   if ([destLat, destLng].some(v => v == null || isNaN(v))) { showToast('Titik tujuan tidak ada koordinat', 'red'); return; }
-  const open = (origin) => {
-    const url = 'https://www.google.com/maps/dir/?api=1'
-      + (origin ? '&origin=' + origin : '')
-      + '&destination=' + destLat + ',' + destLng
-      + '&travelmode=driving';
-    window.open(url, '_blank');
-  };
-  if (!navigator.geolocation) { open(null); return; } // langsung ke Maps, biar Maps yang deteksi lokasi
-  showToast('Mendeteksi lokasi kamu...', 'green');
-  let settled = false;
-  const safety = setTimeout(() => {
-    if (settled) return; settled = true;
-    showToast('Dibuka di Google Maps — pakai lokasimu di sana ya', 'green');
-    open(null);
-  }, 16000);
-  navigator.geolocation.getCurrentPosition(
-    (pos) => { if (settled) return; settled = true; clearTimeout(safety); open(pos.coords.latitude + ',' + pos.coords.longitude); },
-    () => { if (settled) return; settled = true; clearTimeout(safety); showToast('Pakai lokasi dari Google Maps ya', 'green'); open(null); },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  );
+  const url = 'https://www.google.com/maps/dir/?api=1'
+    + '&destination=' + destLat + ',' + destLng
+    + '&travelmode=driving';
+  // Coba buka tab baru (Safari biasa / Android). iOS mode STANDALONE (PWA di home screen)
+  // sering memblokir window.open → mengembalikan null → fallback: navigasi langsung di webview
+  // (iOS lalu hand-off ke app Google Maps). Semua SINKRON di dalam klik agar tak diblokir iOS.
+  const w = window.open(url, '_blank');
+  if (!w) { window.location.href = url; }
 };
 
 // Alamat Mat'am diklik → navigasi kurir → alamat mat'am (pakai helper robust di atas).
