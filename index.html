@@ -26813,8 +26813,8 @@ function _kbSubscribeCourierLoc(orderId, map, pickupLat, pickupLng) {
   if (_kbTrackChannel) { try { window.supabase.removeChannel(_kbTrackChannel); } catch (e) {} _kbTrackChannel = null; }
   const meIcon = L.divIcon({
     className: 'yk-live-dot',
-    html: '<div style="width:16px;height:16px;border-radius:50%;background:#2563EB;border:3px solid #fff;box-shadow:0 0 0 4px rgba(37,99,235,.25),0 1px 4px rgba(0,0,0,.35)"></div>',
-    iconSize: [16, 16], iconAnchor: [8, 8]
+    html: '<div style="width:30px;height:30px;border-radius:50%;background:#10B981;border:2.5px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-motorcycle" style="color:#fff;font-size:14px"></i></div>',
+    iconSize: [30, 30], iconAnchor: [15, 15]
   });
   _kbTrackChannel = window.supabase.channel('yk_track_' + orderId, { config: { broadcast: { self: false } } })
     .on('broadcast', { event: 'loc' }, (msg) => {
