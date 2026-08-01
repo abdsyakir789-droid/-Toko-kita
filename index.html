@@ -23256,27 +23256,39 @@ function _yfMatamAddressBlock(o, shopMap) {
         </div>`;
 }
 
-// Alamat Mat'am diklik: minta izin lokasi kurir → begitu aktif, buka Google Maps rute
-// POSISI KURIR SEKARANG → ALAMAT MAT'AM (dua titik, mode driving). Kalau izin lokasi
-// ditolak/gagal, TIDAK dibuka ke Maps (origin akan ngawur) — ingatkan aktifkan lokasi.
-window._yfNavigateToMatam = function(mLat, mLng) {
-  mLat = +mLat; mLng = +mLng;
-  if ([mLat, mLng].some(v => v == null || isNaN(v))) { showToast('Titik mat\'am tidak ada koordinat', 'red'); return; }
-  if (!navigator.geolocation) { showToast('Perangkat tidak mendukung lokasi', 'red'); return; }
-  showToast('Mengaktifkan lokasi kamu...', 'green');
+// Buka Google Maps NAVIGASI ke satu tujuan, pola ROBUST ala YallaFood (pesan makanan):
+//  • Coba deteksi lokasi kurir dulu (origin akurat) + tampilkan feedback "Mendeteksi lokasi...".
+//  • Timer PENGAMAN: sebagian HP tak menghormati opsi timeout bawaan → jangan sampai menggantung.
+//  • TIDAK dead-end: kalau GPS gagal/ditolak/timeout, TETAP buka Google Maps tanpa origin →
+//    Google Maps pakai lokasi perangkatnya sendiri (jalan walau geolocation web diblok, mis. iOS PWA).
+// Dipakai bersama tombol "Jemput" (YallaKurir) & "Alamat Mat'am" (YallaFood).
+window._openNavToGoogleMaps = function(destLat, destLng) {
+  destLat = +destLat; destLng = +destLng;
+  if ([destLat, destLng].some(v => v == null || isNaN(v))) { showToast('Titik tujuan tidak ada koordinat', 'red'); return; }
+  const open = (origin) => {
+    const url = 'https://www.google.com/maps/dir/?api=1'
+      + (origin ? '&origin=' + origin : '')
+      + '&destination=' + destLat + ',' + destLng
+      + '&travelmode=driving';
+    window.open(url, '_blank');
+  };
+  if (!navigator.geolocation) { open(null); return; } // langsung ke Maps, biar Maps yang deteksi lokasi
+  showToast('Mendeteksi lokasi kamu...', 'green');
+  let settled = false;
+  const safety = setTimeout(() => {
+    if (settled) return; settled = true;
+    showToast('Dibuka di Google Maps — pakai lokasimu di sana ya', 'green');
+    open(null);
+  }, 16000);
   navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const cLat = pos.coords.latitude, cLng = pos.coords.longitude;
-      const url = 'https://www.google.com/maps/dir/?api=1'
-        + '&origin=' + cLat + ',' + cLng
-        + '&destination=' + mLat + ',' + mLng
-        + '&travelmode=driving';
-      window.open(url, '_blank');
-    },
-    () => { showToast('Lokasi belum aktif — aktifkan izin lokasi dulu ya', 'red'); },
+    (pos) => { if (settled) return; settled = true; clearTimeout(safety); open(pos.coords.latitude + ',' + pos.coords.longitude); },
+    () => { if (settled) return; settled = true; clearTimeout(safety); showToast('Pakai lokasi dari Google Maps ya', 'green'); open(null); },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
   );
 };
+
+// Alamat Mat'am diklik → navigasi kurir → alamat mat'am (pakai helper robust di atas).
+window._yfNavigateToMatam = function(mLat, mLng) { window._openNavToGoogleMaps(mLat, mLng); };
 
 // Waktu relatif sederhana untuk kartu pesanan Dashboard Kurir ("1 menit lalu", "5 menit lalu", "1 hari lalu")
 // — murni tampilan, dihitung dari food_orders.created_at yang sudah ada, tidak menyentuh data apapun.
@@ -24679,7 +24691,10 @@ async function _kurirLoadWaitingRoom() {
   const box = document.getElementById('kurirWaitingRoomList');
   box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
   try {
-    const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir&select=*&order=created_at.desc');
+    // Kecualikan order milik sendiri: kurir tidak boleh melihat/mengambil pesanan makanannya sendiri.
+    const _uid = window._S?.user?.uid;
+    const _exclSelf = _uid ? '&buyer_id=neq.' + encodeURIComponent(_uid) : '';
+    const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir' + _exclSelf + '&select=*&order=created_at.desc');
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan menunggu kurir.</p>'; return; }
     const _shopLocs = await _yfFetchShopLocs(rows.map(o => o.seller_id)); // lokasi mat'am utk blok Alamat Mat'am
@@ -25586,7 +25601,9 @@ async function _yfOrderQueueRefreshBadge() {
     const pr = await window._supaFetch(`/rest/v1/courier_profiles?uid=eq.${encodeURIComponent(user.uid)}&select=status&limit=1`);
     const prow = pr.ok ? await pr.json() : [];
     if (prow[0]?.status !== 'active') { badges.forEach(b => { b.style.display = 'none'; }); return; }
-    const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir&select=created_at');
+    // Kecualikan order milik sendiri: kurir yang juga PEMBELI tidak boleh dapat badge
+    // "order baru" dari pesanan makanannya sendiri.
+    const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir&buyer_id=neq.' + encodeURIComponent(user.uid) + '&select=created_at');
     const rows = r.ok ? await r.json() : [];
     const lastSeen = _yfOrderQueueGetLastSeen();
     const count = rows.filter(o => new Date(o.created_at).getTime() > lastSeen).length;
@@ -27674,7 +27691,9 @@ async function _ykOrderBadgeRefresh() {
   const badges = _ykOrderBadgeEls(); if (!badges.length) return;
   if (!window._ykIsActiveCourier || !window._S?.user?.uid) { badges.forEach(b => { b.style.display = 'none'; }); return; }
   try {
-    const r = await window._supaFetch('/rest/v1/yallakurir_orders?status=eq.mencari_kurir&select=created_at');
+    // Kecualikan order milik sendiri: kurir yang juga jadi PENGIRIM tidak boleh dapat
+    // badge "order baru" dari order kirim-barang-nya sendiri.
+    const r = await window._supaFetch('/rest/v1/yallakurir_orders?status=eq.mencari_kurir&sender_id=neq.' + encodeURIComponent(window._S.user.uid) + '&select=created_at');
     const rows = r.ok ? await r.json() : [];
     const lastSeen = _ykOrderBadgeGetLastSeen();
     const count = rows.filter(o => new Date(o.created_at).getTime() > lastSeen).length;
@@ -27743,7 +27762,10 @@ async function _ykLoadWaitingRoom() {
   if (!box) return;
   box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
   try {
-    const r = await window._supaFetch('/rest/v1/yallakurir_orders?status=eq.mencari_kurir&select=*&order=created_at.desc');
+    // Kecualikan order milik sendiri: kurir tidak boleh melihat/mengambil order kirim-barang-nya sendiri.
+    const _uid = window._S?.user?.uid;
+    const _exclSelf = _uid ? '&sender_id=neq.' + encodeURIComponent(_uid) : '';
+    const r = await window._supaFetch('/rest/v1/yallakurir_orders?status=eq.mencari_kurir' + _exclSelf + '&select=*&order=created_at.desc');
     const rows = r.ok ? await r.json() : [];
     // simpan order by-id → tombol rute cukup kirim id (hindari escaping alamat di onclick)
     window._ykWaitingById = {}; rows.forEach(o => { window._ykWaitingById[o.id] = o; });
@@ -27840,7 +27862,6 @@ async function _ykLoadMyDeliveries() {
           </button>` : ''}
         </div>
         <p class="text-xs font-semibold mb-2"><span style="color:#111827">Ongkir:</span> <span class="text-primary">${o.ongkir != null ? _yfFmtPrice(o.ongkir) : '-'}</span>${o.distance_km ? ` <span class="text-[11px] text-gray-400 font-medium">&middot; ${Number(o.distance_km).toFixed(1)} km</span>` : ''}</p>
-        ${o.status === 'diambil' ? `<div style="width:100%;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;padding:7px;font-size:10.5px;font-weight:700;border:1px solid #dbeafe;background:#eff6ff;color:#2563EB"><i class="fa-solid fa-satellite-dish"></i>Lokasimu dibagikan otomatis ke pengirim</div>` : ''}
         <div style="display:flex;gap:8px">
           <button onclick="_ykChatFromMine('${o.id}')" style="position:relative" class="flex-1 text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Pengirim${_yfBtnBadge(unreadMap[o.id] || 0)}</button>
           ${o.status === 'diambil' ? `<button onclick="ykKurirCompleteOrder('${o.id}')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Tandai Selesai</button>` : ''}
@@ -27936,28 +27957,14 @@ window._ykOpenGoogleMaps = function(orderId) {
 
 // Tombol "Jemput": minta izin lokasi kurir → begitu lokasi aktif, buka Google Maps
 // dengan rute POSISI KURIR SEKARANG → TITIK JEMPUT (A). Beda dari _ykOpenGoogleMaps
-// (yang A→B): origin di sini = GPS kurir realtime, tujuan = titik jemput pengirim.
-// Kalau izin lokasi ditolak/gagal, TIDAK dibuka ke Maps (origin akan ngawur) —
-// cukup ingatkan kurir mengaktifkan lokasi.
+// (yang A→B): tujuan di sini = titik jemput pengirim; origin = GPS kurir (kalau gagal,
+// helper _openNavToGoogleMaps tetap buka Maps tanpa origin — tidak dead-end, pola YallaFood).
 window._ykNavigateToPickup = function(orderId) {
   const o = (window._ykWaitingById || {})[orderId] || (window._ykMineById || {})[orderId];
   if (!o) { showToast('Data pesanan tidak ditemukan', 'red'); return; }
   const fLat = +o.from_lat, fLng = +o.from_lng;
   if ([fLat, fLng].some(v => v == null || isNaN(v))) { showToast('Titik jemput tidak ada koordinat', 'red'); return; }
-  if (!navigator.geolocation) { showToast('Perangkat tidak mendukung lokasi', 'red'); return; }
-  showToast('Mengaktifkan lokasi kamu...', 'green');
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const cLat = pos.coords.latitude, cLng = pos.coords.longitude;
-      const url = 'https://www.google.com/maps/dir/?api=1'
-        + '&origin=' + cLat + ',' + cLng
-        + '&destination=' + fLat + ',' + fLng
-        + '&travelmode=driving';
-      window.open(url, '_blank');
-    },
-    () => { showToast('Lokasi belum aktif — aktifkan izin lokasi dulu ya', 'red'); },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  );
+  window._openNavToGoogleMaps(fLat, fLng);
 };
 // ── Titik kurir HIDUP di peta rute in-app ──────────────────────────────────
 // Hemat bandwidth by design:
