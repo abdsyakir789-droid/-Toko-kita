@@ -4141,7 +4141,7 @@ h3.text-sm.font-bold.text-gray-800 {
 
         <!-- Nomor HP/WA + Kirim OTP -->
         <div>
-          <label class="auth-label">Nomor HP / WhatsApp</label>
+          <label class="auth-label">Nomor HP / WhatsApp <span style="font-weight:400;color:#9ca3af;font-size:11px">(opsional)</span></label>
           <div class="flex items-center gap-3">
             <div class="relative flex-1">
               <input id="loginWaPhone" type="tel" placeholder="20xxxxxxxxxx"
@@ -4227,19 +4227,22 @@ h3.text-sm.font-bold.text-gray-800 {
                 class="auth-inp inp" style="padding-left:42px"/>
               <i class="fa-brands fa-whatsapp absolute left-3.5 top-1/2 -translate-y-1/2 text-green-500 text-sm pointer-events-none"></i>
             </div>
+            <!-- SEMBUNYIKAN SEMENTARA sampai Meta Business aktif — cukup hapus style display:none
+                 (di sini & di blok "Kode OTP WhatsApp" di bawah) untuk menampilkan lagi. Fungsi sendRegOtpWa() TIDAK diubah. -->
             <button id="regOtpWaBtn" type="button" onclick="sendRegOtpWa()"
-              class="auth-otp-btn auth-otp-btn-wa">
+              class="auth-otp-btn auth-otp-btn-wa" style="display:none">
               <i class="fa-brands fa-whatsapp mr-1.5 text-green-600"></i> Kirim OTP
             </button>
           </div>
-          <p class="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1">
+          <!-- Keterangan disembunyikan sementara (bareng WA OTP) — hapus style display:none untuk menampilkan lagi -->
+          <p class="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1" style="display:none">
             <i class="fa-solid fa-circle-info text-gray-300"></i>
-            Nomor WA aktif di Mesir 🇪🇬 — OTP dikirim via WhatsApp
+            Nomor WhatsApp aktif di Mesir 🇪🇬
           </p>
         </div>
 
-        <!-- 5. Kode OTP WhatsApp -->
-        <div>
+        <!-- 5. Kode OTP WhatsApp — SEMBUNYIKAN SEMENTARA sampai Meta Business aktif (hapus style display:none untuk menampilkan lagi) -->
+        <div style="display:none">
           <label class="auth-label">Kode OTP WhatsApp</label>
           <div class="relative">
             <input id="regOtpWa" type="text" inputmode="numeric" maxlength="6" placeholder="· · · · · ·"
@@ -24164,6 +24167,9 @@ window.yfCancelFoodOrder = async function(orderId) {
       method: 'POST', prefer: 'return=minimal',
       body: JSON.stringify({ food_order_id: orderId, event: 'cancelled_by_buyer', actor_uid: user.uid })
     }).catch(() => {});
+    // Beri tahu kurir yang sedang melihat pool bahwa order INI dibatalkan (bukan diambil).
+    // Kurir tak bisa baca order dibatalkan (RLS), jadi lewat broadcast berisi id-nya.
+    _yfBroadcastOrderCancelled(orderId);
     showToast('Pesanan dibatalkan', 'green');
     await _yfLoadTracking();
   } catch (e) {
@@ -24617,7 +24623,8 @@ async function _kurirLoadWaitingRoom() {
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan menunggu kurir.</p>'; return; }
     box.innerHTML = rows.map(o => `
-      <div class="bg-white rounded-2xl p-3 border border-gray-100">
+      <div class="bg-white rounded-2xl p-3 border border-gray-100" data-order-id="${o.id}" style="position:relative">
+        ${(window._yfCancelledOrderIds && window._yfCancelledOrderIds.has(o.id)) ? '<span class="yf-cancel-badge" style="position:absolute;top:8px;right:8px;background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;z-index:2">Dibatalkan</span>' : ''}
         <div class="flex items-center gap-1.5 mb-2 min-w-0">
           <i class="fa-solid fa-store" style="font-size:12px;line-height:1;color:#111827;flex-shrink:0"></i>
           <p class="text-xs font-semibold lc1" style="color:#111827;line-height:1${o.seller_id ? ';cursor:pointer' : ''}"${o.seller_id ? ` onclick="closeKurirDashboard();viewSellerStore('${o.seller_id}')"` : ''}>${o.seller_name || ''}</p>
@@ -24718,7 +24725,17 @@ window.yfKurirClaimOrder = async function(orderId) {
       body: JSON.stringify({ courier_id: user.uid, courier_name: user.name || '', status: 'diterima', updated_at: new Date().toISOString() })
     });
     const updated = res.ok ? await res.json() : [];
-    if (!updated.length) { showToast('Pesanan sudah diambil kurir lain', 'red'); await _kurirLoadWaitingRoom(); return; }
+    if (!updated.length) {
+      // 0 baris = order sudah keluar dari 'menunggu_kurir'. Bedakan: dibatalkan buyer
+      // (kita tahu dari broadcast → _yfCancelledOrderIds) vs diambil kurir lain.
+      if (window._yfCancelledOrderIds && window._yfCancelledOrderIds.has(orderId)) {
+        showToast('Pesanan telah dibatalkan oleh buyer', 'red');
+      } else {
+        showToast('Pesanan sudah diambil kurir lain', 'red');
+      }
+      await _kurirLoadWaitingRoom();
+      return;
+    }
     window._supaFetch('/rest/v1/food_order_logs', {
       method: 'POST', prefer: 'return=minimal',
       body: JSON.stringify({ food_order_id: orderId, event: 'courier_claimed', actor_uid: user.uid, meta: { courier_name: user.name || '' } })
@@ -25569,12 +25586,34 @@ function _yfSellerInboxSubscribeGlobal() {
 // postgres_changes, cuma pelengkap utk celah spesifik ini.
 // ============================================================
 let _yfOrderPoolBroadcastChannel = null;
+// Id order yang dibatalkan buyer (diketahui via broadcast) — dipakai untuk badge kartu
+// & pesan toast yang benar saat kurir klik "Ambil Pesanan".
+window._yfCancelledOrderIds = window._yfCancelledOrderIds || new Set();
+// Tandai kartu waiting room sebagai "Dibatalkan" (pojok kanan atas) tanpa menghapusnya.
+function _kurirMarkCardCancelled(orderId) {
+  const card = document.querySelector('#kurirWaitingRoomList [data-order-id="' + orderId + '"]');
+  if (!card || card.querySelector('.yf-cancel-badge')) return;
+  card.style.position = 'relative';
+  const badge = document.createElement('span');
+  badge.className = 'yf-cancel-badge';
+  badge.textContent = 'Dibatalkan';
+  badge.style.cssText = 'position:absolute;top:8px;right:8px;background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;z-index:2';
+  card.appendChild(badge);
+}
 function _yfOrderPoolBroadcastSubscribe() {
   const uid = window._S?.user?.uid;
   if (!uid || !window.supabase) return;
   if (_yfOrderPoolBroadcastChannel) { try { window.supabase.removeChannel(_yfOrderPoolBroadcastChannel); } catch (e) {} }
   _yfOrderPoolBroadcastChannel = window.supabase.channel('food_orders_pool_broadcast', { config: { broadcast: { self: false } } })
-    .on('broadcast', { event: 'pool_changed' }, () => {
+    .on('broadcast', { event: 'pool_changed' }, (msg) => {
+      const cancelledId = msg && msg.payload && msg.payload.cancelledId;
+      if (cancelledId) {
+        // Order dibatalkan buyer → tandai kartu "Dibatalkan" (tidak dihapus/di-reload)
+        window._yfCancelledOrderIds.add(cancelledId);
+        _kurirMarkCardCancelled(cancelledId);
+        _yfOrderQueueRefreshBadge();
+        return;
+      }
       _yfOrderQueueRefreshBadge();
       const dash = document.getElementById('kurirDashboard');
       if (dash && dash.style.display === 'flex') _kurirLoadWaitingRoom();
@@ -25585,6 +25624,19 @@ function _yfOrderPoolBroadcastSubscribe() {
 }
 function _yfOrderPoolBroadcastNotify() {
   try { _yfOrderPoolBroadcastChannel?.send({ type: 'broadcast', event: 'pool_changed', payload: {} }); } catch (e) {}
+}
+// Dipanggil dari sisi BUYER (yang belum tentu subscribe channel pool) → kirim broadcast
+// berisi id order yang dibatalkan lewat channel sekali-pakai.
+function _yfBroadcastOrderCancelled(orderId) {
+  try {
+    const ch = window.supabase.channel('food_orders_pool_broadcast');
+    ch.subscribe((st) => {
+      if (st === 'SUBSCRIBED') {
+        try { ch.send({ type: 'broadcast', event: 'pool_changed', payload: { cancelledId: orderId } }); } catch (e) {}
+        setTimeout(() => { try { window.supabase.removeChannel(ch); } catch (e) {} }, 1500);
+      }
+    });
+  } catch (e) {}
 }
 
 // ============================================================
