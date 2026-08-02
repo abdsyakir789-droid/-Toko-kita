@@ -23031,7 +23031,7 @@ window.closeKelolaToko = function() {
   <div class="bg-white w-full rounded-t-3xl p-5" style="max-width:480px">
     <h3 class="font-bold text-base mb-3">Konfirmasi Pesanan</h3>
     <div id="yfOrderSummaryBody" class="text-sm text-gray-700" style="display:flex;flex-direction:column;gap:6px"></div>
-    <button onclick="yfSubmitFoodOrder()" class="w-full bg-primary text-white font-bold rounded-2xl py-3 mt-4">Konfirmasi Pesanan (COD)</button>
+    <button id="yfOrderSubmitBtn" onclick="yfSubmitFoodOrder()" class="w-full bg-primary text-white font-bold rounded-2xl py-3 mt-4">Konfirmasi Pesanan (COD)</button>
     <button onclick="yfCloseOrderSummary()" class="w-full text-gray-500 font-semibold rounded-2xl py-2 mt-1">Batal</button>
   </div>
 </div>
@@ -23225,9 +23225,14 @@ function _yfBuyerAddressBlock(o) {
   const hasLoc = o.buyer_lat != null && o.buyer_lng != null;
   const mapAttr = hasLoc ? `onclick="window.open('https://www.google.com/maps?q=${o.buyer_lat},${o.buyer_lng}','_blank')" style="display:flex;align-items:flex-start;gap:6px;cursor:pointer"` : `style="display:flex;align-items:flex-start;gap:6px"`;
   const color = hasLoc ? '#059669' : '#111827';
+  // Nama pembeli diklik → tutup dasbor kurir lalu buka detail profil pembeli
+  // (viewSellerStore ambil profil dari tabel users, cocok utk pembeli). WARNA
+  // teks TIDAK diubah (tetap #111827, inherit dari <p>), cuma jadi bisa diklik.
+  const _bid = o.buyer_id || '';
+  const nameClickAttr = _bid ? ` onclick="closeKurirDashboard();viewSellerStore('${_bid}')" style="cursor:pointer;touch-action:manipulation"` : '';
   return `
         <div style="background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
-          <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0 0 4px;word-break:break-word">Nama Pembeli: ${_sadEscHtml(o.buyer_name || '')}</p>
+          <p style="font-size:12px;font-weight:600;color:#111827;line-height:1.5;margin:0 0 4px;word-break:break-word">Nama Pembeli: <span${nameClickAttr}>${_sadEscHtml(o.buyer_name || '')}</span></p>
           <div ${mapAttr}>
             <i class="fa-solid fa-location-dot" style="color:${color};font-size:13px;margin-top:2px;flex-shrink:0"></i>
             <p style="font-size:12px;font-weight:600;color:${color};line-height:1.5;margin:0;word-break:break-word;min-width:0">Alamat Pembeli: ${_sadEscHtml(o.buyer_address)}</p>
@@ -24072,6 +24077,17 @@ window.yfCloseOrderSummary = function() {
 };
 
 window.yfSubmitFoodOrder = async function() {
+  // ── Anti double-submit ──────────────────────────────────────────────────
+  // Kalau jaringan lambat lalu user menekan "Konfirmasi Pesanan" berkali-kali,
+  // hanya tekanan PERTAMA yang diproses; sisanya diabaikan → order tetap 1×.
+  // Flag di-set SINKRON (sebelum await apa pun) supaya tak ada celah balapan;
+  // dilepas di SEMUA jalur lewat finally (sukses/gagal/return awal).
+  if (window._yfOrderSubmitting) return;
+  window._yfOrderSubmitting = true;
+  const _yfSubmitBtn = document.getElementById('yfOrderSubmitBtn');
+  const _yfSubmitBtnLabel = _yfSubmitBtn ? _yfSubmitBtn.textContent : '';
+  if (_yfSubmitBtn) { _yfSubmitBtn.disabled = true; _yfSubmitBtn.style.opacity = '0.6'; _yfSubmitBtn.style.pointerEvents = 'none'; _yfSubmitBtn.textContent = 'Memproses...'; }
+  try {
   if(await window._guardBlocked()) return;
   const p = window._yfState.pendingOrder;
   const user = window._S?.user;
@@ -24127,6 +24143,10 @@ window.yfSubmitFoodOrder = async function() {
     openFoodOrderTracking();
   } catch (e) {
     showToast('Gagal membuat pesanan: ' + e.message, 'red');
+  }
+  } finally {
+    window._yfOrderSubmitting = false;
+    if (_yfSubmitBtn) { _yfSubmitBtn.disabled = false; _yfSubmitBtn.style.opacity = ''; _yfSubmitBtn.style.pointerEvents = ''; _yfSubmitBtn.textContent = _yfSubmitBtnLabel || 'Konfirmasi Pesanan (COD)'; }
   }
 };
 
@@ -24317,9 +24337,11 @@ window.yfCancelFoodOrder = async function(orderId) {
 // ── Detail Profil Kurir (dibuka dari klik nama/foto kurir di Pesanan Saya) ──
 // Fokus layout & navigasi saja — tombol Chat masih murni visual, belum
 // disambungkan ke fungsi apapun sesuai batasan tugas ini.
-window._yfOpenKurirProfile = async function(kurirId, orderId, courierName) {
+window._yfOpenKurirProfile = async function(kurirId, orderId, courierName, chatThread) {
   if (!kurirId) return;
-  window._yfKurirProfileCtx = { orderId: orderId || null, courierName: courierName || 'Kurir' };
+  // chatThread menentukan thread chat tombol "Chat" di sheet: 'buyer_kurir' (default,
+  // dipanggil dari sisi buyer) atau 'kurir_seller' (dipanggil dari sisi seller).
+  window._yfKurirProfileCtx = { orderId: orderId || null, courierName: courierName || 'Kurir', chatThread: chatThread || 'buyer_kurir' };
   const sheet = document.getElementById('yfKurirProfileSheet');
   const inner = document.getElementById('yfKurirProfileSheetInner');
   sheet.style.display = 'flex';
@@ -24366,7 +24388,7 @@ window._yfOpenKurirProfileChat = function() {
   window._yfCloseKurirProfile();
   // Tunggu animasi tutup sheet (300ms) kelar dulu baru buka chat, supaya
   // tidak tabrakan z-index dengan sheet profil yang masih tampil.
-  setTimeout(() => { window.openYfChat(ctx.orderId, 'buyer_kurir', ctx.courierName); }, 300);
+  setTimeout(() => { window.openYfChat(ctx.orderId, ctx.chatThread || 'buyer_kurir', ctx.courierName); }, 300);
 };
 window._yfCloseKurirProfile = function() {
   const sheet = document.getElementById('yfKurirProfileSheet');
@@ -24494,7 +24516,7 @@ async function _yfLoadKelolaPesanan() {
           </div>
           <div class="flex flex-col items-end gap-1 flex-shrink-0">
             <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary" style="white-space:nowrap">${_YF_STATUS_LABEL[o.status] || o.status}</span>
-            ${o.courier_name ? `<span class="text-[10px] font-bold text-gray-900" style="white-space:nowrap">Kurir: ${o.courier_name}</span>` : ''}
+            ${o.courier_name ? `<span class="text-[10px] font-bold text-gray-900" style="white-space:nowrap">Kurir: <span${o.courier_id ? ` onclick="_yfOpenKurirProfile('${o.courier_id}','${o.id}','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}','kurir_seller')" style="cursor:pointer;touch-action:manipulation"` : ''}>${o.courier_name}</span></span>` : ''}
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:flex-end">
@@ -24543,7 +24565,12 @@ window.yfAdvanceOrderStatus = async function(orderId, newStatus) {
         method: 'POST', prefer: 'return=minimal',
         body: JSON.stringify([{
           to_uid: order.buyer_id, user_id: order.buyer_id, type: 'yallafood_status',
-          message: buyerMsg, sender_name: order.seller_name || window._S?.user?.name || 'Sistem YallaFood', is_read: false, created_at: new Date().toISOString()
+          message: buyerMsg, sender_name: order.seller_name || window._S?.user?.name || 'Sistem YallaFood',
+          // sender_uid = penjual (mat'am) → notif tampilkan foto/ikon orang penjual (bukan lonceng)
+          // & nama bisa diklik ke etalase penjual. sender_photo kosong: render backfill foto penjual
+          // by uid (status bisa di-advance kurir, jadi jangan pakai foto user yang menekan).
+          sender_uid: order.seller_id || null, sender_photo: '',
+          is_read: false, created_at: new Date().toISOString()
         }])
       }).catch(() => {});
     }
