@@ -9504,6 +9504,9 @@ window._sendWarning = async function(adId, sellerUid, encTitle) {
       })
     });
     if(!res.ok) throw new Error('Gagal kirim (' + res.status + ')');
+    // Push notification ke HP pemilik iklan (muncul di layar walau app ditutup) — fire-and-forget,
+    // kalau gagal, peringatan in-app di atas tetap dianggap sukses.
+    if(window.sendPushToUser) window.sendPushToUser(sellerUid, '⚠️ Peringatan YallaMart', 'Iklan "' + adTitle + '": ' + reason, '/').catch(function(){});
     showToast('✅ Peringatan terkirim ke pemilik iklan', 'green');
     _closeWarnModal();
   } catch(e) {
@@ -10447,18 +10450,18 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
                 <p style="font-size:10px;font-weight:700;color:#9ca3af;margin-bottom:2px">Update Status Pesanan:</p>
                 <div style="display:flex;flex-direction:column;gap:6px">
                   <div style="display:flex;gap:6px;justify-content:space-between">
-                    <button id="obtn-diproses-${m.id}" ${m.status?'disabled':''} onclick="updateOrderStatus('diproses','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='diproses'||m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='diproses'||m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='diproses'||m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status?'not-allowed':'pointer'};opacity:${m.status?'0.5':'1'}">
+                    <button id="obtn-diproses-${m.id}" ${m.status?'disabled':''} onclick="updateOrderStatus('diproses','${window._S.activeChatId||''}','${orderData.buyerUid||window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='diproses'||m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='diproses'||m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='diproses'||m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status?'not-allowed':'pointer'};opacity:${m.status?'0.5':'1'}">
                       <i class="fa-solid fa-box-open" style="font-size:10px"></i> Diproses
                     </button>
-                    <button id="obtn-diantar-${m.id}" ${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'disabled':''} onclick="updateOrderStatus('diantar','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'0.5':'1'}">
+                    <button id="obtn-diantar-${m.id}" ${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'disabled':''} onclick="updateOrderStatus('diantar','${window._S.activeChatId||''}','${orderData.buyerUid||window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='diantar'||m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'0.5':'1'}">
                       <i class="fa-solid fa-truck" style="font-size:10px"></i> Diantar
                     </button>
-                    <button id="obtn-sampai-${m.id}" ${m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'disabled':''} onclick="updateOrderStatus('sampai','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'0.5':'1'}">
+                    <button id="obtn-sampai-${m.id}" ${m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'disabled':''} onclick="updateOrderStatus('sampai','${window._S.activeChatId||''}','${orderData.buyerUid||window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border-radius:20px;border:1.5px solid ${m.status==='sampai'||m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='sampai'||m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='sampai'||m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='sampai'||m.status==='selesai'||m.status==='dibatalkan'?'0.5':'1'}">
                       <i class="fa-solid fa-location-dot" style="font-size:10px"></i> Sampai
                     </button>
                   </div>
                   <div style="display:flex;gap:6px;justify-content:center">
-                    <button id="obtn-selesai-${m.id}" ${m.status==='selesai'||m.status==='dibatalkan'?'disabled':''} onclick="updateOrderStatus('selesai','${window._S.activeChatId||''}','${window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 32px;border-radius:20px;border:1.5px solid ${m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='selesai'||m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='selesai'||m.status==='dibatalkan'?'0.5':'1'}">
+                    <button id="obtn-selesai-${m.id}" ${m.status==='selesai'||m.status==='dibatalkan'?'disabled':''} onclick="updateOrderStatus('selesai','${window._S.activeChatId||''}','${orderData.buyerUid||window._S.activeChatBuyerId||''}','${m.id||''}','${orderData.sellerUid||''}')" style="display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 32px;border-radius:20px;border:1.5px solid ${m.status==='selesai'?'#2563EB':'#9ca3af'};background:${m.status==='selesai'?'#2563EB':'#f3f4f6'};color:${m.status==='selesai'?'#fff':'#374151'};font-size:11px;font-weight:700;cursor:${m.status==='selesai'||m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='selesai'||m.status==='dibatalkan'?'0.5':'1'}">
                       <i class="fa-solid fa-circle-check" style="font-size:10px"></i> Selesai
                     </button>
                     <button id="obtn-alamat-${m.id}" ${m.status==='dibatalkan'?'disabled':''} onclick="openBuyerAddress('${orderData.buyerUid||window._S.activeChatBuyerId||''}','${orderData.sellerUid||''}')" style="display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 18px;border-radius:20px;border:1.5px solid #9ca3af;background:#f3f4f6;color:#374151;font-size:11px;font-weight:700;cursor:${m.status==='dibatalkan'?'not-allowed':'pointer'};opacity:${m.status==='dibatalkan'?'0.5':'1'}">
@@ -15972,11 +15975,53 @@ function _uadEscHtml(str) {
 }
 
 function _uadStatusBadge(uid) {
-  const status = window._usersAdminStatusOverride[uid] || 'active';
-  return status === 'active'
-    ? `<button type="button" class="uad-badge uad-badge-active" onclick="toggleUserStatusPlaceholder('${uid}')"><i class="fa-solid fa-circle-check"></i> Aktif</button>`
-    : `<button type="button" class="uad-badge uad-badge-inactive" onclick="toggleUserStatusPlaceholder('${uid}')"><i class="fa-solid fa-circle-xmark"></i> Non-Aktif</button>`;
+  const u = (window._usersAdminData || []).find(x => x.uid === uid);
+  const blocked = !!(u && u.is_blocked);
+  const badge = blocked
+    ? `<span class="uad-badge uad-badge-inactive"><i class="fa-solid fa-ban"></i> Diblokir</span>`
+    : `<span class="uad-badge uad-badge-active"><i class="fa-solid fa-circle-check"></i> Aktif</span>`;
+  const btn = blocked
+    ? `<button type="button" onclick="toggleUserBlock('${uid}',true)" style="flex-shrink:0;font-size:11px;font-weight:700;color:#059669;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:4px 10px;cursor:pointer;white-space:nowrap"><i class="fa-solid fa-lock-open mr-1"></i>Buka Blokir</button>`
+    : `<button type="button" onclick="toggleUserBlock('${uid}',false)" style="flex-shrink:0;font-size:11px;font-weight:700;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:4px 10px;cursor:pointer;white-space:nowrap"><i class="fa-solid fa-ban mr-1"></i>Blokir</button>`;
+  return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${badge}${btn}</div>`;
 }
+
+// Blokir/buka-blokir AKUN dari daftar user (admin). Set users.is_blocked — inilah yang
+// ditegakkan RLS "beku total": user terblokir tak bisa transaksi (iklan, order YallaMart/
+// Food/Kurir) maupun aksi kurir (klaim). Reversible: buka blokir → is_blocked=false → normal.
+window.toggleUserBlock = async function(uid, currentlyBlocked) {
+  const admin = window._S?.user;
+  if (!admin || !isAdmin(admin.email)) { showToast('Akses ditolak', 'red'); return; }
+  const willBlock = !currentlyBlocked;
+  const msg = willBlock
+    ? 'Blokir akun ini?\n\nPemilik TIDAK akan bisa bertransaksi (YallaMart, YallaFood, YallaKurir) maupun bekerja sebagai kurir, sampai blokir dibuka.'
+    : 'Buka blokir akun ini?\n\nPemilik bisa kembali bertransaksi normal.';
+  if (!confirm(msg)) return;
+  try {
+    const r = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(uid), {
+      method: 'PATCH', prefer: 'return=representation',
+      body: JSON.stringify({ is_blocked: willBlock })
+    });
+    const rows = r.ok ? await r.json().catch(() => []) : [];
+    if (!r.ok || !rows.length) throw new Error('perubahan tidak tersimpan (izin ditolak / 0 baris)');
+    // Kopling: aktif/nonaktifkan toko user ini juga (kalau punya) — samakan dgn Dashboard Toko Baru.
+    window._supaFetch('/rest/v1/shops?user_id=eq.' + encodeURIComponent(uid), {
+      method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ is_active: !willBlock })
+    }).catch(function() {});
+    // Update data lokal + re-render badge (tabel & kartu).
+    const u = (window._usersAdminData || []).find(x => x.uid === uid);
+    if (u) u.is_blocked = willBlock;
+    if (window._S?.user?.uid === uid) window._S.user.is_blocked = willBlock;
+    const cell = document.getElementById('uadStatusCell-' + uid);
+    const cardCell = document.getElementById('uadStatusCardCell-' + uid);
+    if (cell) cell.innerHTML = _uadStatusBadge(uid);
+    if (cardCell) cardCell.innerHTML = _uadStatusBadge(uid);
+    showToast(willBlock ? '🚫 Akun diblokir (beku total)' : '✅ Akun diaktifkan kembali', willBlock ? 'red' : 'green');
+  } catch (e) {
+    showToast('Gagal ubah status blokir: ' + (e.message || e), 'red');
+  }
+};
 
 window.openUsersAdminDashboard = async function() {
   const u = window._S?.user;
@@ -16023,7 +16068,7 @@ async function loadUsersAdminData() {
   if (countEl) countEl.textContent = 'Memuat...';
 
   try {
-    const res = await window._supaFetch('/rest/v1/users?select=uid,name,email,address,created_at&order=created_at.desc');
+    const res = await window._supaFetch('/rest/v1/users?select=uid,name,email,address,created_at,is_blocked&order=created_at.desc');
     if (!res.ok) throw new Error(await res.text());
     const users = await res.json();
     window._usersAdminData = users;
@@ -17184,7 +17229,6 @@ document.getElementById('editIsYallaFood')?.addEventListener('change', function(
       <textarea id="ycChatInput" placeholder="Ketik pesan..." rows="1"
         style="flex:1;border:1.5px solid #e5e7eb;border-radius:18px;padding:9px 16px;font-size:13px;outline:none;background:#f9fafb;resize:none;max-height:110px;overflow-y:auto;line-height:1.4;font-family:inherit"
         oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,110)+'px';"
-        onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();ycSendChat();}"
         onfocus="document.getElementById('ycChatInputBar').style.paddingBottom='10px'"
         onblur="document.getElementById('ycChatInputBar').style.paddingBottom='calc(10px + env(safe-area-inset-bottom))'"></textarea>
       <button onclick="ycSendChat()" style="flex-shrink:0;width:38px;height:38px;border-radius:50%;background:linear-gradient(to right,#10B981,#0d9488);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center">
@@ -23910,6 +23954,10 @@ window.yfConfirmVariantAndProceed = function() {
 window.yfStartOrder = function() {
   const ad = window._yfState.current;
   if (!ad || !window._yfState.currentOpen) return;
+  // Cegah pesan iklan sendiri (penjual = pembeli) — tampilkan toast, hentikan alur order.
+  const _myUid = window._S?.user?.uid;
+  const _adSeller = ad.seller_uid || ad.sellerUid;
+  if (_myUid && _adSeller && _adSeller === _myUid) { showToast('Ini iklan kamu sendiri — tidak bisa memesan sendiri', 'red'); return; }
   const variants = window._yfState.currentVariants || [];
   if (variants.length > 0) { _yfOpenVariantConfirmModal(); return; }
   _yfProceedToOrder();
