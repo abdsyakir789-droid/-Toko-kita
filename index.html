@@ -8338,12 +8338,8 @@ window.renderNotifFull = function(notifs) {
         if(found) resolvedAdId = found.id;
       }
 
-      // Status pill untuk notif pesanan — TIDAK untuk notif YallaKurir (label "Pesanan" dihilangkan)
-      const isOrderNotif = n.type !== 'yallakurir_order'
-        && (n.type === 'order_status' || (n.message||'').includes('pesanan'));
-      const statusPill = isOrderNotif
-        ? `<div style="flex-shrink:0;padding:5px 10px;border-radius:8px;border:1px solid #e5e7eb;font-size:11px;font-weight:600;color:#374151;white-space:nowrap">Pesanan</div>`
-        : '';
+      // Label "Pesanan" di pojok kanan (notif YallaFood & Status Pesanan) DIHILANGKAN —
+      // biar tampilan lebih bersih & teks utama + waktu punya ruang lebih lega.
 
       // Bangun teks: nama bold + pesan menyambung + waktu abu
       const senderNavAttr = n.senderUid
@@ -8394,10 +8390,7 @@ window.renderNotifFull = function(notifs) {
           ${middleContentHtml}
         </div>
         ${isFollowNotif ? `<div style="flex-shrink:0">${followBackBtnHtml}</div>` : ''}
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
-          ${statusPill}
-          ${isUnread ? `<div style="width:8px;height:8px;border-radius:50%;background:#10B981;flex-shrink:0"></div>` : ''}
-        </div>
+        ${isUnread ? `<div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0"><div style="width:8px;height:8px;border-radius:50%;background:#10B981;flex-shrink:0"></div></div>` : ''}
       </div>`;
     }).join('');
 
@@ -22375,15 +22368,18 @@ async function _loadRiwayatPenjualan() {
   try {
     // Riwayat gabungan: barang fisik (orders) + YallaFood (food_orders) — dua tabel
     // terpisah, di-fetch paralel lalu digabung jadi satu daftar riwayat penjualan.
-    const [res, foodRes] = await Promise.all([
+    const [res, foodRes, ledgerRes] = await Promise.all([
       window._supaFetch('/rest/v1/orders?seller_id=eq.' + uid + '&order=created_at.desc&limit=200&select=*'),
-      window._supaFetch('/rest/v1/food_orders?seller_id=eq.' + uid + '&order=created_at.desc&limit=200&select=*')
+      window._supaFetch('/rest/v1/food_orders?seller_id=eq.' + uid + '&order=created_at.desc&limit=200&select=*'),
+      // Buku besar pemasukan order YallaFood yang sudah DIHAPUS (agar income tetap utuh)
+      window._supaFetch('/rest/v1/food_sales_ledger?seller_id=eq.' + uid + '&order=order_created_at.desc&limit=500&select=*')
     ]);
     if (!res.ok) throw new Error(await res.text());
     const orders = await res.json();
     const foodOrders = foodRes.ok ? await foodRes.json() : [];
+    const ledger = ledgerRes.ok ? await ledgerRes.json() : [];
 
-    if ((!Array.isArray(orders) || orders.length === 0) && (!Array.isArray(foodOrders) || foodOrders.length === 0)) {
+    if ((!Array.isArray(orders) || orders.length === 0) && (!Array.isArray(foodOrders) || foodOrders.length === 0) && (!Array.isArray(ledger) || ledger.length === 0)) {
       body.innerHTML = '<div style="text-align:center;padding:40px 0;color:#9ca3af;font-size:13px">Belum ada transaksi masuk</div>';
       if (footer) footer.style.display = 'none';
       return;
@@ -22424,6 +22420,15 @@ async function _loadRiwayatPenjualan() {
         pembeli: o.buyer_name || 'Pembeli',
         total: o.total || 0,
         created_at: o.created_at
+      });
+    });
+    // Order YallaFood yang sudah dihapus permanen — income-nya tetap dari buku besar ledger.
+    (Array.isArray(ledger) ? ledger : []).forEach(l => {
+      rows.push({
+        terjual: l.ad_title || 'Menu YallaFood',
+        pembeli: l.buyer_name || 'Pembeli',
+        total: l.total || 0,
+        created_at: l.order_created_at || l.deleted_at
       });
     });
 
@@ -24114,7 +24119,17 @@ async function _yfLoadTracking() {
   box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat pesanan...</p>';
   try {
     const r = await window._supaFetch(`/rest/v1/food_orders?buyer_id=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc`);
-    const rows = r.ok ? await r.json() : [];
+    let rows = r.ok ? await r.json() : [];
+    // Sembunyikan pesanan yang sudah "dihapus" buyer dari Pesanan Saya-nya (server-side, permanen).
+    // Hanya menyaring tampilan buyer — food_orders & income penjual/kurir TIDAK disentuh.
+    try {
+      const hr = await window._supaFetch(`/rest/v1/buyer_hidden_food_orders?buyer_id=eq.${encodeURIComponent(uid)}&select=order_id`);
+      const hidden = hr.ok ? await hr.json() : [];
+      if (hidden.length) {
+        const hset = new Set(hidden.map(h => h.order_id));
+        rows = rows.filter(o => !hset.has(o.id));
+      }
+    } catch (e) {}
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood.</p>'; return; }
 
     // Badge unread PER TOMBOL 'Chat Kurir' — bukan agregat global.
@@ -24147,12 +24162,16 @@ async function _yfLoadTracking() {
     } catch (e) { console.warn('[YallaFood Tracking] gagal ambil foto kurir:', e.message); }
 
     box.innerHTML = rows.map(o => `
-      <div class="bg-white rounded-2xl p-3 border border-gray-100">
+      <div class="bg-white rounded-2xl p-3 border border-gray-100" style="position:relative">
+        <div id="yfBuyerOrderMenu-${o.id}" style="display:none;position:absolute;top:38px;right:10px;z-index:20;background:#fff;border:1px solid #f3f4f6;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;min-width:158px">
+          <button onclick="_yfBuyerHideOrder('${o.id}')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:600;color:#dc2626;background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash-can mr-1.5"></i>Hapus pesanan</button>
+        </div>
         <div class="flex items-center justify-between gap-1.5 mb-2 min-w-0">
           <div class="flex items-center gap-1.5 min-w-0">
             <i class="fa-solid fa-store" style="font-size:12px;line-height:1;color:#111827;flex-shrink:0"></i>
             <p class="text-xs font-semibold lc1" style="color:#111827;line-height:1">${o.seller_name || ''}</p>
           </div>
+          <div class="flex items-center gap-1.5 flex-shrink-0">
           ${o.status === 'menunggu_kurir' ? `
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
             <button onclick="yfCancelFoodOrder('${o.id}')" class="text-[10px] font-bold px-2 py-1 rounded-full bg-red-50 text-red-500" style="white-space:nowrap">Batalkan</button>
@@ -24164,6 +24183,8 @@ async function _yfLoadTracking() {
             ${o.courier_name ? `<span class="text-[10px] font-bold text-gray-900" style="white-space:nowrap">Kurir: ${o.courier_name}</span>` : ''}
           </div>
           ` : `<span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full flex-shrink-0 ${o.status === 'dibatalkan' ? 'bg-red-50 text-red-500' : 'bg-pl text-primary'}">${_YF_STATUS_LABEL[o.status] || o.status}</span>`}
+            <button onclick="_yfBuyerToggleOrderMenu(event,'${o.id}')" class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400" style="flex-shrink:0"><i class="fa-solid fa-ellipsis-vertical text-xs"></i></button>
+          </div>
         </div>
         <div class="flex gap-3">
           <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
@@ -24202,6 +24223,44 @@ async function _yfLoadTracking() {
 // Filter status=eq.menunggu_kurir di WHERE mencegah race condition dengan
 // kurir yang mengklaim di saat bersamaan (siapa lebih dulu commit, menang;
 // yang kalah dapat updated.length===0 dan tidak menggantung, cukup refresh).
+// ── Menu titik-3 pada kartu "Pesanan Saya" (sisi buyer YallaFood) ──
+// "Hapus" = sembunyikan kartu dari Pesanan Saya buyer saja (server-side, permanen).
+// TIDAK menghapus food_orders → penjual & kurir tetap punya kartunya, income aman.
+window._yfBuyerToggleOrderMenu = function(ev, id) {
+  if (ev) ev.stopPropagation();
+  const m = document.getElementById('yfBuyerOrderMenu-' + id);
+  if (!m) return;
+  const wasOpen = m.style.display === 'block';
+  document.querySelectorAll('[id^="yfBuyerOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+  m.style.display = wasOpen ? 'none' : 'block';
+};
+if (!window._yfBuyerOrderMenuClickAway) {
+  window._yfBuyerOrderMenuClickAway = true;
+  document.addEventListener('click', function(e) {
+    const t = e.target;
+    if (t.closest && (t.closest('[id^="yfBuyerOrderMenu-"]') || t.closest('button[onclick*="_yfBuyerToggleOrderMenu"]'))) return;
+    document.querySelectorAll('[id^="yfBuyerOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+  });
+}
+window._yfBuyerHideOrder = async function(orderId) {
+  if (!confirm('Hapus pesanan ini dari Pesanan Saya?\n\nKartu akan hilang permanen dari daftarmu. Data pesanan di sisi penjual & kurir TIDAK terpengaruh.')) return;
+  const uid = window._S?.user?.uid;
+  if (!uid) return;
+  try {
+    // Upsert (abaikan duplikat) supaya klik berulang aman, bukan error 409.
+    const res = await window._supaFetch('/rest/v1/buyer_hidden_food_orders?on_conflict=buyer_id,order_id', {
+      method: 'POST', prefer: 'resolution=ignore-duplicates,return=minimal',
+      body: JSON.stringify([{ buyer_id: uid, order_id: orderId }])
+    });
+    if (!res.ok) throw new Error('gagal (' + res.status + ')');
+    document.querySelectorAll('[id^="yfBuyerOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+    showToast('🗑️ Pesanan dihapus dari daftarmu', 'green');
+    _yfLoadTracking();
+  } catch (e) {
+    showToast('Gagal hapus: ' + (e.message || e), 'red');
+  }
+};
+
 window.yfCancelFoodOrder = async function(orderId) {
   const user = window._S?.user;
   if (!user?.uid) { showToast('Login dulu', 'red'); return; }
@@ -24363,6 +24422,7 @@ async function _yfLoadKelolaPesanan() {
     // status=neq.menunggu_kurir — seller baru lihat pesanan SETELAH kurir mengambilnya
     const r = await window._supaFetch(`/rest/v1/food_orders?seller_id=eq.${encodeURIComponent(uid)}&status=neq.menunggu_kurir&select=*&order=created_at.desc`);
     const rows = r.ok ? await r.json() : [];
+    window._yfKelolaOrders = {}; rows.forEach(o => { window._yfKelolaOrders[o.id] = o; }); // utk snapshot ledger saat hapus
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood masuk.</p>'; return; }
 
     // Badge unread PER TOMBOL 'Chat Kurir' — bukan agregat global.
@@ -24489,9 +24549,28 @@ if (!window._yfOrderMenuClickAway) {
 }
 
 // Hapus pesanan PERMANEN dari Supabase (pembeli/penjual/admin — via RLS DELETE policy).
+// Sebelum hapus, ringkasan pemasukan disalin ke buku besar `food_sales_ledger` agar total
+// Riwayat Penjualan TIDAK berkurang saat order dihapus. Kalau salin ledger gagal → batal hapus.
 window.yfDeleteOrder = async function(orderId) {
-  if (!confirm('Hapus pesanan ini secara permanen?\n\nData pesanan akan dihapus dari server dan TIDAK bisa dikembalikan.')) return;
+  if (!confirm('Hapus pesanan ini secara permanen?\n\nData pesanan akan dihapus dari server dan TIDAK bisa dikembalikan.\n(Pemasukan tetap tercatat di Riwayat Penjualan.)')) return;
+  const o = (window._yfKelolaOrders || {})[orderId];
   try {
+    // 1) Simpan ringkasan pemasukan ke ledger DULU (biar income tak hilang saat order dihapus).
+    if (o) {
+      const lr = await window._supaFetch('/rest/v1/food_sales_ledger', {
+        method: 'POST', prefer: 'return=minimal',
+        body: JSON.stringify({
+          seller_id: o.seller_id || (window._S?.user?.uid || ''),
+          ad_title: o.ad_title || 'Menu YallaFood',
+          buyer_name: o.buyer_name || 'Pembeli',
+          total: o.total || 0,
+          status: o.status || null,
+          order_created_at: o.created_at || null
+        })
+      });
+      if (!lr.ok) throw new Error('gagal simpan riwayat pemasukan (' + lr.status + ') — order tidak dihapus');
+    }
+    // 2) Hapus order permanen
     const res = await window._supaFetch('/rest/v1/food_orders?id=eq.' + encodeURIComponent(orderId), {
       method: 'DELETE', prefer: 'return=representation'
     });
@@ -24535,7 +24614,12 @@ function _yfSubscribeSellerRealtime() {
 <div id="kurirDashboard" style="display:none;position:fixed;inset:0;z-index:55;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
     <button onclick="closeKurirDashboard()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
-    <h2 class="font-bold text-base flex-1">Dashboard Kurir</h2>
+    <h2 class="font-bold text-base flex-1 min-w-0 truncate">Dashboard Kurir</h2>
+    <div class="flex items-center gap-1.5" style="flex-shrink:0;margin-right:12px">
+      <span id="kurirIncomeIcon" style="display:flex;color:#059669"></span>
+      <span class="text-xs font-semibold text-gray-700" style="white-space:nowrap">Pendapatan:</span>
+      <span id="kurirIncomeAmount" class="text-sm font-bold text-primary" style="white-space:nowrap">LE 0</span>
+    </div>
   </div>
   <div class="flex-1 overflow-y-auto px-3 py-3">
     <p class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Pesanan Menunggu Kurir</p>
@@ -24752,13 +24836,52 @@ async function _kurirLoadWaitingRoom() {
   }
 }
 
+// Pendapatan kurir di top bar dasbor — SUMBER SAMA dengan Panel Admin
+// (courier_delivery_ledger, Σ ongkir milik kurir ini) supaya angkanya selalu cocok.
+async function _kurirRenderIncome() {
+  const uid = window._S?.user?.uid;
+  const iconEl = document.getElementById('kurirIncomeIcon');
+  if (iconEl && window.lucide && !iconEl.dataset.rendered) {
+    try {
+      const IconDef = lucide.Wallet || lucide.Banknote || lucide.CircleDollarSign || lucide.Coins;
+      if (IconDef) {
+        const svg = lucide.createElement(IconDef);
+        svg.setAttribute('width', 18); svg.setAttribute('height', 18);
+        svg.setAttribute('stroke', '#059669'); svg.setAttribute('stroke-width', '2.5');
+        svg.setAttribute('fill', 'none'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+        iconEl.innerHTML = ''; iconEl.appendChild(svg);
+        iconEl.dataset.rendered = '1';
+      }
+    } catch (e) {}
+  }
+  const amtEl = document.getElementById('kurirIncomeAmount');
+  if (!amtEl || !uid) return;
+  try {
+    const r = await window._supaFetch(`/rest/v1/courier_delivery_ledger?courier_id=eq.${encodeURIComponent(uid)}&select=ongkir`);
+    const rows = r.ok ? await r.json() : [];
+    const sum = rows.reduce((a, x) => a + Number(x.ongkir || 0), 0);
+    amtEl.textContent = 'LE ' + sum.toLocaleString('en-EG');
+  } catch (e) {}
+}
+
 async function _kurirLoadMyDeliveries() {
   const box = document.getElementById('kurirMyDeliveriesList');
   const uid = window._S?.user?.uid;
+  _kurirRenderIncome(); // refresh pendapatan tiap daftar antaran dimuat (buka, selesai, realtime)
   box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
   try {
     const r = await window._supaFetch(`/rest/v1/food_orders?courier_id=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc&limit=20`);
-    const rows = r.ok ? await r.json() : [];
+    let rows = r.ok ? await r.json() : [];
+    // Sembunyikan pesanan yang sudah "dihapus" kurir dari dasbornya (server-side, permanen).
+    // Hanya menyaring tampilan — food_orders & pencatatan pendapatan (ledger) TIDAK disentuh.
+    try {
+      const hr = await window._supaFetch(`/rest/v1/courier_hidden_orders?courier_id=eq.${encodeURIComponent(uid)}&select=order_id`);
+      const hidden = hr.ok ? await hr.json() : [];
+      if (hidden.length) {
+        const hset = new Set(hidden.map(h => h.order_id));
+        rows = rows.filter(o => !hset.has(o.id));
+      }
+    } catch (e) {}
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan yang kamu antar.</p>'; return; }
 
     // Badge unread PER TOMBOL (Chat Buyer / Chat Seller) — bukan agregat.
@@ -24783,7 +24906,10 @@ async function _kurirLoadMyDeliveries() {
       const buyerUnread = unreadMap[o.id + '_buyer_kurir'] || 0;
       const sellerUnread = unreadMap[o.id + '_kurir_seller'] || 0;
       return `
-      <div class="bg-white rounded-2xl p-3 border border-gray-100">
+      <div class="bg-white rounded-2xl p-3 border border-gray-100" style="position:relative">
+        <div id="kurirOrderMenu-${o.id}" style="display:none;position:absolute;top:38px;right:10px;z-index:20;background:#fff;border:1px solid #f3f4f6;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;min-width:158px">
+          <button onclick="_kurirHideOrder('${o.id}')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:600;color:#dc2626;background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash-can mr-1.5"></i>Hapus pesanan</button>
+        </div>
         <div class="flex items-center justify-between gap-1.5 mb-2 min-w-0">
           <div class="flex items-center gap-1.5 min-w-0">
             <i class="fa-solid fa-store" style="font-size:12px;line-height:1;color:#111827;flex-shrink:0"></i>
@@ -24792,6 +24918,7 @@ async function _kurirLoadMyDeliveries() {
           <div class="flex items-center gap-1.5 flex-shrink-0">
             ${(o.status === 'dijemput' || o.status === 'menuju') ? `<button onclick="yfAdvanceOrderStatus('${o.id}','selesai').then(()=>_kurirLoadMyDeliveries())" class="text-[10px] font-bold px-2 py-1 rounded-full bg-primary text-white" style="white-space:nowrap">Selesai</button>` : ''}
             <span class="text-[10px] font-bold px-2 py-1 rounded-full bg-pl text-primary" style="white-space:nowrap">${_YF_STATUS_LABEL[o.status] || o.status}</span>
+            <button onclick="_kurirToggleOrderMenu(event,'${o.id}')" class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400" style="flex-shrink:0"><i class="fa-solid fa-ellipsis-vertical text-xs"></i></button>
           </div>
         </div>
         <div class="flex gap-3">
@@ -24819,6 +24946,45 @@ async function _kurirLoadMyDeliveries() {
     box.innerHTML = '<p class="text-center text-red-400 text-xs py-4">Gagal memuat.</p>';
   }
 }
+
+// ── Menu titik-3 pada kartu "Pesanan Saya Antar" (dasbor kurir) ──
+// "Hapus" = sembunyikan kartu dari dasbor kurir saja (server-side, permanen).
+// TIDAK menghapus food_orders, TIDAK menyentuh pendapatan/pengantaran (ledger),
+// dan TIDAK memengaruhi tampilan penjual/pembeli.
+window._kurirToggleOrderMenu = function(ev, id) {
+  if (ev) ev.stopPropagation();
+  const m = document.getElementById('kurirOrderMenu-' + id);
+  if (!m) return;
+  const wasOpen = m.style.display === 'block';
+  document.querySelectorAll('[id^="kurirOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+  m.style.display = wasOpen ? 'none' : 'block';
+};
+if (!window._kurirOrderMenuClickAway) {
+  window._kurirOrderMenuClickAway = true;
+  document.addEventListener('click', function(e) {
+    const t = e.target;
+    if (t.closest && (t.closest('[id^="kurirOrderMenu-"]') || t.closest('button[onclick*="_kurirToggleOrderMenu"]'))) return;
+    document.querySelectorAll('[id^="kurirOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+  });
+}
+window._kurirHideOrder = async function(orderId) {
+  if (!confirm('Hapus pesanan ini dari dasbor kamu?\n\nKartu akan hilang permanen dari daftar antaranmu. Jumlah pengantaran & pendapatan kamu TIDAK berubah.')) return;
+  const uid = window._S?.user?.uid;
+  if (!uid) return;
+  try {
+    // Upsert (abaikan duplikat) supaya klik berulang aman, bukan error 409.
+    const res = await window._supaFetch('/rest/v1/courier_hidden_orders?on_conflict=courier_id,order_id', {
+      method: 'POST', prefer: 'resolution=ignore-duplicates,return=minimal',
+      body: JSON.stringify([{ courier_id: uid, order_id: orderId }])
+    });
+    if (!res.ok) throw new Error('gagal (' + res.status + ')');
+    document.querySelectorAll('[id^="kurirOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+    showToast('🗑️ Pesanan dihapus dari dasbor', 'green');
+    _kurirLoadMyDeliveries();
+  } catch (e) {
+    showToast('Gagal hapus: ' + (e.message || e), 'red');
+  }
+};
 
 window.yfKurirClaimOrder = async function(orderId) {
   const user = window._S?.user;
@@ -24882,6 +25048,21 @@ window.loadKurirAdminUI = async function() {
     const r = await window._supaFetch('/rest/v1/courier_profiles?select=*&order=applied_at.desc');
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pendaftar kurir.</p>'; return; }
+    // Statistik pengantaran & pendapatan per kurir dari buku besar TERPISAH
+    // (courier_delivery_ledger) — dicatat server-side saat pesanan → 'selesai',
+    // dan TIDAK ikut berkurang kalau pesanan (mutasi) dihapus.
+    const _cdStats = {};
+    try {
+      const lr = await window._supaFetch('/rest/v1/courier_delivery_ledger?select=courier_id,ongkir');
+      const led = lr.ok ? await lr.json() : [];
+      led.forEach(x => {
+        const k = x.courier_id;
+        if (!_cdStats[k]) _cdStats[k] = { count: 0, sum: 0 };
+        _cdStats[k].count += 1;
+        _cdStats[k].sum += Number(x.ongkir || 0);
+      });
+    } catch (e) {}
+    const _cdFmt = n => 'LE ' + Number(n || 0).toLocaleString('en-EG');
     box.innerHTML = rows.map(c => `
       <div class="bg-white rounded-2xl p-3.5 border border-gray-100 mb-2.5">
         <div class="flex items-center justify-between mb-1 gap-2">
@@ -24892,7 +25073,17 @@ window.loadKurirAdminUI = async function() {
             <span class="text-[10px] font-bold px-2 py-1 rounded-full ${c.status === 'active' ? 'bg-pl text-primary' : (c.status === 'rejected' || c.status === 'blocked') ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}">${_kurirStatusLabel(c.status)}</span>
           </div>
         </div>
-        <p class="text-xs text-gray-500 ${c.status === 'pending' ? 'mb-2.5' : ''}">Daerah: ${c.coverage_area || '-'}</p>
+        <p class="text-xs text-gray-500">Daerah: ${c.coverage_area || '-'}</p>
+        <div class="flex items-center gap-5 mt-2 pt-2 border-t border-gray-50 ${c.status === 'pending' ? 'mb-2.5' : ''}">
+          <div>
+            <p class="text-[10px] text-gray-400 font-semibold leading-tight">Pengantaran</p>
+            <p class="text-sm font-bold text-gray-800 leading-tight">${(_cdStats[c.uid]||{}).count||0}<span class="text-[10px] font-medium text-gray-400"> antar</span></p>
+          </div>
+          <div>
+            <p class="text-[10px] text-gray-400 font-semibold leading-tight">Pendapatan</p>
+            <p class="text-sm font-bold text-primary leading-tight">${_cdFmt((_cdStats[c.uid]||{}).sum||0)}</p>
+          </div>
+        </div>
         ${c.status === 'pending' ? `
         <div style="display:flex;gap:8px">
           <button onclick="kurirAdminSetStatus('${c.id}','active')" class="flex-1 bg-primary text-white text-xs font-bold rounded-xl py-2">Setujui</button>
@@ -25907,7 +26098,12 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 <div id="ykCourierDashboard" style="display:none;position:fixed;inset:0;z-index:55;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
     <button onclick="closeYkCourierDashboard()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
-    <h2 class="font-bold text-base flex-1">Dashboard YallaKurir</h2>
+    <h2 class="font-bold text-base flex-1 min-w-0 truncate">Dashboard YallaKurir</h2>
+    <div class="flex items-center gap-1.5" style="flex-shrink:0;margin-right:12px">
+      <span id="ykIncomeIcon" style="display:flex;color:#059669"></span>
+      <span class="text-xs font-semibold text-gray-700" style="white-space:nowrap">Pendapatan:</span>
+      <span id="ykIncomeAmount" class="text-sm font-bold text-primary" style="white-space:nowrap">LE 0</span>
+    </div>
   </div>
   <div class="flex-1 overflow-y-auto px-3 py-3">
     <p class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Pesanan Menunggu Kurir</p>
@@ -27966,10 +28162,39 @@ async function _ykLoadWaitingRoom() {
 
 // Pesanan yang SUDAH diambil kurir ini (status diambil/selesai). Tampil di bagian
 // "Pesanan Saya Antar" — mirror pola _kurirLoadMyDeliveries YallaFood.
+// Pendapatan kurir YallaKurir di top bar — SUMBER SAMA dengan Panel Admin
+// (yallakurir_delivery_ledger, Σ ongkir milik kurir ini) supaya angkanya konsisten.
+async function _ykRenderIncome() {
+  const uid = window._S?.user?.uid;
+  const iconEl = document.getElementById('ykIncomeIcon');
+  if (iconEl && window.lucide && !iconEl.dataset.rendered) {
+    try {
+      const IconDef = lucide.Wallet || lucide.Banknote || lucide.CircleDollarSign || lucide.Coins;
+      if (IconDef) {
+        const svg = lucide.createElement(IconDef);
+        svg.setAttribute('width', 18); svg.setAttribute('height', 18);
+        svg.setAttribute('stroke', '#059669'); svg.setAttribute('stroke-width', '2.5');
+        svg.setAttribute('fill', 'none'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+        iconEl.innerHTML = ''; iconEl.appendChild(svg);
+        iconEl.dataset.rendered = '1';
+      }
+    } catch (e) {}
+  }
+  const amtEl = document.getElementById('ykIncomeAmount');
+  if (!amtEl || !uid) return;
+  try {
+    const r = await window._supaFetch(`/rest/v1/yallakurir_delivery_ledger?courier_id=eq.${encodeURIComponent(uid)}&select=ongkir`);
+    const rows = r.ok ? await r.json() : [];
+    const sum = rows.reduce((a, x) => a + Number(x.ongkir || 0), 0);
+    amtEl.textContent = 'LE ' + sum.toLocaleString('en-EG');
+  } catch (e) {}
+}
+
 async function _ykLoadMyDeliveries() {
   const box = document.getElementById('ykMyDeliveriesList');
   const uid = window._S?.user?.uid;
   if (!box || !uid) return;
+  _ykRenderIncome(); // refresh pendapatan tiap daftar antaran dimuat (buka, selesai, realtime)
   box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
   try {
     const r = await window._supaFetch(`/rest/v1/yallakurir_orders?courier_id=eq.${encodeURIComponent(uid)}&status=in.(diambil,selesai)&select=*&order=created_at.desc&limit=20`);
@@ -27990,10 +28215,16 @@ async function _ykLoadMyDeliveries() {
     } catch (e) { console.warn('[YallaKurir] gagal hitung badge chat pengirim:', e.message); }
 
     box.innerHTML = rows.map(o => `
-      <div class="bg-white rounded-2xl p-3 border border-gray-100">
+      <div class="bg-white rounded-2xl p-3 border border-gray-100" style="position:relative">
+        <div id="ykOrderMenu-${o.id}" style="display:none;position:absolute;top:38px;right:10px;z-index:20;background:#fff;border:1px solid #f3f4f6;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;min-width:158px">
+          <button onclick="_ykDeleteOrder('${o.id}')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:600;color:#dc2626;background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash-can mr-1.5"></i>Hapus pesanan</button>
+        </div>
         <div class="flex items-center justify-between gap-2 mb-2">
           <span class="text-[11px] font-bold text-primary bg-pl px-2.5 py-1 rounded-full"><i class="fa-solid ${_YK_ITEM_ICON[o.item_type] || 'fa-box'} mr-1"></i>${_sadEscHtml(o.item_type || '-')}</span>
-          <span class="text-[10px] font-bold px-2 py-1 rounded-full ${o.status === 'selesai' ? 'bg-gray-100 text-gray-500' : 'bg-pl text-primary'}">${_YK_STATUS_LABEL[o.status] || o.status}</span>
+          <div class="flex items-center gap-1.5 flex-shrink-0">
+            <span class="text-[10px] font-bold px-2 py-1 rounded-full ${o.status === 'selesai' ? 'bg-gray-100 text-gray-500' : 'bg-pl text-primary'}">${_YK_STATUS_LABEL[o.status] || o.status}</span>
+            <button onclick="_ykToggleOrderMenu(event,'${o.id}')" class="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400" style="flex-shrink:0"><i class="fa-solid fa-ellipsis-vertical text-xs"></i></button>
+          </div>
         </div>
         <div style="background:#f9fafb;border-radius:10px;padding:8px 10px;margin-bottom:8px">
           <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:6px">
@@ -28082,6 +28313,42 @@ function _ykSyncAutoShare(activeOrderIds) {
     _ykAutoShareStop();
   }
 }
+
+// ── Menu titik-3 pada kartu "Pesanan Saya Antar" (dasbor YallaKurir) ──
+// "Hapus" = HAPUS PERMANEN baris yallakurir_orders dari server (via policy DELETE baru).
+// Pendapatan (yallakurir_delivery_ledger) TERPISAH tanpa FK → TIDAK ikut berkurang.
+window._ykToggleOrderMenu = function(ev, id) {
+  if (ev) ev.stopPropagation();
+  const m = document.getElementById('ykOrderMenu-' + id);
+  if (!m) return;
+  const wasOpen = m.style.display === 'block';
+  document.querySelectorAll('[id^="ykOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+  m.style.display = wasOpen ? 'none' : 'block';
+};
+if (!window._ykOrderMenuClickAway) {
+  window._ykOrderMenuClickAway = true;
+  document.addEventListener('click', function(e) {
+    const t = e.target;
+    if (t.closest && (t.closest('[id^="ykOrderMenu-"]') || t.closest('button[onclick*="_ykToggleOrderMenu"]'))) return;
+    document.querySelectorAll('[id^="ykOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+  });
+}
+window._ykDeleteOrder = async function(orderId) {
+  if (!confirm('Hapus pesanan ini secara permanen?\n\nKartu akan dihapus dari server dan TIDAK bisa dikembalikan. Jumlah pengantaran & pendapatan kamu TIDAK berubah.')) return;
+  try {
+    // return=representation supaya PATCH/DELETE 0-baris (RLS/senyap) ketahuan, bukan cuma res.ok.
+    const res = await window._supaFetch('/rest/v1/yallakurir_orders?id=eq.' + encodeURIComponent(orderId), {
+      method: 'DELETE', prefer: 'return=representation'
+    });
+    const deleted = res.ok ? await res.json().catch(() => []) : [];
+    if (!res.ok || !deleted.length) throw new Error('tidak terhapus (izin ditolak / 0 baris)');
+    document.querySelectorAll('[id^="ykOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+    showToast('🗑️ Pesanan dihapus permanen', 'green');
+    _ykLoadMyDeliveries();
+  } catch (e) {
+    showToast('Gagal hapus: ' + (e.message || e), 'red');
+  }
+};
 
 window.ykKurirCompleteOrder = async function(orderId) {
   const user = window._S?.user;
