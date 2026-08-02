@@ -11856,10 +11856,9 @@ function renderFollowingStoryBar(currentUser, sellers) {
   const _seenMap = window._storyGetSeenMap();
 
   function storyItem({ photoUrl, label, isMe, sellerUid, sellerName, sellerPhoto, latestMs }) {
-    const firstChar = (label||'?')[0].toUpperCase();
     const avatarInner = photoUrl
-      ? `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none'">`
-      : `<span style="color:#fff;font-size:18px;font-weight:900">${firstChar}</span>`;
+      ? `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.style.background='#e5e7eb';this.parentElement.classList.add('ym-avatar-fb');this.parentElement.innerHTML=window.YM_USER_ICON_SVG">`
+      : `<div class="ym-avatar-fb" style="width:100%;height:100%">${window.YM_USER_ICON_SVG}</div>`;
 
     const alreadySeen = !isMe && sellerUid && window._storyIsSeen(_seenMap, sellerUid, latestMs);
     const ringBg  = alreadySeen ? '#d1d5db' : igGrad;
@@ -13230,12 +13229,10 @@ window.openFollowingStores = async function() {
         <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px;cursor:pointer"
              onclick="openSellerFromFollowing('${seller.uid}','${(seller.name||'').replace(/'/g,"\\'")}','')">
           <div style="display:flex;align-items:center;gap:10px">
-            <div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,#10B981,#064E3B);display:flex;align-items:center;justify-content:center">
-              ${seller.photo_url
-                ? `<img src="${seller.photo_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`
-                : `<span style="color:#fff;font-weight:900;font-size:14px">${(seller.name||'?')[0].toUpperCase()}</span>`
-              }
-            </div>
+            ${seller.photo_url
+              ? `<div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#e5e7eb"><img src="${seller.photo_url}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.classList.add('ym-avatar-fb');this.parentElement.innerHTML=window.YM_USER_ICON_SVG"></div>`
+              : `<div class="ym-avatar-fb" style="width:36px;height:36px;flex-shrink:0">${window.YM_USER_ICON_SVG}</div>`
+            }
             <div style="display:flex;flex-direction:column;gap:1px">
               <span style="font-size:13px;font-weight:700;color:#0f172a;line-height:1.2">${seller.name||'Toko'}</span>
               <span style="font-size:11px;color:#6b7280">${followerCount} pengikut</span>
@@ -15252,7 +15249,6 @@ if ('serviceWorker' in navigator) {
         <button id="aptab-switch" onclick="switchApTab('switch')" class="ap-tab active" style="color:#fff;border-color:#fff">Master Switch</button>
         <button id="aptab-ads" onclick="switchApTab('ads')" class="ap-tab">Aktivasi Iklan</button>
         <button id="aptab-verify" onclick="switchApTab('verify')" class="ap-tab">Verifikasi User</button>
-        <button id="aptab-cleanup" onclick="switchApTab('cleanup')" class="ap-tab">🗑️ Iklan Hantu</button>
         <button id="aptab-title" onclick="switchApTab('title'); if(window.loadSponsorTitleAdminUI) loadSponsorTitleAdminUI();" class="ap-tab">📝 Judul Section</button>
         <button id="aptab-kurir" onclick="switchApTab('kurir'); if(window.loadKurirAdminUI) loadKurirAdminUI();" class="ap-tab">🛵 Kurir YallaFood</button>
         <button id="aptab-yallakurir" onclick="switchApTab('yallakurir'); if(window.loadYkAdminUI) loadYkAdminUI();" class="ap-tab">📦 YallaKurir</button>
@@ -15354,18 +15350,6 @@ if ('serviceWorker' in navigator) {
           </button>
           <!-- Info user -->
           <div id="verifyUserStatus" class="hidden bg-gray-50 rounded-xl p-3 text-[11px] text-gray-600 border border-gray-100"></div>
-        </div>
-      </div>
-
-      <!-- ── Tab: Hapus Iklan Hantu ── -->
-      <div id="aptab-cleanup-content" style="display:none">
-        <div class="bg-red-50 border border-red-100 rounded-2xl p-4 mb-4">
-          <p class="text-sm font-black text-gray-800 mb-1">🗑️ Hapus Iklan Tanpa Akun</p>
-          <p class="text-[11px] text-gray-500 mb-4">Scan semua iklan di Firestore. Iklan yang pemiliknya tidak terdaftar di koleksi <code class="bg-red-100 px-1 rounded">users</code> akan dihapus otomatis.</p>
-          <button onclick="cleanupOrphanAds()" class="w-full bg-red-500 text-white text-sm font-bold py-3 rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2">
-            <i class="fa-solid fa-trash-can"></i> Scan &amp; Hapus Sekarang
-          </button>
-          <div id="cleanupStatus" class="hidden mt-3 bg-white rounded-xl p-3 text-[11px] text-gray-600 border border-red-100 whitespace-pre-line leading-relaxed"></div>
         </div>
       </div>
 
@@ -15696,7 +15680,7 @@ window.closeAdminPanel = function() {
 };
 
 window.switchApTab = function(tab) {
-  ['switch','ads','verify','cleanup','title','kurir','yallakurir'].forEach(t => {
+  ['switch','ads','verify','title','kurir','yallakurir'].forEach(t => {
     const btn = document.getElementById('aptab-' + t);
     const content = document.getElementById('aptab-' + t + '-content');
     if(btn) btn.classList.toggle('active', t === tab);
@@ -16140,50 +16124,6 @@ window.toggleUserStatusPlaceholder = function(uid) {
     if (el) el.textContent = 'Total User: ' + total.toLocaleString('id-ID');
   };
 })();
-
-window.cleanupOrphanAds = async function() {
-  const statusEl = document.getElementById('cleanupStatus');
-  statusEl.style.display = 'block';
-  statusEl.className = 'mt-3 bg-white rounded-xl p-3 text-[11px] text-gray-600 border border-red-100 whitespace-pre-line leading-relaxed';
-  statusEl.textContent = '⏳ Mengambil semua iklan...';
-  try {
-    const { data: ads } = await window.supabase.from('ads').select('id,seller_uid');
-    statusEl.textContent = `⏳ Ditemukan ${(ads||[]).length} iklan. Mengecek akun pemilik...`;
-    const uidSet = new Set((ads||[]).map(a => a.seller_uid).filter(Boolean));
-    const uids = [...uidSet];
-    const validUids = new Set();
-    for (let i = 0; i < uids.length; i += 50) {
-      const { data: users } = await window.supabase.from('users').select('uid').in('uid', uids.slice(i, i+50));
-      (users||[]).forEach(u => validUids.add(u.uid));
-    }
-    const orphans = (ads||[]).filter(a => !a.seller_uid || !validUids.has(a.seller_uid));
-    if (orphans.length === 0) {
-      statusEl.textContent = '✅ Semua iklan punya akun terdaftar. Tidak ada yang perlu dihapus.';
-      statusEl.style.color = '#059669';
-      return;
-    }
-    statusEl.textContent = `⚠️ Ditemukan ${orphans.length} iklan hantu. Menghapus...`;
-    let deleted = 0, failed = 0;
-    for (const ad of orphans) {
-      try {
-        const _dr = await window._supaFetch('/rest/v1/ads?id=eq.' + ad.id, { method: 'DELETE' });
-        if(_dr.ok) deleted++;
-      }
-      catch(e) { failed++; }
-    }
-    const lines = [`✅ Selesai! ${deleted} iklan hantu berhasil dihapus.`];
-    if (failed > 0) lines.push(`⚠️ Gagal hapus: ${failed} iklan.`);
-    lines.push(`📋 Total iklan awal: ${ads.length}`);
-    lines.push(`👥 Akun terdaftar: ${validUids.size}`);
-    statusEl.textContent = lines.join('\n');
-    statusEl.style.color = '#dc2626';
-    showToast(`🗑️ ${deleted} iklan hantu dihapus!`, 'red');
-    if (typeof loadAds === 'function') loadAds();
-  } catch(e) {
-    statusEl.textContent = '❌ Error: ' + (e.message || e);
-    showToast('Gagal: ' + (e.message || e), 'red');
-  }
-};
 
 window.updateVerifyTypeUI = function() {
   const blueWrap = document.getElementById('vtype-blue-wrap');
@@ -24450,8 +24390,13 @@ async function _yfLoadKelolaPesanan() {
       const canAdvance = next && (o.status === 'diterima' || o.status === 'dimasak');
       const canCancel = o.status === 'diterima';
       return `
-      <div class="bg-white rounded-2xl p-3 border border-gray-100">
-        <div class="flex gap-3 mb-2">
+      <div class="bg-white rounded-2xl p-3 border border-gray-100" style="position:relative">
+        <button onclick="_yfToggleOrderMenu(event,'${o.id}')" title="Aksi" style="position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:none;cursor:pointer;color:#9ca3af;z-index:3"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+        <div id="yfOrderMenu-${o.id}" style="display:none;position:absolute;top:36px;right:8px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.14);z-index:4;overflow:hidden;min-width:180px">
+          ${canCancel ? `<button onclick="_yfCloseOrderMenu('${o.id}');yfAdvanceOrderStatus('${o.id}','dibatalkan')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:600;color:#374151;background:none;border:none;cursor:pointer;border-bottom:1px solid #f3f4f6"><i class="fa-solid fa-ban mr-1.5 text-gray-400"></i>Batalkan pesanan</button>` : ''}
+          <button onclick="_yfCloseOrderMenu('${o.id}');yfDeleteOrder('${o.id}')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:700;color:#dc2626;background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash-can mr-1.5"></i>Hapus pesanan ini</button>
+        </div>
+        <div class="flex gap-3 mb-2" style="padding-right:26px">
           <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
           <div class="flex-1 min-w-0">
             <p class="font-bold text-sm lc1">${o.ad_title}</p>
@@ -24471,8 +24416,10 @@ async function _yfLoadKelolaPesanan() {
             <button onclick="yfAdvanceOrderStatus('${o.id}','${next}')" class="w-full bg-primary text-white text-xs font-bold rounded-xl py-2">${_YF_STATUS_LABEL[next]}</button>
           </div>
           ` : ''}
-          ${canCancel ? `<button onclick="yfAdvanceOrderStatus('${o.id}','dibatalkan')" class="text-xs font-semibold text-red-500 rounded-xl py-2 px-3">Batalkan</button>` : ''}
           ${o.courier_id ? `<button onclick="openYfChat('${o.id}','kurir_seller','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" style="position:relative" class="text-xs font-semibold text-gray-700 border border-gray-200 rounded-xl py-2 px-3"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir${_yfBtnBadge(unreadMap[o.id] || 0)}</button>` : ''}
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px">
+          <span style="font-size:10px;font-weight:600;color:#9ca3af">${_yfTimeAgo(o.created_at)}</span>
         </div>
       </div>`;
     }).join('');
@@ -24517,6 +24464,46 @@ window.yfAdvanceOrderStatus = async function(orderId, newStatus) {
     showToast('Gagal update status pesanan: ' + e.message, 'red');
   }
 };
+
+// ── Menu titik-3 per kartu pesanan (Batalkan / Hapus) ──
+window._yfToggleOrderMenu = function(ev, id) {
+  if (ev) ev.stopPropagation();
+  const m = document.getElementById('yfOrderMenu-' + id);
+  if (!m) return;
+  const wasOpen = m.style.display === 'block';
+  document.querySelectorAll('[id^="yfOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+  m.style.display = wasOpen ? 'none' : 'block';
+};
+window._yfCloseOrderMenu = function(id) {
+  const m = document.getElementById('yfOrderMenu-' + id);
+  if (m) m.style.display = 'none';
+};
+// Klik di luar menu → tutup semua menu (pasang sekali)
+if (!window._yfOrderMenuClickAway) {
+  window._yfOrderMenuClickAway = true;
+  document.addEventListener('click', function(e) {
+    const t = e.target;
+    if (t.closest && (t.closest('[id^="yfOrderMenu-"]') || t.closest('button[onclick*="_yfToggleOrderMenu"]'))) return;
+    document.querySelectorAll('[id^="yfOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+  });
+}
+
+// Hapus pesanan PERMANEN dari Supabase (pembeli/penjual/admin — via RLS DELETE policy).
+window.yfDeleteOrder = async function(orderId) {
+  if (!confirm('Hapus pesanan ini secara permanen?\n\nData pesanan akan dihapus dari server dan TIDAK bisa dikembalikan.')) return;
+  try {
+    const res = await window._supaFetch('/rest/v1/food_orders?id=eq.' + encodeURIComponent(orderId), {
+      method: 'DELETE', prefer: 'return=representation'
+    });
+    const deleted = res.ok ? await res.json().catch(() => []) : [];
+    if (!res.ok || !deleted.length) throw new Error('tidak terhapus (izin ditolak / 0 baris)');
+    showToast('🗑️ Pesanan dihapus permanen', 'green');
+    await _yfLoadKelolaPesanan();
+  } catch (e) {
+    showToast('Gagal hapus pesanan: ' + (e.message || e), 'red');
+  }
+};
+
 let _yfSellerChannel = null;
 function _yfSubscribeSellerRealtime() {
   const uid = window._S?.user?.uid;
