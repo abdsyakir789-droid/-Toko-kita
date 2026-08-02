@@ -26610,6 +26610,9 @@ async function _ykNotifyActiveCouriers(order) {
 window._kbCariKurir = async function() {
   const user = window._S?.user;
   if (!user?.uid) { showToast('Login dulu', 'red'); return; }
+  // Akun terblokir → toast "Akun Anda sedang dibatasi" & berhenti (jangan masuk state "mencari kurir"
+  // yang nyangkut). RLS server tetap menolak order-nya; ini cuma pesan yang ramah di sisi klien.
+  if (await window._guardBlocked()) return;
   const st = window._kbState;
   const from = document.getElementById('kbFromInput').value.trim();
   const to = document.getElementById('kbToInput').value.trim();
