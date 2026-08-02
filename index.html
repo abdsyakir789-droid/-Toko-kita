@@ -23691,7 +23691,10 @@ window.openFoodDetail = async function(adId) {
       <p class="text-sm text-gray-600 mt-3 leading-relaxed">${ad.description || ''}</p>
     </div>
     <div class="px-4 pt-6">
-      <h4 class="font-bold text-sm text-gray-800 mb-2">Ulasan</h4>
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="font-bold text-sm text-gray-800">Ulasan</h4>
+        <button id="yfReviewSeeAll" type="button" style="display:none" class="text-xs font-semibold text-primary">Lihat Semua</button>
+      </div>
       <div id="yfDetailReviews"><p class="text-xs text-gray-400 py-2">Memuat ulasan...</p></div>
     </div>
     <div class="px-4 pt-6 pb-8">
@@ -23784,6 +23787,8 @@ async function _yfInjectSellerInfo(ad) {
 async function _yfLoadFoodReviews(adId) {
   const box = document.getElementById('yfDetailReviews');
   if (!box) return;
+  const _seeAllBtn = document.getElementById('yfReviewSeeAll');
+  if (_seeAllBtn) { _seeAllBtn.style.display = 'none'; _seeAllBtn.onclick = null; }
   try {
     const r = await window._supaFetch(`/rest/v1/reviews?ad_id=eq.${encodeURIComponent(adId)}&review_type=eq.food&select=*&order=created_at.desc&limit=20`);
     const rows = r.ok ? await r.json() : [];
@@ -23798,7 +23803,7 @@ async function _yfLoadFoodReviews(adId) {
     const avgRating = (rows.reduce((s, rv) => s + (rv.rating || 0), 0) / rows.length).toFixed(1);
     if (rcEl) rcEl.textContent = '(' + rows.length + ' ulasan)';
     if (rsEl) rsEl.textContent = avgRating;
-    box.innerHTML = `<div style="display:flex;flex-direction:column;gap:14px">` + rows.map(rv => {
+    const _renderList = (list) => `<div style="display:flex;flex-direction:column;gap:14px">` + list.map(rv => {
       const stars = [1,2,3,4,5].map(i => `<i class="fa-solid fa-star text-[10px] ${i <= (rv.rating||0) ? 'text-amber-400' : 'text-gray-200'}"></i>`).join('');
       return `
       <div>
@@ -23809,6 +23814,13 @@ async function _yfLoadFoodReviews(adId) {
         ${rv.comment ? `<p class="text-xs text-gray-500 mt-1">${rv.comment}</p>` : ''}
       </div>`;
     }).join('') + `</div>`;
+    // Default: tampil 1 ulasan. Kalau ada >=2 ulasan → tombol "Lihat Semua" (pojok
+    // kanan header) muncul; saat diklik menampilkan SEMUA ulasan lalu tombol hilang.
+    box.innerHTML = _renderList(rows.slice(0, 1));
+    if (_seeAllBtn && rows.length >= 2) {
+      _seeAllBtn.style.display = 'inline-flex';
+      _seeAllBtn.onclick = () => { box.innerHTML = _renderList(rows); _seeAllBtn.style.display = 'none'; };
+    }
   } catch (e) {
     box.innerHTML = '<p class="text-xs text-red-400 py-2">Gagal memuat ulasan.</p>';
   }
