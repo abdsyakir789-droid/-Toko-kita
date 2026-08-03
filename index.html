@@ -5638,7 +5638,18 @@ function startProfileListener(uid) {
 window._supaFetch = function _supaFetch(path, opts={}) {
   const SUPA_URL = window._SUPA_URL;
   const SUPA_KEY = window._SUPA_ANON;
-  const token = window._S?._accessToken || SUPA_KEY;
+  // Pertahanan berlapis: kalau _S._accessToken belum ke-set (mis. sesaat setelah
+  // daftar/login sebelum onAuthStateChange jalan), baca JWT dari sesi localStorage
+  // DULU sebelum fallback ke anon. Fallback ke anon bikin auth.uid() NULL server-side
+  // → semua tulis ber-RLS (cari kurir, chat, dll) ditolak DIAM-DIAM.
+  let token = window._S?._accessToken;
+  if (!token) {
+    try {
+      const _sess = JSON.parse(localStorage.getItem('sb-' + window._SUPA_REF + '-auth-token') || 'null');
+      token = (_sess && (_sess.access_token || (_sess[0] && _sess[0].access_token))) || '';
+    } catch(e) {}
+  }
+  if (!token) token = SUPA_KEY;
   const { prefer, headers: extraHeaders, ...restOpts } = opts;
   const mergedHeaders = {
     'apikey': SUPA_KEY,
@@ -14164,6 +14175,17 @@ window.doRegister=async()=>{
         name: name,
         phone: phone, photoUrl:''
       };
+      // ── WAJIB: set token & sinkronkan Supabase client SEKARANG ──────────────
+      // Tanpa ini, _supaFetch fallback ke anon key (auth.uid() NULL server-side),
+      // sehingga SEMUA tulis ber-RLS (mis. "Cari Kurir" YallaKurir, chat) ditolak
+      // diam-diam sampai app di-reload. Samakan dengan alur login OTP (yg sudah benar).
+      window._S._accessToken = json.access_token;
+      if(window.supabase){
+        window.supabase.auth.setSession({
+          access_token: json.access_token,
+          refresh_token: json.refresh_token
+        }).catch(()=>{});
+      }
       if(window.renderUserState) renderUserState();
       if(window.startUnreadListener) startUnreadListener();
       if(window.startNotifListener) startNotifListener();
@@ -26947,8 +26969,14 @@ window._kbCariKurir = async function() {
       }
     } else {
       console.warn('[kirimBarang] simpan order gagal:', res.status);
+      const _fs = document.getElementById('kbFindingState'); if (_fs) _fs.style.display = 'none';
+      showToast('Gagal mencari kurir, coba lagi', 'red');
     }
-  } catch (e) { console.warn('[kirimBarang]', e.message); }
+  } catch (e) {
+    console.warn('[kirimBarang]', e.message);
+    const _fs = document.getElementById('kbFindingState'); if (_fs) _fs.style.display = 'none';
+    showToast('Gagal mencari kurir, coba lagi', 'red');
+  }
 };
 
 window._kbCancelSearch = async function() {
