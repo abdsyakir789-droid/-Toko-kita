@@ -10272,6 +10272,15 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
   const ov=document.getElementById('chatRoomOverlay');
   ov.style.display='flex';
   document.body.style.overflow='hidden';
+  // ── Teardown ruang chat SEBELUMNYA — WAJIB di awal, sebelum await apa pun ──
+  // Cegah kebocoran antar-room: kalau langganan realtime room lama tidak dimatikan
+  // & kontainer pesan tidak dibersihkan di sini, saat initChat room baru gagal/lambat
+  // (return lebih awal), room lama masih "hidup" → pesan room lama nyangkut di room baru,
+  // dan activeChatId masih menunjuk room lama (pesan bisa salah kirim). Dibersihkan di awal
+  // ini juga membuat toast "chat belum siap" muncul benar (activeChatId null) sampai room siap.
+  if(window._S.chatUnsub){ try{ window._S.chatUnsub(); }catch(e){} window._S.chatUnsub=null; }
+  window._S.activeChatId=null; window._S.activeChatOther=null; window._S._activeChatReload=null;
+  { const _cmEl=document.getElementById('chatMessages'); if(_cmEl) _cmEl.innerHTML='<p class="text-xs text-gray-400 text-center py-8">Memuat…</p>'; }
   // Poll sampai supabase ready (lebih cepat dari _FB)
   let _sw2 = 0;
   while(!window.supabase && _sw2 < 25) { await new Promise(r=>setTimeout(r,200)); _sw2++; }
@@ -10282,7 +10291,7 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
   let _fbReady = 0;
   while(!window._FB && _fbReady < 10) { await new Promise(r=>setTimeout(r,200)); _fbReady++; }
   const chatId=await window._FB.initChat(adId,sellerId,sellerName,sellerPhoto,adTitle,adImg,adPrice);
-  if(!chatId) return;
+  if(!chatId){ const _cmErr=document.getElementById('chatMessages'); if(_cmErr) _cmErr.innerHTML='<p class="text-xs text-gray-400 text-center py-8">Chat belum siap, coba buka lagi.</p>'; return; }
   window._S.activeChatId=chatId; window._S.activeChatOther=sellerId;
   trackEvent('start_chat', { chat_id: chatId, item_id: adId||'' });
 
