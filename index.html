@@ -6069,7 +6069,10 @@ window._FB = {
         prefer: 'return=minimal',
         body: JSON.stringify({
           chat_id: chatId,
-          ad_id: adId, ad_title: adTitle, ad_img: adImg, ad_price: adPrice,
+          // ad_id kolomnya UUID → string kosong '' (chat dari etalase, tanpa iklan
+          // spesifik) GAGAL cast uuid & bikin POST 400 ("gagal membuka chat"). Normalkan
+          // ke null. Chat dari detail iklan tetap kirim uuid asli (tak berubah).
+          ad_id: adId || null, ad_title: adTitle, ad_img: adImg, ad_price: adPrice,
           participants: [window._S.user.uid, sellerId],
           buyer_id: window._S.user.uid, buyer_name: window._S.user.name, buyer_photo: window._S.user.photoUrl||'',
           seller_id: sellerId, seller_name: sellerName, seller_photo: sellerPhoto,
