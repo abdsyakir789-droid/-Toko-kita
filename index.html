@@ -7306,7 +7306,9 @@ window.loadDetailReviews = async function(adId) {
 
   try {
     const res = await window._supaFetch('/rest/v1/reviews?ad_id=eq.'+adId+'&select=*&order=created_at.desc');
-    const reviews = res.ok ? await res.json() : [];
+    // Ulasan kurir (review_type='kurir') hanya milik profil kurir — JANGAN tampilkan
+    // di ulasan produk walau ad_id-nya sama dengan menu YallaFood.
+    const reviews = (res.ok ? await res.json() : []).filter(r => r.review_type !== 'kurir');
 
     if(!reviews.length) {
       el.innerHTML = `<p style="font-size:12px;color:#9ca3af;text-align:center;padding:12px 0">Belum ada ulasan untuk produk ini</p>`;
@@ -7379,7 +7381,7 @@ window.openAllReviewsModal = async function(adId) {
 
   try {
     const res = await window._supaFetch('/rest/v1/reviews?ad_id=eq.'+adId+'&select=*&order=created_at.desc');
-    const reviews = res.ok ? await res.json() : [];
+    const reviews = (res.ok ? await res.json() : []).filter(r => r.review_type !== 'kurir'); // exclude ulasan kurir
     if(!reviews.length) {
       listEl.innerHTML = `<p style="font-size:12px;color:#9ca3af;text-align:center;padding:20px 0">Belum ada ulasan</p>`;
       return;
@@ -19359,7 +19361,8 @@ window._routePushGo = function(params) {
   const fnMap = {
     ykdash:   'openYkCourierDashboard',    // notif "cari kurir" → dashboard kurir YallaKurir
     yfkurir:  'openKurirDashboard',        // notif pesanan YallaFood → dashboard kurir YallaFood
-    yfseller: 'openKelolaPesananYallaFood'  // notif pesanan YallaFood → kelola pesanan (seller)
+    yfseller: 'openKelolaPesananYallaFood', // notif pesanan YallaFood → kelola pesanan (seller)
+    yforders: 'openFoodOrderTracking'       // notif status YallaFood → "Pesanan Saya" (buyer)
   };
   const fnName = fnMap[go];
   if (!fnName) return;
@@ -24573,6 +24576,9 @@ window.yfAdvanceOrderStatus = async function(orderId, newStatus) {
     }
     const buyerMsg = _YF_BUYER_STATUS_NOTIF[newStatus];
     if (buyerMsg && order?.buyer_id) {
+      // Push ke LAYAR HP buyer (muncul walau app ditutup) — sebelumnya HANYA notif in-app
+      // (lonceng), jadi status "diproses"/"dijemput" tak tampil saat app tertutup.
+      try { window.sendPushToUser(order.buyer_id, order.seller_name || 'YallaFood', buyerMsg, '/?go=yforders'); } catch (e) {}
       window._supaFetch('/rest/v1/notifications', {
         method: 'POST', prefer: 'return=minimal',
         body: JSON.stringify([{
