@@ -26524,12 +26524,15 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 
   async function _bsHydrateCourier(o){
     try{
-      if(typeof _ykFetchOwnProfile !== 'function') return;
-      const prof = await _ykFetchOwnProfile(o.courier_id);
-      if(!prof) return;
+      // Avatar kurir = foto PROFIL (users.photo_url), BUKAN selfie/KTP (dokumen
+      // verifikasi rahasia — hanya boleh dilihat admin). Cegah kebocoran ke pengirim.
       const el = document.getElementById('bsAv_'+o.id);
-      if(el && prof.selfie_photo_url){
-        el.innerHTML = '<img src="'+esc(prof.selfie_photo_url)+'" style="width:100%;height:100%;object-fit:cover" alt=""/>';
+      if(!el || !o.courier_id) return;
+      const ur = await window._supaFetch('/rest/v1/users?uid=eq.'+encodeURIComponent(o.courier_id)+'&select=photo_url&limit=1');
+      const urows = ur.ok ? await ur.json() : [];
+      const photo = (urows[0] && urows[0].photo_url) || '';
+      if(photo){
+        el.innerHTML = '<img src="'+esc(photo)+'" style="width:100%;height:100%;object-fit:cover" alt=""/>';
       }
     }catch(e){}
   }
@@ -27036,7 +27039,7 @@ function _kbUnsubscribeOrderStatus() {
   if (_kbOrderChannel) { try { window.supabase.removeChannel(_kbOrderChannel); } catch (e) {} _kbOrderChannel = null; }
 }
 
-// Isi bulatan avatar: foto (selfie_photo_url) kalau ada, jika tidak fallback ikon User (Lucide).
+// Isi bulatan avatar: foto profil (users.photo_url) kalau ada, jika tidak fallback ikon User (Lucide).
 function _kbSetAvatar(el, photoUrl) {
   if (!el) return;
   if (photoUrl) { el.innerHTML = '<img src="' + _sadEscHtml(photoUrl) + '" style="width:100%;height:100%;object-fit:cover" alt=""/>'; }
@@ -27058,10 +27061,15 @@ async function _kbShowCourierPanel(order) {
   try {
     if (order.courier_id) {
       const prof = await _ykFetchOwnProfile(order.courier_id);
-      if (prof) {
-        if (prof.name) document.getElementById('kbCourierName').textContent = prof.name;
-        _kbSetAvatar(document.getElementById('kbCourierAvatar'), prof.selfie_photo_url || '');
-      }
+      if (prof && prof.name) document.getElementById('kbCourierName').textContent = prof.name;
+      // Avatar = foto PROFIL kurir (users.photo_url), BUKAN selfie/KTP (dokumen verifikasi rahasia).
+      let _cphoto = '';
+      try {
+        const _ur = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(order.courier_id) + '&select=photo_url&limit=1');
+        const _urows = _ur.ok ? await _ur.json() : [];
+        _cphoto = (_urows[0] && _urows[0].photo_url) || '';
+      } catch (e2) {}
+      _kbSetAvatar(document.getElementById('kbCourierAvatar'), _cphoto);
     }
   } catch (e) {}
 }
