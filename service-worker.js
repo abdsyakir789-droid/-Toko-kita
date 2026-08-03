@@ -17,7 +17,9 @@ const CDN_DOMAINS = [
   'cdn.tailwindcss.com',
   'cdnjs.cloudflare.com',
   'cdn.jsdelivr.net',
-  'unpkg.com'
+  'unpkg.com',
+  'fonts.googleapis.com', // CSS Google Fonts (Plus Jakarta Sans, dll)
+  'fonts.gstatic.com'     // file font .woff2
 ];
 
 const APP_SHELL = ['/', '/index.html'];
@@ -126,7 +128,11 @@ self.addEventListener('fetch', event => {
 
         const networkFetch = fetchWithTimeout(req, 5000)
           .then(response => {
-            if (response && response.status === 200) {
+            // WAJIB simpan juga respons OPAQUE (status 0, type 'opaque'): aset CDN
+            // seperti Tailwind/Font Awesome/Lucide dimuat via <script>/<link> lintas-origin
+            // (mode no-cors) → responsnya opaque. Kalau cuma simpan status===200, aset
+            // layout INTI tak pernah ter-cache → offline layout berantakan.
+            if (response && (response.status === 200 || response.type === 'opaque')) {
               cache.put(req, response.clone());
             }
             return response;
@@ -184,7 +190,7 @@ self.addEventListener('fetch', event => {
 });
 
 // ══════════════════════════════════════════
-// PUSH NOTIFICATION — tidak diubah
+// PUSH NOTIFICATION
 // ══════════════════════════════════════════
 
 self.addEventListener('push', event => {
@@ -209,11 +215,11 @@ self.addEventListener('push', event => {
     renotify: true,
     data    : { chatId, url },
     actions : chatId ? [
-      { action: 'open',    title: '\uD83D\uDCAC Buka Chat' },
-      { action: 'dismiss', title: '\u2715 Tutup' }
+      { action: 'open',    title: '💬 Buka Chat' },
+      { action: 'dismiss', title: '✕ Tutup' }
     ] : [
-      { action: 'open',    title: '\uD83D\uDED2 Lihat Sekarang' },
-      { action: 'dismiss', title: '\u2715 Tutup' }
+      { action: 'open',    title: '🛒 Lihat Sekarang' },
+      { action: 'dismiss', title: '✕ Tutup' }
     ]
   };
 
@@ -235,6 +241,9 @@ self.addEventListener('notificationclick', event => {
           try {
             if (new URL(c.url).origin === self.location.origin) {
               if (chatId) c.postMessage({ type: 'OPEN_CHAT', chatId });
+              // Kirim tujuan navigasi ke app yang sudah terbuka (kasus app di-BACKGROUND).
+              // App punya listener 'message' → PUSH_NAV → _routePushGo(?go=...).
+              c.postMessage({ type: 'PUSH_NAV', url });
               return c.focus();
             }
           } catch(e) {}
