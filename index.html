@@ -25554,10 +25554,9 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     // saat nama mat'am di daftar bawah diklik, lihat _mtShowRoute.)
     near.forEach(s => {
       const pin = L.divIcon({
-        className: '', iconSize: [0, 0], html: `<div style="position:relative;transform:translate(-50%,-100%);text-align:center">
-          <div style="display:inline-block;background:#fff;border:1.5px solid #10B981;color:#065f46;font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18);max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">🍽️ ${_mtEsc(s.name)}</div>
-          <div style="background:#10B981;color:#fff;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:10px;display:inline-block;margin-top:2px">${_mtFmt(s.d)}</div>
-          <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #10B981;margin:1px auto 0"></div>
+        className: '', iconSize: [0, 0], html: `<div style="position:relative;transform:translate(-50%,-100%);text-align:center;white-space:nowrap">
+          <div style="display:inline-block;background:#fff;color:#2563eb;font-size:11px;font-weight:800;padding:3px 9px;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,.28);max-width:150px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">${_mtEsc(s.name)}</div>
+          <div style="line-height:0;margin-top:1px"><svg width="26" height="30" viewBox="0 0 24 24" fill="#2563eb" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"><path d="M12 22s-6.5-6.16-6.5-11A6.5 6.5 0 0 1 12 4.5a6.5 6.5 0 0 1 6.5 6.5c0 4.84-6.5 11-6.5 11z"/><circle cx="12" cy="11" r="2.4" fill="#ffffff" stroke="none"/></svg></div>
         </div>`
       });
       L.marker([s.lat, s.lng], { icon: pin }).addTo(_mtLayer)
