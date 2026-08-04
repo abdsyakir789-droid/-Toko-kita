@@ -25309,6 +25309,8 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
   let _mtFetchCenter = null;   // pusat lokasi saat data terakhir diambil
   let _mtWatchId = null;       // id watchPosition (live tracking)
   let _mtLastTrackPt = null;   // titik GPS terakhir (utk throttle update)
+  let _mtRouteLine = null;     // garis rute (ikuti jalan) ke mat'am terpilih
+  let _mtSelectedUid = null;   // mat'am yang rutenya sedang ditampilkan
 
   function _mtHaversineM(lat1, lng1, lat2, lng2) {
     const R = 6371000, p = Math.PI / 180;
@@ -25548,9 +25550,9 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     if (!(keepMsg && _mtManual)) {
       sub.textContent = near.length ? (near.length + " mat'am dalam radius 1 km") : "Tidak ada mat'am dalam radius 1 km";
     }
-    // Garis putus-putus user → mat'am + pin dengan nama jelas
+    // Pin mat'am dengan nama jelas. (Garis rute TIDAK digambar di sini — hanya muncul
+    // saat nama mat'am di daftar bawah diklik, lihat _mtShowRoute.)
     near.forEach(s => {
-      L.polyline([[_mtUser.lat, _mtUser.lng], [s.lat, s.lng]], { color: '#10B981', weight: 2.5, dashArray: '6,8', opacity: .75 }).addTo(_mtLayer);
       const pin = L.divIcon({
         className: '', iconSize: [0, 0], html: `<div style="position:relative;transform:translate(-50%,-100%);text-align:center">
           <div style="display:inline-block;background:#fff;border:1.5px solid #10B981;color:#065f46;font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18);max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">🍽️ ${_mtEsc(s.name)}</div>
@@ -25606,15 +25608,58 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
       return;
     }
     box.innerHTML = near.map(s => `
-      <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #f0f0f0;border-radius:16px;padding:10px 12px;margin-bottom:8px">
+      <div onclick="_mtShowRoute('${_mtEsc(s.uid)}')" style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #f0f0f0;border-radius:16px;padding:10px 12px;margin-bottom:8px;cursor:pointer">
         <div style="width:46px;height:46px;border-radius:12px;background:#ecfdf5;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🍽️</div>
         <div style="flex:1;min-width:0">
           <p style="margin:0;font-weight:700;font-size:14px;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_mtEsc(s.name)}</p>
-          <p style="margin:2px 0 0;font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="fa-solid fa-location-dot" style="color:#10B981"></i> ${_mtFmt(s.d)}${s.alamat ? ' · ' + _mtEsc(s.alamat) : ''}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="fa-solid fa-route" style="color:#10B981"></i> ${_mtFmt(s.d)} · ketuk untuk rute${s.alamat ? ' · ' + _mtEsc(s.alamat) : ''}</p>
         </div>
-        <button onclick="closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:8px 14px;border-radius:12px;flex-shrink:0">Lihat</button>
+        <button onclick="event.stopPropagation();closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:8px 14px;border-radius:12px;flex-shrink:0">Lihat</button>
       </div>`).join('');
   }
+
+  // ── Rute ke mat'am terpilih (SOLID, mengikuti jalan via ORS) ──────────────
+  // Hanya tampil saat nama mat'am di daftar bawah diklik. Klik lagi mat'am yang
+  // sama = sembunyikan (toggle). Garis lurus solid tampil instan, lalu di-upgrade
+  // jadi rute jalan sungguhan begitu ORS balas. Garis rute ditaruh langsung di
+  // _mtMap (bukan _mtLayer) supaya tidak terhapus saat marker digambar ulang.
+  function _mtClearRoute() {
+    _mtSelectedUid = null;
+    if (_mtRouteLine) { try { _mtMap.removeLayer(_mtRouteLine); } catch (e) {} _mtRouteLine = null; }
+  }
+  async function _mtFetchRoadRoute(fLat, fLng, tLat, tLng) {
+    if (!window._ORS_API_KEY) return null;
+    try {
+      const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${encodeURIComponent(window._ORS_API_KEY)}&start=${fLng},${fLat}&end=${tLng},${tLat}`;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      let res;
+      try { res = await fetch(url, { signal: ctrl.signal }); } finally { clearTimeout(timer); }
+      if (!res.ok) throw new Error('ORS ' + res.status);
+      const data = await res.json();
+      const coords = data && data.features && data.features[0] && data.features[0].geometry && data.features[0].geometry.coordinates;
+      if (!Array.isArray(coords) || !coords.length) throw new Error('geometri kosong');
+      return coords.map(c => [c[1], c[0]]); // ORS [lng,lat] → Leaflet [lat,lng]
+    } catch (e) { return null; }
+  }
+  window._mtShowRoute = async function (uid) {
+    if (!_mtMap || !_mtUser) return;
+    if (_mtSelectedUid === uid) { _mtClearRoute(); return; } // klik lagi = toggle off
+    const s = (_mtLastNear || []).find(x => x.uid === uid);
+    if (!s) return;
+    _mtSelectedUid = uid;
+    if (_mtRouteLine) { try { _mtMap.removeLayer(_mtRouteLine); } catch (e) {} _mtRouteLine = null; }
+    // 1) garis lurus SOLID dulu (instan) + fokuskan peta ke rute
+    _mtRouteLine = L.polyline([[_mtUser.lat, _mtUser.lng], [s.lat, s.lng]], { color: '#10B981', weight: 5, opacity: .9 }).addTo(_mtMap);
+    _mtProgView(() => { try { _mtMap.fitBounds([[_mtUser.lat, _mtUser.lng], [s.lat, s.lng]], { padding: [70, 70], maxZoom: 17, animate: true }); } catch (e) {} });
+    // 2) upgrade jadi rute mengikuti JALAN (kalau ORS berhasil & pilihan masih sama)
+    const path = await _mtFetchRoadRoute(_mtUser.lat, _mtUser.lng, s.lat, s.lng);
+    if (path && _mtSelectedUid === uid && _mtMap) {
+      if (_mtRouteLine) { try { _mtMap.removeLayer(_mtRouteLine); } catch (e) {} }
+      _mtRouteLine = L.polyline(path, { color: '#10B981', weight: 5, opacity: .95 }).addTo(_mtMap);
+      _mtProgView(() => { try { _mtMap.fitBounds(_mtRouteLine.getBounds(), { padding: [70, 70], maxZoom: 17, animate: true }); } catch (e) {} });
+    }
+  };
 
   // Ekspos hanya yang dipanggil dari HTML
   window.openMatamTerdekat = openMatamTerdekat;
