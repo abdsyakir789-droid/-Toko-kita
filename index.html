@@ -8,16 +8,30 @@
      window._SUPA_URL / window._SUPA_ANON / window._SUPA_REF sebelum jalan.
      ================================================================ -->
 <script>
+  /* ═══════════ PRODUCTION (CADANGAN — uncomment saat balik ke produksi, comment blok STAGING di bawah) ═══════════
+  window._SUPA_URL  = 'https://jgnjgfuypcelwjztebsy.supabase.co';
+  window._SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
+  window._SUPA_REF  = 'jgnjgfuypcelwjztebsy';
+  window._R2_URL    = 'https://yallamart-upload.abdsyakir789.workers.dev';
+  window._R2_TOKEN  = 'yallamart2024secret';   // ⚠️ VERIFIKASI: token upload R2 prod (nilai ini dipakai fungsi cleanup prod)
+  window._KV_ENABLED = true;    // production: KV cache aktif
+  window._SKIP_REG_OTP = false; // production: WAJIB OTP saat daftar akun baru
+  window._ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFkMDc5MzAxMjBhZTQ1ZTJiNDI1ZWFjN2I1MTVlYTllIiwiaCI6Im11cm11cjY0In0='; // OpenRouteService (sama utk kedua env)
+  // VAPID public key untuk Web Push — HARUS berpasangan dgn VAPID_PRIVATE_KEY (secret) di edge function environment yg sama.
+  window._VAPID_PUB = 'BP6twOL2T7JcnN-99X13ZBNQVq14vHKTpajimdAoJpfAOlQRSLnsp5wSVoWT-jv17pb4BelRTUtL98mt160e2AI'; // production
+  */
+
+  // ═══════════ STAGING (AKTIF) ═══════════
+  // Untuk kembali ke PRODUCTION: comment blok ini, uncomment blok PRODUCTION di atas.
   window._SUPA_URL  = 'https://ipbxwdqnwcshezzrtxzr.supabase.co';
   window._SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwYnh3ZHFud2NzaGV6enJ0eHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MTM0NTksImV4cCI6MjA5NTQ4OTQ1OX0.UHaK9Tyd7c48j1q_kdX7C_gQCzojAcfIOQ2IZHEJENg';
   window._SUPA_REF  = 'ipbxwdqnwcshezzrtxzr';
   window._R2_URL    = 'https://yallamart-upload-staging.abdsyakir789.workers.dev';
   window._R2_TOKEN  = 'yallamart-staging-2026';
-  window._KV_ENABLED = false;   // staging: KV cache dimatikan (production: true)
-  window._SKIP_REG_OTP = true;  // staging only: lewati verifikasi OTP saat daftar akun baru (production: false/hapus)
-  window._ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFkMDc5MzAxMjBhZTQ1ZTJiNDI1ZWFjN2I1MTVlYTllIiwiaCI6Im11cm11cjY0In0='; // OpenRouteService — hitung jarak jalan sungguhan untuk ongkir YallaFood
-  // VAPID public key untuk Web Push — HARUS berpasangan dgn VAPID_PRIVATE_KEY (secret) di edge function environment yg sama.
-  window._VAPID_PUB = 'BGGgCA4G-q0zFcpCrAzgJGR1NTlIp4YxOFiq_AWANAXHlnhvWRI3szItAbcwuZezkEzPS1zAh4VJndrKrWQPCE8'; // staging (production: 'BP6twOL2T7JcnN-99X13ZBNQVq14vHKTpajimdAoJpfAOlQRSLnsp5wSVoWT-jv17pb4BelRTUtL98mt160e2AI')
+  window._KV_ENABLED = false;
+  window._SKIP_REG_OTP = true;
+  window._ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFkMDc5MzAxMjBhZTQ1ZTJiNDI1ZWFjN2I1MTVlYTllIiwiaCI6Im11cm11cjY0In0=';
+  window._VAPID_PUB = 'BGGgCA4G-q0zFcpCrAzgJGR1NTlIp4YxOFiq_AWANAXHlnhvWRI3szItAbcwuZezkEzPS1zAh4VJndrKrWQPCE8';
 </script>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-9VPFMLYW9G"></script>
@@ -17985,6 +17999,20 @@ function updateYcBadge(count) {
           <i class="fa-solid fa-chevron-right" style="color:#d1d5db;font-size:12px;flex-shrink:0"></i>
         </div>
 
+        <!-- ── Hapus Akun — tepat di bawah Notifikasi (wajib Google Play utk app dgn login) ── -->
+        <div style="height:1px;background:#f3f4f6;margin:0 16px"></div>
+        <button onclick="openDeleteAccount()"
+          style="width:100%;padding:17px 16px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:14px;text-align:left">
+          <div style="width:40px;height:40px;border-radius:13px;background:#fef2f2;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </div>
+          <div style="flex:1;min-width:0">
+            <p style="font-size:14px;font-weight:700;color:#dc2626;margin:0">Hapus Akun</p>
+            <p style="font-size:11.5px;color:#9ca3af;margin:2px 0 0">Hapus permanen akun &amp; seluruh data kamu</p>
+          </div>
+          <i class="fa-solid fa-chevron-right" style="color:#fca5a5;font-size:12px;flex-shrink:0"></i>
+        </button>
+
         <!-- ── Tombol Keluar — dipindahkan ke sini, khusus desktop, tepat di bawah Notifikasi ── -->
         <div class="hidden md:block">
           <div style="height:1px;background:#f3f4f6;margin:0 16px"></div>
@@ -25295,6 +25323,8 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
   let _mtFetchCenter = null;   // pusat lokasi saat data terakhir diambil
   let _mtWatchId = null;       // id watchPosition (live tracking)
   let _mtLastTrackPt = null;   // titik GPS terakhir (utk throttle update)
+  let _mtRouteLine = null;     // garis rute (ikuti jalan) ke mat'am terpilih
+  let _mtSelectedUid = null;   // mat'am yang rutenya sedang ditampilkan
 
   function _mtHaversineM(lat1, lng1, lat2, lng2) {
     const R = 6371000, p = Math.PI / 180;
@@ -25534,14 +25564,18 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     if (!(keepMsg && _mtManual)) {
       sub.textContent = near.length ? (near.length + " mat'am dalam radius 1 km") : "Tidak ada mat'am dalam radius 1 km";
     }
-    // Garis putus-putus user → mat'am + pin dengan nama jelas
+    // Pin mat'am dengan nama jelas. (Garis rute TIDAK digambar di sini — hanya muncul
+    // saat nama mat'am di daftar bawah diklik, lihat _mtShowRoute.)
     near.forEach(s => {
-      L.polyline([[_mtUser.lat, _mtUser.lng], [s.lat, s.lng]], { color: '#10B981', weight: 2.5, dashArray: '6,8', opacity: .75 }).addTo(_mtLayer);
       const pin = L.divIcon({
-        className: '', iconSize: [0, 0], html: `<div style="position:relative;transform:translate(-50%,-100%);text-align:center">
-          <div style="display:inline-block;background:#fff;border:1.5px solid #10B981;color:#065f46;font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18);max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">🍽️ ${_mtEsc(s.name)}</div>
-          <div style="background:#10B981;color:#fff;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:10px;display:inline-block;margin-top:2px">${_mtFmt(s.d)}</div>
-          <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #10B981;margin:1px auto 0"></div>
+        className: '', iconSize: [0, 0], html: `<div style="position:relative;display:inline-block;transform:translate(-50%,-100%)">
+          <!-- Pin marker mat'am: teardrop + simbol garpu & pisau (fork & knife) -->
+          <div style="position:relative;width:32px;height:38px">
+            <svg width="32" height="38" viewBox="0 0 24 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C6.48 0 2 4.48 2 10c0 6.5 10 18 10 18s10-11.5 10-18C22 4.48 17.52 0 12 0z" fill="#10B981" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            <i class="fa-solid fa-utensils" style="position:absolute;top:7px;left:0;right:0;text-align:center;color:#fff;font-size:11px;line-height:1"></i>
+          </div>
+          <!-- Nama mat'am TEPAT DI BAWAH pin; glow tipis mengikuti kontur huruf (bukan kotak) -->
+          <div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:1px;white-space:nowrap;font-size:11.5px;font-weight:800;color:#111827;text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 0 6px rgba(255,255,255,.85);max-width:160px;overflow:hidden;text-overflow:ellipsis">${_mtEsc(s.name)}</div>
         </div>`
       });
       L.marker([s.lat, s.lng], { icon: pin }).addTo(_mtLayer)
@@ -25592,15 +25626,58 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
       return;
     }
     box.innerHTML = near.map(s => `
-      <div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #f0f0f0;border-radius:16px;padding:10px 12px;margin-bottom:8px">
+      <div onclick="_mtShowRoute('${_mtEsc(s.uid)}')" style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #f0f0f0;border-radius:16px;padding:10px 12px;margin-bottom:8px;cursor:pointer">
         <div style="width:46px;height:46px;border-radius:12px;background:#ecfdf5;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🍽️</div>
         <div style="flex:1;min-width:0">
           <p style="margin:0;font-weight:700;font-size:14px;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_mtEsc(s.name)}</p>
-          <p style="margin:2px 0 0;font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="fa-solid fa-location-dot" style="color:#10B981"></i> ${_mtFmt(s.d)}${s.alamat ? ' · ' + _mtEsc(s.alamat) : ''}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="fa-solid fa-route" style="color:#10B981"></i> ${_mtFmt(s.d)} · ketuk untuk rute${s.alamat ? ' · ' + _mtEsc(s.alamat) : ''}</p>
         </div>
-        <button onclick="closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:8px 14px;border-radius:12px;flex-shrink:0">Lihat</button>
+        <button onclick="event.stopPropagation();closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:8px 14px;border-radius:12px;flex-shrink:0">Lihat</button>
       </div>`).join('');
   }
+
+  // ── Rute ke mat'am terpilih (SOLID, mengikuti jalan via ORS) ──────────────
+  // Hanya tampil saat nama mat'am di daftar bawah diklik. Klik lagi mat'am yang
+  // sama = sembunyikan (toggle). Garis lurus solid tampil instan, lalu di-upgrade
+  // jadi rute jalan sungguhan begitu ORS balas. Garis rute ditaruh langsung di
+  // _mtMap (bukan _mtLayer) supaya tidak terhapus saat marker digambar ulang.
+  function _mtClearRoute() {
+    _mtSelectedUid = null;
+    if (_mtRouteLine) { try { _mtMap.removeLayer(_mtRouteLine); } catch (e) {} _mtRouteLine = null; }
+  }
+  async function _mtFetchRoadRoute(fLat, fLng, tLat, tLng) {
+    if (!window._ORS_API_KEY) return null;
+    try {
+      const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${encodeURIComponent(window._ORS_API_KEY)}&start=${fLng},${fLat}&end=${tLng},${tLat}`;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      let res;
+      try { res = await fetch(url, { signal: ctrl.signal }); } finally { clearTimeout(timer); }
+      if (!res.ok) throw new Error('ORS ' + res.status);
+      const data = await res.json();
+      const coords = data && data.features && data.features[0] && data.features[0].geometry && data.features[0].geometry.coordinates;
+      if (!Array.isArray(coords) || !coords.length) throw new Error('geometri kosong');
+      return coords.map(c => [c[1], c[0]]); // ORS [lng,lat] → Leaflet [lat,lng]
+    } catch (e) { return null; }
+  }
+  window._mtShowRoute = async function (uid) {
+    if (!_mtMap || !_mtUser) return;
+    if (_mtSelectedUid === uid) { _mtClearRoute(); return; } // klik lagi = toggle off
+    const s = (_mtLastNear || []).find(x => x.uid === uid);
+    if (!s) return;
+    _mtSelectedUid = uid;
+    if (_mtRouteLine) { try { _mtMap.removeLayer(_mtRouteLine); } catch (e) {} _mtRouteLine = null; }
+    // 1) garis lurus SOLID dulu (instan) + fokuskan peta ke rute
+    _mtRouteLine = L.polyline([[_mtUser.lat, _mtUser.lng], [s.lat, s.lng]], { color: '#10B981', weight: 5, opacity: .9 }).addTo(_mtMap);
+    _mtProgView(() => { try { _mtMap.fitBounds([[_mtUser.lat, _mtUser.lng], [s.lat, s.lng]], { padding: [70, 70], maxZoom: 17, animate: true }); } catch (e) {} });
+    // 2) upgrade jadi rute mengikuti JALAN (kalau ORS berhasil & pilihan masih sama)
+    const path = await _mtFetchRoadRoute(_mtUser.lat, _mtUser.lng, s.lat, s.lng);
+    if (path && _mtSelectedUid === uid && _mtMap) {
+      if (_mtRouteLine) { try { _mtMap.removeLayer(_mtRouteLine); } catch (e) {} }
+      _mtRouteLine = L.polyline(path, { color: '#10B981', weight: 5, opacity: .95 }).addTo(_mtMap);
+      _mtProgView(() => { try { _mtMap.fitBounds(_mtRouteLine.getBounds(), { padding: [70, 70], maxZoom: 17, animate: true }); } catch (e) {} });
+    }
+  };
 
   // Ekspos hanya yang dipanggil dari HTML
   window.openMatamTerdekat = openMatamTerdekat;
@@ -26510,12 +26587,15 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 
   async function _bsHydrateCourier(o){
     try{
-      if(typeof _ykFetchOwnProfile !== 'function') return;
-      const prof = await _ykFetchOwnProfile(o.courier_id);
-      if(!prof) return;
+      // Avatar kurir = foto PROFIL (users.photo_url), BUKAN selfie/KTP (dokumen
+      // verifikasi rahasia — hanya boleh dilihat admin). Cegah kebocoran ke pengirim.
       const el = document.getElementById('bsAv_'+o.id);
-      if(el && prof.selfie_photo_url){
-        el.innerHTML = '<img src="'+esc(prof.selfie_photo_url)+'" style="width:100%;height:100%;object-fit:cover" alt=""/>';
+      if(!el || !o.courier_id) return;
+      const ur = await window._supaFetch('/rest/v1/users?uid=eq.'+encodeURIComponent(o.courier_id)+'&select=photo_url&limit=1');
+      const urows = ur.ok ? await ur.json() : [];
+      const photo = (urows[0] && urows[0].photo_url) || '';
+      if(photo){
+        el.innerHTML = '<img src="'+esc(photo)+'" style="width:100%;height:100%;object-fit:cover" alt=""/>';
       }
     }catch(e){}
   }
@@ -27022,7 +27102,7 @@ function _kbUnsubscribeOrderStatus() {
   if (_kbOrderChannel) { try { window.supabase.removeChannel(_kbOrderChannel); } catch (e) {} _kbOrderChannel = null; }
 }
 
-// Isi bulatan avatar: foto (selfie_photo_url) kalau ada, jika tidak fallback ikon User (Lucide).
+// Isi bulatan avatar: foto profil (users.photo_url) kalau ada, jika tidak fallback ikon User (Lucide).
 function _kbSetAvatar(el, photoUrl) {
   if (!el) return;
   if (photoUrl) { el.innerHTML = '<img src="' + _sadEscHtml(photoUrl) + '" style="width:100%;height:100%;object-fit:cover" alt=""/>'; }
@@ -27044,10 +27124,15 @@ async function _kbShowCourierPanel(order) {
   try {
     if (order.courier_id) {
       const prof = await _ykFetchOwnProfile(order.courier_id);
-      if (prof) {
-        if (prof.name) document.getElementById('kbCourierName').textContent = prof.name;
-        _kbSetAvatar(document.getElementById('kbCourierAvatar'), prof.selfie_photo_url || '');
-      }
+      if (prof && prof.name) document.getElementById('kbCourierName').textContent = prof.name;
+      // Avatar = foto PROFIL kurir (users.photo_url), BUKAN selfie/KTP (dokumen verifikasi rahasia).
+      let _cphoto = '';
+      try {
+        const _ur = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(order.courier_id) + '&select=photo_url&limit=1');
+        const _urows = _ur.ok ? await _ur.json() : [];
+        _cphoto = (_urows[0] && _urows[0].photo_url) || '';
+      } catch (e2) {}
+      _kbSetAvatar(document.getElementById('kbCourierAvatar'), _cphoto);
     }
   } catch (e) {}
 }
@@ -29233,6 +29318,95 @@ function _renderPopupPromoCard(p) {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => { _checkAndShowPopupPromo(); }, 2000);
 });
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HAPUS AKUN — wajib Google Play (app dengan login).
+     Memanggil Edge Function `delete-account` (service_role) yang menghapus
+     data pribadi user + baris auth.users → akun benar-benar terhapus &
+     tidak bisa login lagi. Tombol ada di Pengaturan, di bawah Notifikasi.
+═══════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  const REQUIRED_WORD = 'HAPUS';
+
+  function _delAccToken(){
+    let t = (window._S && window._S._accessToken) || null;
+    if (t) return t;
+    try {
+      const raw = localStorage.getItem('sb-' + window._SUPA_REF + '-auth-token');
+      if (raw) { const p = JSON.parse(raw); t = (p && p.access_token) || (Array.isArray(p) && p[0] && p[0].access_token) || null; }
+    } catch(e){}
+    return t;
+  }
+
+  window.openDeleteAccount = function(){
+    if (document.getElementById('delAccOverlay')) return;
+    const email = (window._S && window._S.user && window._S.user.email) || '';
+    const ov = document.createElement('div');
+    ov.id = 'delAccOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px)';
+    ov.innerHTML = `
+      <div style="background:#fff;border-radius:24px;max-width:400px;width:100%;padding:26px 22px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+        <div style="width:56px;height:56px;border-radius:18px;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </div>
+        <h3 style="font-size:19px;font-weight:800;color:#111827;text-align:center;margin:0 0 6px">Hapus Akun Permanen?</h3>
+        <p style="font-size:13.5px;color:#6b7280;text-align:center;line-height:1.6;margin:0 0 4px">Tindakan ini <b>tidak bisa dibatalkan</b>. Seluruh data pribadi kamu (profil, toko, produk, chat, pesanan) akan dihapus dan kamu tidak bisa login lagi.</p>
+        ${email ? `<p style="font-size:12.5px;color:#9ca3af;text-align:center;margin:0 0 14px">Akun: <b style="color:#4b5563">${email}</b></p>` : '<div style="height:10px"></div>'}
+        <p style="font-size:12.5px;color:#374151;margin:0 0 6px">Ketik <b style="color:#dc2626">${REQUIRED_WORD}</b> untuk konfirmasi:</p>
+        <input id="delAccInput" type="text" autocomplete="off" placeholder="${REQUIRED_WORD}"
+          style="width:100%;padding:12px 14px;border:2px solid #e5e7eb;border-radius:12px;font-size:15px;font-weight:700;letter-spacing:.05em;text-align:center;outline:none;box-sizing:border-box"/>
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button id="delAccCancel" style="flex:1;padding:13px;border-radius:12px;border:none;background:#f3f4f6;color:#374151;font-weight:700;font-size:14px;cursor:pointer">Batal</button>
+          <button id="delAccConfirm" disabled style="flex:1;padding:13px;border-radius:12px;border:none;background:#fca5a5;color:#fff;font-weight:700;font-size:14px;cursor:not-allowed">Hapus</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+
+    const input = ov.querySelector('#delAccInput');
+    const btn = ov.querySelector('#delAccConfirm');
+    const close = () => ov.remove();
+    ov.querySelector('#delAccCancel').onclick = close;
+    ov.addEventListener('click', e => { if (e.target === ov) close(); });
+    input.addEventListener('input', () => {
+      const ok = input.value.trim().toUpperCase() === REQUIRED_WORD;
+      btn.disabled = !ok;
+      btn.style.background = ok ? '#dc2626' : '#fca5a5';
+      btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+    });
+    btn.onclick = () => doDeleteAccount(btn);
+    setTimeout(() => input.focus(), 50);
+  };
+
+  window.doDeleteAccount = async function(btn){
+    const token = _delAccToken();
+    if (!token) { showToast('Sesi tidak ditemukan. Silakan login ulang.', 'red'); return; }
+    if (btn){ btn.disabled = true; btn.textContent = 'Menghapus...'; btn.style.background = '#b91c1c'; btn.style.cursor = 'wait'; }
+    try {
+      const res = await fetch(`${window._SUPA_URL}/functions/v1/delete-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': window._SUPA_ANON,
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({})
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
+
+      // Bersihkan sesi lokal & keluar total
+      try { await supabase.auth.signOut(); } catch(e){}
+      try { localStorage.removeItem('sb-' + window._SUPA_REF + '-auth-token'); } catch(e){}
+      showToast('Akun kamu telah dihapus.', 'green');
+      setTimeout(() => { window.location.href = '/'; }, 1200);
+    } catch (err) {
+      showToast('Gagal menghapus akun: ' + (err.message || err), 'red');
+      if (btn){ btn.disabled = false; btn.textContent = 'Hapus'; btn.style.background = '#dc2626'; btn.style.cursor = 'pointer'; }
+    }
+  };
+})();
 </script>
 
 </body>
