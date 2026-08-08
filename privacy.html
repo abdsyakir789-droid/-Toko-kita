@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kebijakan Privasi — YallaMart</title>
+<style>
+  :root { --emerald:#10B981; --ink:#111827; --muted:#4b5563; --line:#e5e7eb; }
+  * { box-sizing:border-box; }
+  body{
+    margin:0; background:#f9fafb; color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7; -webkit-text-size-adjust:100%;
+  }
+  .wrap{ max-width:760px; margin:0 auto; padding:24px 20px 64px; }
+  header{ border-bottom:3px solid var(--emerald); padding-bottom:16px; margin-bottom:8px; }
+  h1{ font-size:26px; margin:0 0 4px; }
+  .updated{ color:var(--muted); font-size:14px; margin:0; }
+  h2{ font-size:19px; margin:32px 0 8px; color:#065f46; }
+  h3{ font-size:16px; margin:20px 0 4px; }
+  p, li{ color:var(--ink); font-size:15.5px; }
+  ul{ padding-left:20px; }
+  a{ color:var(--emerald); }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:4px 20px 20px; margin-top:16px; }
+  table{ width:100%; border-collapse:collapse; margin:8px 0; font-size:14.5px; }
+  th,td{ text-align:left; border:1px solid var(--line); padding:8px 10px; vertical-align:top; }
+  th{ background:#ecfdf5; }
+  footer{ margin-top:40px; color:var(--muted); font-size:13.5px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Kebijakan Privasi YallaMart</h1>
+    <p class="updated">Terakhir diperbarui: 8 Agustus 2026</p>
+  </header>
+
+  <div class="card">
+    <p>YallaMart ("kami", "aplikasi") adalah platform marketplace untuk komunitas mahasiswa di Kairo, Mesir. Kebijakan Privasi ini menjelaskan data apa yang kami kumpulkan, bagaimana kami menggunakannya, dengan siapa kami membagikannya, dan hak Anda atas data tersebut. Dengan menggunakan YallaMart, Anda menyetujui praktik yang dijelaskan di sini.</p>
+
+    <h2>1. Data yang Kami Kumpulkan</h2>
+    <table>
+      <tr><th>Kategori</th><th>Contoh Data</th><th>Tujuan</th></tr>
+      <tr><td>Data Akun</td><td>Nama, nomor telepon, alamat email, kata sandi (terenkripsi)</td><td>Membuat &amp; mengamankan akun, autentikasi, verifikasi OTP</td></tr>
+      <tr><td>Lokasi</td><td>Alamat pengantaran, titik koordinat saat menggunakan fitur kurir/pengiriman</td><td>Menampilkan lokasi di peta, menghitung rute &amp; ongkir, live tracking kurir</td></tr>
+      <tr><td>Konten Pengguna</td><td>Foto produk/toko yang diunggah, pesan chat, ulasan</td><td>Menampilkan listing, komunikasi antar pengguna</td></tr>
+      <tr><td>Data Notifikasi</td><td>Token push notification perangkat</td><td>Mengirim notifikasi pesan &amp; pesanan</td></tr>
+      <tr><td>Data Penggunaan</td><td>Halaman yang dibuka, interaksi, tipe perangkat, laporan error</td><td>Analitik, memperbaiki bug, meningkatkan layanan</td></tr>
+      <tr><td>Verifikasi Identitas Kurir (YallaKurir)</td><td>Foto KTP atau paspor, dan foto selfie — khusus saat mendaftar sebagai kurir</td><td>Memverifikasi identitas kurir. Karena layanan pengiriman barang (YallaKurir) berisiko, verifikasi ini diperlukan demi keamanan &amp; kepercayaan antara pengirim, penerima, dan kurir</td></tr>
+    </table>
+    <p>Kami <strong>tidak</strong> mengumpulkan data kartu kredit atau informasi pembayaran finansial di dalam aplikasi.</p>
+
+    <h2>2. Bagaimana Kami Menggunakan Data</h2>
+    <ul>
+      <li>Menyediakan dan mengoperasikan fitur marketplace, chat, dan pengiriman kurir.</li>
+      <li>Mengautentikasi pengguna dan menjaga keamanan akun.</li>
+      <li>Mengirim notifikasi terkait pesanan, pesan, dan aktivitas akun.</li>
+      <li>Menghitung rute dan estimasi biaya pengiriman berdasarkan lokasi.</li>
+      <li>Menganalisis penggunaan secara agregat dan memperbaiki performa aplikasi.</li>
+      <li>Memverifikasi identitas calon kurir YallaKurir (KTP/paspor + selfie) demi keamanan layanan pengiriman barang.</li>
+    </ul>
+
+    <h2>3. Pihak Ketiga yang Memproses Data</h2>
+    <p>Kami menggunakan penyedia layanan berikut yang dapat memproses sebagian data untuk menjalankan aplikasi:</p>
+    <ul>
+      <li><strong>Supabase</strong> — database, autentikasi, dan penyimpanan data akun.</li>
+      <li><strong>Cloudflare</strong> (R2, Workers, KV) — hosting, penyimpanan gambar, dan cache.</li>
+      <li><strong>Cloudinary</strong> — pengoptimalan dan penyajian gambar.</li>
+      <li><strong>OpenRouteService</strong> — perhitungan rute dan jarak pengiriman.</li>
+      <li><strong>Google Analytics</strong> — statistik penggunaan aplikasi.</li>
+      <li><strong>Sentry</strong> — pelaporan dan diagnosis error teknis.</li>
+      <li><strong>Brevo</strong> — pengiriman kode OTP melalui email.</li>
+      <li><strong>Fonnte</strong> — pengiriman kode OTP melalui WhatsApp.</li>
+    </ul>
+    <p>Kami tidak menjual data pribadi Anda kepada pihak mana pun.</p>
+
+    <h2>4. Lokasi &amp; Peta</h2>
+    <p>Fitur kurir dan pengiriman menggunakan lokasi hanya saat aplikasi digunakan (foreground) untuk menampilkan posisi, menghitung rute, dan memungkinkan pelacakan pengiriman. Anda dapat menolak izin lokasi; sebagian fitur pengiriman mungkin tidak berfungsi tanpa izin tersebut.</p>
+
+    <h2>5. Penyimpanan &amp; Keamanan Data</h2>
+    <p>Data disimpan pada infrastruktur Supabase dan Cloudflare dengan enkripsi saat transit (HTTPS). Kata sandi disimpan dalam bentuk ter-hash dan tidak pernah kami lihat dalam bentuk asli. Dokumen identitas kurir (KTP/paspor + selfie) disimpan secara terbatas dan hanya digunakan untuk verifikasi. Kami menyimpan data selama akun Anda aktif atau selama diperlukan untuk menyediakan layanan.</p>
+
+    <h2>6. Hak Anda &amp; Penghapusan Akun</h2>
+    <p>Anda berhak mengakses, memperbarui, atau menghapus data pribadi Anda. Anda dapat menghapus akun beserta data terkait langsung dari dalam aplikasi melalui menu <em>Profil &rarr; Pengaturan &rarr; Hapus Akun</em>, atau dengan menghubungi kami di alamat email di bawah. Setelah penghapusan, data akun Anda akan dihapus dari sistem kami dalam waktu wajar, kecuali data yang wajib kami simpan menurut hukum.</p>
+
+    <h2>7. Anak-anak</h2>
+    <p>YallaMart ditujukan untuk pengguna berusia 13 tahun ke atas. Kami tidak sengaja mengumpulkan data dari anak di bawah usia tersebut.</p>
+
+    <h2>8. Perubahan Kebijakan</h2>
+    <p>Kami dapat memperbarui Kebijakan Privasi ini dari waktu ke waktu. Perubahan akan dipublikasikan pada halaman ini beserta tanggal pembaruan terbaru.</p>
+
+    <h2>9. Hubungi Kami</h2>
+    <p>Jika Anda memiliki pertanyaan mengenai Kebijakan Privasi ini atau ingin mengajukan permintaan terkait data Anda, hubungi kami di:</p>
+    <p><strong>Email:</strong> <a href="mailto:admin@yallamart.my.id">admin@yallamart.my.id</a></p>
+  </div>
+
+  <footer>
+    &copy; 2026 YallaMart. Seluruh hak cipta dilindungi.
+  </footer>
+</div>
+</body>
+</html>
