@@ -17999,6 +17999,20 @@ function updateYcBadge(count) {
           <i class="fa-solid fa-chevron-right" style="color:#d1d5db;font-size:12px;flex-shrink:0"></i>
         </div>
 
+        <!-- ── Hapus Akun — tepat di bawah Notifikasi (wajib Google Play utk app dgn login) ── -->
+        <div style="height:1px;background:#f3f4f6;margin:0 16px"></div>
+        <button onclick="openDeleteAccount()"
+          style="width:100%;padding:17px 16px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:14px;text-align:left">
+          <div style="width:40px;height:40px;border-radius:13px;background:#fef2f2;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </div>
+          <div style="flex:1;min-width:0">
+            <p style="font-size:14px;font-weight:700;color:#dc2626;margin:0">Hapus Akun</p>
+            <p style="font-size:11.5px;color:#9ca3af;margin:2px 0 0">Hapus permanen akun &amp; seluruh data kamu</p>
+          </div>
+          <i class="fa-solid fa-chevron-right" style="color:#fca5a5;font-size:12px;flex-shrink:0"></i>
+        </button>
+
         <!-- ── Tombol Keluar — dipindahkan ke sini, khusus desktop, tepat di bawah Notifikasi ── -->
         <div class="hidden md:block">
           <div style="height:1px;background:#f3f4f6;margin:0 16px"></div>
@@ -25311,6 +25325,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
   let _mtLastTrackPt = null;   // titik GPS terakhir (utk throttle update)
   let _mtRouteLine = null;     // garis rute (ikuti jalan) ke mat'am terpilih
   let _mtSelectedUid = null;   // mat'am yang rutenya sedang ditampilkan
+  let _mtFetchRetry = 0;       // penghitung percobaan ulang saat fetch data mat'am gagal
 
   function _mtHaversineM(lat1, lng1, lat2, lng2) {
     const R = 6371000, p = Math.PI / 180;
@@ -25399,15 +25414,47 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     tiles.addTo(_mtMap);
   }
 
+  // Plugin rotasi peta (leaflet-rotate) — dimuat sekali, khusus fitur mat'am.
+  // HARUS siap SEBELUM L.map dibuat karena opsi rotate dibaca saat inisialisasi.
+  let _mtRotatePromise = null;
+  function _mtEnsureRotate() {
+    if (_mtRotatePromise) return _mtRotatePromise;
+    _mtRotatePromise = new Promise((resolve) => {
+      if (L.Map && L.Map.prototype && L.Map.prototype.setBearing) return resolve(true);
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js';
+      s.onload = () => resolve(!!(L.Map && L.Map.prototype && L.Map.prototype.setBearing));
+      s.onerror = () => resolve(false);
+      document.head.appendChild(s);
+    });
+    return _mtRotatePromise;
+  }
+
   function _mtInitMap() {
     if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; }
     const loader = document.getElementById('mtMapLoading');
     if (loader) loader.style.display = 'flex';
+    // Muat plugin rotasi DULU, baru bangun peta (kalau gagal, peta tetap jalan tanpa rotasi).
+    _mtEnsureRotate().then((canRotate) => {
+      if (!_mtOvVisible()) return; // sudah ditutup sebelum plugin siap
+      _mtBuildMap(!!canRotate);
+    });
+  }
+
+  function _mtBuildMap(canRotate) {
     let _loaderHidden = false;
     const hideLoader = () => { if (_loaderHidden) return; _loaderHidden = true; const l = document.getElementById('mtMapLoading'); if (l) l.style.display = 'none'; };
     const c = _mtUser || DEFAULT_CENTER;
-    // Animasi zoom dimatikan supaya basemap vektor (MapLibre GL) & marker Leaflet tetap sinkron
-    _mtMap = L.map('mtMap', { zoomControl: true, fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false }).setView([c.lat, c.lng], 15);
+    const opts = { zoomControl: true, fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false };
+    // Aktifkan rotasi peta: dua jari di HP (touchRotate), Shift+drag di desktop, + tombol kompas.
+    if (canRotate) {
+      opts.rotate = true;
+      opts.touchRotate = true;
+      opts.shiftKeyRotate = true;
+      opts.bearing = 0;
+      opts.rotateControl = { closeOnZeroBearing: false, position: 'topleft' };
+    }
+    _mtMap = L.map('mtMap', opts).setView([c.lat, c.lng], 15);
     _mtLayer = L.layerGroup().addTo(_mtMap);
     // Kalau user geser/zoom peta sendiri, jangan auto-fit lagi (biar tidak menyentak)
     _mtMap.on('dragstart', () => { _mtUserMoved = true; });
@@ -25429,26 +25476,20 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     });
     _mtMap.addControl(new _MtLocateCtrl());
     requestAnimationFrame(() => { if (_mtMap) _mtMap.invalidateSize(); });
-    // Basemap: coba OpenFreeMap (vektor, label Latin + landmark); kalau gagal → CARTO raster.
-    _mtEnsureMapLibre().then(ok => {
-      if (!_mtMap) return; // sudah ditutup sebelum library siap
-      if (ok && L.maplibreGL) {
-        try {
-          const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(_mtMap);
-          const mm = gl.getMaplibreMap ? gl.getMaplibreMap() : gl._glMap;
-          if (mm) {
-            mm.on('load', () => { _mtForceLatinLabels(mm); _mtEnhanceBuildings(mm); _mtBasemapReady = true; _mtTryFit(); hideLoader(); });
-            mm.on('idle', hideLoader);
-            mm.on('error', () => {});
-          } else { hideLoader(); }
-          return;
-        } catch (e) { /* jatuh ke raster */ }
-      }
-      _mtAddRasterFallback(hideLoader);
+    // Basemap RASTER (CARTO Voyager): label Latin, tampil bersih, DAN bisa ikut berputar
+    // saat peta diputar. (Basemap vektor MapLibre GL tidak dipakai di sini karena plugin
+    // Leaflet-nya tidak mendukung bearing → tak bisa ikut berputar.)
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO'
     });
+    tiles.on('load', () => { _mtBasemapReady = true; _mtTryFit(); hideLoader(); });
+    tiles.addTo(_mtMap);
     // Pengaman: sembunyikan loader walau event telat/tak terpicu
     setTimeout(() => { if (_mtMap) { _mtMap.invalidateSize(); _mtBasemapReady = true; _mtTryFit(); } hideLoader(); }, 3500);
   }
+
+  // Overlay Mat'am masih terbuka? (dipakai untuk hentikan retry saat user menutup)
+  function _mtOvVisible() { const o = document.getElementById('matamTerdekatOverlay'); return !!o && o.style.display !== 'none'; }
 
   async function _mtFetchShops() {
     if (!_mtUser) { _mtShops = []; _mtDraw(); return; }
@@ -25464,22 +25505,41 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
       const lngMin = (_mtUser.lng - dLng).toFixed(6), lngMax = (_mtUser.lng + dLng).toFixed(6);
       // 1) toko di sekitar user yang SUDAH mengaktifkan titik lokasi (dibatasi kotak → ringan)
       const shopRes = await window._supaFetch(`/rest/v1/shops?lat=gte.${latMin}&lat=lte.${latMax}&lng=gte.${lngMin}&lng=lte.${lngMax}&select=user_id,nama_toko,lat,lng,alamat`);
-      const shopsRaw = shopRes.ok ? await shopRes.json() : [];
-      if (!shopsRaw.length) { _mtShops = []; _mtFetching = false; _mtDraw(); return; }
+      if (!shopRes.ok) throw new Error('shops HTTP ' + shopRes.status); // non-ok = GAGAL (bukan "kosong")
+      const shopsRaw = await shopRes.json();
+      if (!shopsRaw.length) { _mtShops = []; _mtFetchedOnce = true; _mtFetchRetry = 0; _mtFetching = false; _mtDraw(); return; }
       // 2) dari toko sekitar itu, saring hanya yang mat'am YallaFood (in-list sudah kecil)
       const uids = [...new Set(shopsRaw.map(s => s.user_id).filter(Boolean))];
       const inList = uids.map(u => '"' + String(u).replace(/"/g, '') + '"').join(',');
       const adsRes = await window._supaFetch(`/rest/v1/ads?is_yallafood=eq.true&seller_uid=in.(${inList})&select=seller_uid`);
-      const ads = adsRes.ok ? await adsRes.json() : [];
+      if (!adsRes.ok) throw new Error('ads HTTP ' + adsRes.status);
+      const ads = await adsRes.json();
       const foodUids = new Set(ads.map(a => a.seller_uid));
       _mtShops = shopsRaw
         .filter(s => foodUids.has(s.user_id))
         .map(s => ({ uid: s.user_id, name: s.nama_toko || "Mat'am", lat: Number(s.lat), lng: Number(s.lng), alamat: s.alamat || '' }))
         .filter(s => !isNaN(s.lat) && !isNaN(s.lng));
+      _mtFetchedOnce = true; _mtFetchRetry = 0; // sukses → baru boleh kunci supaya tidak fetch berulang
       _mtFetching = false;
       _mtDraw();
     } catch (e) {
-      _mtShops = []; _mtFetching = false; _mtDraw();
+      // GAGAL fetch (transient) — JANGAN kunci _mtFetchedOnce. Coba ulang otomatis beberapa
+      // kali TANPA perlu tutup & buka lagi (ini akar bug "harus di-swipe close dulu").
+      const sub = document.getElementById('mtSubtitle');
+      if (_mtFetchRetry < 4 && _mtOvVisible()) {
+        _mtFetchRetry++;
+        if (sub) sub.textContent = 'Koneksi tersendat, mencoba lagi… (' + _mtFetchRetry + '/4)';
+        // _mtFetching tetap true selama menunggu → cegah fetch ganda
+        setTimeout(() => {
+          if (!_mtOvVisible()) { _mtFetching = false; return; }
+          _mtFetching = false; _mtShops = null; _mtFetchShops();
+        }, 1000 * _mtFetchRetry);
+      } else {
+        // 4x gagal → berhenti; biarkan bisa dicoba manual (tombol lokasi) / GPS tick berikutnya
+        _mtFetchRetry = 0; _mtFetchedOnce = false; _mtFetching = false; _mtShops = [];
+        _mtDraw();
+        if (sub) sub.textContent = "Gagal memuat mat'am — tap tombol lokasi untuk coba lagi.";
+      }
     }
   }
 
@@ -25508,6 +25568,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     // update berikutnya: geser titik + perbarui jarak/garis, TANPA memindah/zoom peta (biar tidak menyentak)
     _mtUser = { lat: Number(lat), lng: Number(lng) };
     if (_mtFetchCenter && _mtHaversineM(_mtUser.lat, _mtUser.lng, _mtFetchCenter.lat, _mtFetchCenter.lng) > 800) { _mtShops = null; _mtFetchShops(); }
+    else if (!_mtFetchedOnce && !_mtFetching) { _mtFetchRetry = 0; _mtShops = null; _mtFetchShops(); } // fetch pertama gagal → coba lagi saat GPS update, tanpa tutup-buka
     else { _mtDraw(); }
   }
 
@@ -25522,7 +25583,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     _mtUser = { lat: Number(lat), lng: Number(lng) };
     if (_mtMap) _mtProgView(() => _mtMap.setView([_mtUser.lat, _mtUser.lng], _mtMap.getZoom() < 14 ? 15 : _mtMap.getZoom(), { animate: false }));
     _mtDraw(keepMsg);
-    if (!_mtFetchedOnce && !_mtFetching) { _mtFetchedOnce = true; _mtFetchShops(); }
+    if (!_mtFetchedOnce && !_mtFetching) { _mtFetchShops(); } // _mtFetchedOnce dikunci di dalam _mtFetchShops HANYA saat sukses
   }
 
   function _mtDraw(keepMsg) {
@@ -25554,9 +25615,14 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     // saat nama mat'am di daftar bawah diklik, lihat _mtShowRoute.)
     near.forEach(s => {
       const pin = L.divIcon({
-        className: '', iconSize: [0, 0], html: `<div style="position:relative;transform:translate(-50%,-100%);text-align:center;white-space:nowrap">
-          <div style="display:inline-block;background:#fff;color:#2563eb;font-size:11px;font-weight:800;padding:3px 9px;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,.28);max-width:150px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">${_mtEsc(s.name)}</div>
-          <div style="line-height:0;margin-top:1px"><svg width="26" height="30" viewBox="0 0 24 24" fill="#2563eb" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"><path d="M12 22s-6.5-6.16-6.5-11A6.5 6.5 0 0 1 12 4.5a6.5 6.5 0 0 1 6.5 6.5c0 4.84-6.5 11-6.5 11z"/><circle cx="12" cy="11" r="2.4" fill="#ffffff" stroke="none"/></svg></div>
+        className: '', iconSize: [0, 0], html: `<div style="position:relative;display:inline-block;transform:translate(-50%,-100%)">
+          <!-- Pin marker mat'am: teardrop + simbol garpu & pisau (fork & knife) -->
+          <div style="position:relative;width:32px;height:38px">
+            <svg width="32" height="38" viewBox="0 0 24 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C6.48 0 2 4.48 2 10c0 6.5 10 18 10 18s10-11.5 10-18C22 4.48 17.52 0 12 0z" fill="#10B981" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            <i class="fa-solid fa-utensils" style="position:absolute;top:7px;left:0;right:0;text-align:center;color:#fff;font-size:11px;line-height:1"></i>
+          </div>
+          <!-- Nama mat'am TEPAT DI BAWAH pin; glow tipis mengikuti kontur huruf (bukan kotak) -->
+          <div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:1px;white-space:nowrap;font-size:11.5px;font-weight:800;color:#111827;text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 0 6px rgba(255,255,255,.85);max-width:160px;overflow:hidden;text-overflow:ellipsis">${_mtEsc(s.name)}</div>
         </div>`
       });
       L.marker([s.lat, s.lng], { icon: pin }).addTo(_mtLayer)
@@ -25598,6 +25664,9 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     _mtUserMoved = false;
     _mtFit();          // balik ke lokasi live sekarang
     _mtStartWatch();   // pastikan tracking aktif (kalau sempat mati)
+    // Jalur retry manual: kalau data mat'am belum pernah berhasil dimuat (gagal/transient),
+    // ambil ulang sekarang — supaya user tak perlu tutup & buka lagi.
+    if (_mtUser && !_mtFetching && !_mtFetchedOnce) { _mtFetchRetry = 0; _mtShops = null; _mtFetchShops(); }
   }
 
   function _mtRenderList(near) {
@@ -29299,6 +29368,95 @@ function _renderPopupPromoCard(p) {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => { _checkAndShowPopupPromo(); }, 2000);
 });
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HAPUS AKUN — wajib Google Play (app dengan login).
+     Memanggil Edge Function `delete-account` (service_role) yang menghapus
+     data pribadi user + baris auth.users → akun benar-benar terhapus &
+     tidak bisa login lagi. Tombol ada di Pengaturan, di bawah Notifikasi.
+═══════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  const REQUIRED_WORD = 'HAPUS';
+
+  function _delAccToken(){
+    let t = (window._S && window._S._accessToken) || null;
+    if (t) return t;
+    try {
+      const raw = localStorage.getItem('sb-' + window._SUPA_REF + '-auth-token');
+      if (raw) { const p = JSON.parse(raw); t = (p && p.access_token) || (Array.isArray(p) && p[0] && p[0].access_token) || null; }
+    } catch(e){}
+    return t;
+  }
+
+  window.openDeleteAccount = function(){
+    if (document.getElementById('delAccOverlay')) return;
+    const email = (window._S && window._S.user && window._S.user.email) || '';
+    const ov = document.createElement('div');
+    ov.id = 'delAccOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px)';
+    ov.innerHTML = `
+      <div style="background:#fff;border-radius:24px;max-width:400px;width:100%;padding:26px 22px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+        <div style="width:56px;height:56px;border-radius:18px;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </div>
+        <h3 style="font-size:19px;font-weight:800;color:#111827;text-align:center;margin:0 0 6px">Hapus Akun Permanen?</h3>
+        <p style="font-size:13.5px;color:#6b7280;text-align:center;line-height:1.6;margin:0 0 4px">Tindakan ini <b>tidak bisa dibatalkan</b>. Seluruh data pribadi kamu (profil, toko, produk, chat, pesanan) akan dihapus dan kamu tidak bisa login lagi.</p>
+        ${email ? `<p style="font-size:12.5px;color:#9ca3af;text-align:center;margin:0 0 14px">Akun: <b style="color:#4b5563">${email}</b></p>` : '<div style="height:10px"></div>'}
+        <p style="font-size:12.5px;color:#374151;margin:0 0 6px">Ketik <b style="color:#dc2626">${REQUIRED_WORD}</b> untuk konfirmasi:</p>
+        <input id="delAccInput" type="text" autocomplete="off" placeholder="${REQUIRED_WORD}"
+          style="width:100%;padding:12px 14px;border:2px solid #e5e7eb;border-radius:12px;font-size:15px;font-weight:700;letter-spacing:.05em;text-align:center;outline:none;box-sizing:border-box"/>
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button id="delAccCancel" style="flex:1;padding:13px;border-radius:12px;border:none;background:#f3f4f6;color:#374151;font-weight:700;font-size:14px;cursor:pointer">Batal</button>
+          <button id="delAccConfirm" disabled style="flex:1;padding:13px;border-radius:12px;border:none;background:#fca5a5;color:#fff;font-weight:700;font-size:14px;cursor:not-allowed">Hapus</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+
+    const input = ov.querySelector('#delAccInput');
+    const btn = ov.querySelector('#delAccConfirm');
+    const close = () => ov.remove();
+    ov.querySelector('#delAccCancel').onclick = close;
+    ov.addEventListener('click', e => { if (e.target === ov) close(); });
+    input.addEventListener('input', () => {
+      const ok = input.value.trim().toUpperCase() === REQUIRED_WORD;
+      btn.disabled = !ok;
+      btn.style.background = ok ? '#dc2626' : '#fca5a5';
+      btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+    });
+    btn.onclick = () => doDeleteAccount(btn);
+    setTimeout(() => input.focus(), 50);
+  };
+
+  window.doDeleteAccount = async function(btn){
+    const token = _delAccToken();
+    if (!token) { showToast('Sesi tidak ditemukan. Silakan login ulang.', 'red'); return; }
+    if (btn){ btn.disabled = true; btn.textContent = 'Menghapus...'; btn.style.background = '#b91c1c'; btn.style.cursor = 'wait'; }
+    try {
+      const res = await fetch(`${window._SUPA_URL}/functions/v1/delete-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': window._SUPA_ANON,
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({})
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
+
+      // Bersihkan sesi lokal & keluar total
+      try { await supabase.auth.signOut(); } catch(e){}
+      try { localStorage.removeItem('sb-' + window._SUPA_REF + '-auth-token'); } catch(e){}
+      showToast('Akun kamu telah dihapus.', 'green');
+      setTimeout(() => { window.location.href = '/'; }, 1200);
+    } catch (err) {
+      showToast('Gagal menghapus akun: ' + (err.message || err), 'red');
+      if (btn){ btn.disabled = false; btn.textContent = 'Hapus'; btn.style.background = '#dc2626'; btn.style.cursor = 'pointer'; }
+    }
+  };
+})();
 </script>
 
 </body>
