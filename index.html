@@ -25325,6 +25325,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
   let _mtLastTrackPt = null;   // titik GPS terakhir (utk throttle update)
   let _mtRouteLine = null;     // garis rute (ikuti jalan) ke mat'am terpilih
   let _mtSelectedUid = null;   // mat'am yang rutenya sedang ditampilkan
+  let _mtFetchRetry = 0;       // penghitung percobaan ulang saat fetch data mat'am gagal
 
   function _mtHaversineM(lat1, lng1, lat2, lng2) {
     const R = 6371000, p = Math.PI / 180;
@@ -25413,15 +25414,47 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     tiles.addTo(_mtMap);
   }
 
+  // Plugin rotasi peta (leaflet-rotate) — dimuat sekali, khusus fitur mat'am.
+  // HARUS siap SEBELUM L.map dibuat karena opsi rotate dibaca saat inisialisasi.
+  let _mtRotatePromise = null;
+  function _mtEnsureRotate() {
+    if (_mtRotatePromise) return _mtRotatePromise;
+    _mtRotatePromise = new Promise((resolve) => {
+      if (L.Map && L.Map.prototype && L.Map.prototype.setBearing) return resolve(true);
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js';
+      s.onload = () => resolve(!!(L.Map && L.Map.prototype && L.Map.prototype.setBearing));
+      s.onerror = () => resolve(false);
+      document.head.appendChild(s);
+    });
+    return _mtRotatePromise;
+  }
+
   function _mtInitMap() {
     if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; }
     const loader = document.getElementById('mtMapLoading');
     if (loader) loader.style.display = 'flex';
+    // Muat plugin rotasi DULU, baru bangun peta (kalau gagal, peta tetap jalan tanpa rotasi).
+    _mtEnsureRotate().then((canRotate) => {
+      if (!_mtOvVisible()) return; // sudah ditutup sebelum plugin siap
+      _mtBuildMap(!!canRotate);
+    });
+  }
+
+  function _mtBuildMap(canRotate) {
     let _loaderHidden = false;
     const hideLoader = () => { if (_loaderHidden) return; _loaderHidden = true; const l = document.getElementById('mtMapLoading'); if (l) l.style.display = 'none'; };
     const c = _mtUser || DEFAULT_CENTER;
-    // Animasi zoom dimatikan supaya basemap vektor (MapLibre GL) & marker Leaflet tetap sinkron
-    _mtMap = L.map('mtMap', { zoomControl: true, fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false }).setView([c.lat, c.lng], 15);
+    const opts = { zoomControl: true, fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false };
+    // Aktifkan rotasi peta: dua jari di HP (touchRotate), Shift+drag di desktop, + tombol kompas.
+    if (canRotate) {
+      opts.rotate = true;
+      opts.touchRotate = true;
+      opts.shiftKeyRotate = true;
+      opts.bearing = 0;
+      opts.rotateControl = { closeOnZeroBearing: false, position: 'topleft' };
+    }
+    _mtMap = L.map('mtMap', opts).setView([c.lat, c.lng], 15);
     _mtLayer = L.layerGroup().addTo(_mtMap);
     // Kalau user geser/zoom peta sendiri, jangan auto-fit lagi (biar tidak menyentak)
     _mtMap.on('dragstart', () => { _mtUserMoved = true; });
@@ -25443,26 +25476,20 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     });
     _mtMap.addControl(new _MtLocateCtrl());
     requestAnimationFrame(() => { if (_mtMap) _mtMap.invalidateSize(); });
-    // Basemap: coba OpenFreeMap (vektor, label Latin + landmark); kalau gagal → CARTO raster.
-    _mtEnsureMapLibre().then(ok => {
-      if (!_mtMap) return; // sudah ditutup sebelum library siap
-      if (ok && L.maplibreGL) {
-        try {
-          const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(_mtMap);
-          const mm = gl.getMaplibreMap ? gl.getMaplibreMap() : gl._glMap;
-          if (mm) {
-            mm.on('load', () => { _mtForceLatinLabels(mm); _mtEnhanceBuildings(mm); _mtBasemapReady = true; _mtTryFit(); hideLoader(); });
-            mm.on('idle', hideLoader);
-            mm.on('error', () => {});
-          } else { hideLoader(); }
-          return;
-        } catch (e) { /* jatuh ke raster */ }
-      }
-      _mtAddRasterFallback(hideLoader);
+    // Basemap RASTER (CARTO Voyager): label Latin, tampil bersih, DAN bisa ikut berputar
+    // saat peta diputar. (Basemap vektor MapLibre GL tidak dipakai di sini karena plugin
+    // Leaflet-nya tidak mendukung bearing → tak bisa ikut berputar.)
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO'
     });
+    tiles.on('load', () => { _mtBasemapReady = true; _mtTryFit(); hideLoader(); });
+    tiles.addTo(_mtMap);
     // Pengaman: sembunyikan loader walau event telat/tak terpicu
     setTimeout(() => { if (_mtMap) { _mtMap.invalidateSize(); _mtBasemapReady = true; _mtTryFit(); } hideLoader(); }, 3500);
   }
+
+  // Overlay Mat'am masih terbuka? (dipakai untuk hentikan retry saat user menutup)
+  function _mtOvVisible() { const o = document.getElementById('matamTerdekatOverlay'); return !!o && o.style.display !== 'none'; }
 
   async function _mtFetchShops() {
     if (!_mtUser) { _mtShops = []; _mtDraw(); return; }
@@ -25478,22 +25505,41 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
       const lngMin = (_mtUser.lng - dLng).toFixed(6), lngMax = (_mtUser.lng + dLng).toFixed(6);
       // 1) toko di sekitar user yang SUDAH mengaktifkan titik lokasi (dibatasi kotak → ringan)
       const shopRes = await window._supaFetch(`/rest/v1/shops?lat=gte.${latMin}&lat=lte.${latMax}&lng=gte.${lngMin}&lng=lte.${lngMax}&select=user_id,nama_toko,lat,lng,alamat`);
-      const shopsRaw = shopRes.ok ? await shopRes.json() : [];
-      if (!shopsRaw.length) { _mtShops = []; _mtFetching = false; _mtDraw(); return; }
+      if (!shopRes.ok) throw new Error('shops HTTP ' + shopRes.status); // non-ok = GAGAL (bukan "kosong")
+      const shopsRaw = await shopRes.json();
+      if (!shopsRaw.length) { _mtShops = []; _mtFetchedOnce = true; _mtFetchRetry = 0; _mtFetching = false; _mtDraw(); return; }
       // 2) dari toko sekitar itu, saring hanya yang mat'am YallaFood (in-list sudah kecil)
       const uids = [...new Set(shopsRaw.map(s => s.user_id).filter(Boolean))];
       const inList = uids.map(u => '"' + String(u).replace(/"/g, '') + '"').join(',');
       const adsRes = await window._supaFetch(`/rest/v1/ads?is_yallafood=eq.true&seller_uid=in.(${inList})&select=seller_uid`);
-      const ads = adsRes.ok ? await adsRes.json() : [];
+      if (!adsRes.ok) throw new Error('ads HTTP ' + adsRes.status);
+      const ads = await adsRes.json();
       const foodUids = new Set(ads.map(a => a.seller_uid));
       _mtShops = shopsRaw
         .filter(s => foodUids.has(s.user_id))
         .map(s => ({ uid: s.user_id, name: s.nama_toko || "Mat'am", lat: Number(s.lat), lng: Number(s.lng), alamat: s.alamat || '' }))
         .filter(s => !isNaN(s.lat) && !isNaN(s.lng));
+      _mtFetchedOnce = true; _mtFetchRetry = 0; // sukses → baru boleh kunci supaya tidak fetch berulang
       _mtFetching = false;
       _mtDraw();
     } catch (e) {
-      _mtShops = []; _mtFetching = false; _mtDraw();
+      // GAGAL fetch (transient) — JANGAN kunci _mtFetchedOnce. Coba ulang otomatis beberapa
+      // kali TANPA perlu tutup & buka lagi (ini akar bug "harus di-swipe close dulu").
+      const sub = document.getElementById('mtSubtitle');
+      if (_mtFetchRetry < 4 && _mtOvVisible()) {
+        _mtFetchRetry++;
+        if (sub) sub.textContent = 'Koneksi tersendat, mencoba lagi… (' + _mtFetchRetry + '/4)';
+        // _mtFetching tetap true selama menunggu → cegah fetch ganda
+        setTimeout(() => {
+          if (!_mtOvVisible()) { _mtFetching = false; return; }
+          _mtFetching = false; _mtShops = null; _mtFetchShops();
+        }, 1000 * _mtFetchRetry);
+      } else {
+        // 4x gagal → berhenti; biarkan bisa dicoba manual (tombol lokasi) / GPS tick berikutnya
+        _mtFetchRetry = 0; _mtFetchedOnce = false; _mtFetching = false; _mtShops = [];
+        _mtDraw();
+        if (sub) sub.textContent = "Gagal memuat mat'am — tap tombol lokasi untuk coba lagi.";
+      }
     }
   }
 
@@ -25522,6 +25568,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     // update berikutnya: geser titik + perbarui jarak/garis, TANPA memindah/zoom peta (biar tidak menyentak)
     _mtUser = { lat: Number(lat), lng: Number(lng) };
     if (_mtFetchCenter && _mtHaversineM(_mtUser.lat, _mtUser.lng, _mtFetchCenter.lat, _mtFetchCenter.lng) > 800) { _mtShops = null; _mtFetchShops(); }
+    else if (!_mtFetchedOnce && !_mtFetching) { _mtFetchRetry = 0; _mtShops = null; _mtFetchShops(); } // fetch pertama gagal → coba lagi saat GPS update, tanpa tutup-buka
     else { _mtDraw(); }
   }
 
@@ -25536,7 +25583,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     _mtUser = { lat: Number(lat), lng: Number(lng) };
     if (_mtMap) _mtProgView(() => _mtMap.setView([_mtUser.lat, _mtUser.lng], _mtMap.getZoom() < 14 ? 15 : _mtMap.getZoom(), { animate: false }));
     _mtDraw(keepMsg);
-    if (!_mtFetchedOnce && !_mtFetching) { _mtFetchedOnce = true; _mtFetchShops(); }
+    if (!_mtFetchedOnce && !_mtFetching) { _mtFetchShops(); } // _mtFetchedOnce dikunci di dalam _mtFetchShops HANYA saat sukses
   }
 
   function _mtDraw(keepMsg) {
@@ -25617,6 +25664,9 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     _mtUserMoved = false;
     _mtFit();          // balik ke lokasi live sekarang
     _mtStartWatch();   // pastikan tracking aktif (kalau sempat mati)
+    // Jalur retry manual: kalau data mat'am belum pernah berhasil dimuat (gagal/transient),
+    // ambil ulang sekarang — supaya user tak perlu tutup & buka lagi.
+    if (_mtUser && !_mtFetching && !_mtFetchedOnce) { _mtFetchRetry = 0; _mtShops = null; _mtFetchShops(); }
   }
 
   function _mtRenderList(near) {
