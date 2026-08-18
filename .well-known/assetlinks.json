@@ -3,6 +3,9 @@
   "target": {
     "namespace": "android_app",
     "package_name": "id.my.yallamart.app",
-    "sha256_cert_fingerprints": ["D9:2C:2B:C8:75:C6:0D:EF:65:46:CF:F7:05:E3:16:E5:D4:3E:99:C3:CE:8E:A1:06:13:D9:F5:04:BE:F0:06:F9"]
+    "sha256_cert_fingerprints": [
+      "D9:2C:2B:C8:75:C6:0D:EF:65:46:CF:F7:05:E3:16:E5:D4:3E:99:C3:CE:8E:A1:06:13:D9:F5:04:BE:F0:06:F9",
+      "FD:65:A3:4A:5E:DA:9A:25:C0:47:09:5C:B7:F3:C0:B4:CD:7D:CB:95:C8:D8:C6:AC:13:CE:68:1A:32:68:16:47"
+    ]
   }
 }]
