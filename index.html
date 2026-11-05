@@ -4094,13 +4094,59 @@ h3.text-sm.font-bold.text-gray-800 {
     gap: 4px;
   }
   .auth-hint.wa { color: #16a34a; }
+
+  /* ── Tampilan DAFTAR baru (hero + kartu form) ── */
+  #authOverlay.auth-reg-mode .auth-head,
+  #authOverlay.auth-reg-mode .auth-tabs { display: none; }
+  #authOverlay.auth-reg-mode { background: #f3faf6; }
+  .reg-wrap { flex-direction: column; flex: 1 0 auto; background: linear-gradient(180deg,#e8f8ef 0%,#f3faf6 38%,#f3faf6 100%); }
+  .reg-hero { position: relative; display: flex; align-items: flex-end; padding: 18px 0 0 22px; min-height: 210px; overflow: hidden; }
+  .reg-hero-city { position: absolute; right: 0; bottom: 0; width: 70%; height: 70px; fill: #10B981; opacity: .1; pointer-events: none; }
+  .reg-close { position: absolute; top: max(14px, env(safe-area-inset-top, 14px)); right: 14px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; border: none; background: rgba(255,255,255,.85); color: #4b5563; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.08); cursor: pointer; }
+  .reg-hero-txt { position: relative; z-index: 2; flex: 1 1 58%; min-width: 0; padding: 8px 4px 22px 0; align-self: center; }
+  .reg-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; }
+  .reg-brand img { width: 36px; height: 36px; border-radius: 10px; box-shadow: 0 2px 8px rgba(16,185,129,.25); }
+  .reg-brand span { font-size: 23px; font-weight: 900; color: #065f46; letter-spacing: -.4px; }
+  .reg-brand b { color: #10B981; font-weight: 900; }
+  .reg-hero h2 { margin: 0 0 8px; font-size: clamp(17px, 5.3vw, 27px); white-space: nowrap; line-height: 1.15; font-weight: 900; color: #0f172a; letter-spacing: -.4px; }
+  .reg-hero p { margin: 0; font-size: 13px; line-height: 1.45; color: #374151; font-weight: 500; max-width: 230px; }
+  .reg-underline { display: block; width: 46px; height: 4px; border-radius: 4px; background: #10B981; margin-top: 12px; }
+  .reg-hero-art { position: relative; z-index: 1; flex: 0 0 42%; max-width: 250px; padding-top: 40px; /* ruang tombol ✕ di atas topi */ display: flex; align-items: flex-end; justify-content: center; }
+  .reg-hero-art picture { display: block; width: 100%; }
+  .reg-hero-art img { display: block; width: 100%; height: auto; max-height: 220px; object-fit: contain; object-position: bottom; }
+  .reg-hero-fallback { width: 110px; height: 110px; margin: 0 auto 24px; border-radius: 50%; background: radial-gradient(circle at 35% 30%,#34d399,#059669); color: #fff; font-size: 44px; align-items: center; justify-content: center; box-shadow: 0 10px 26px rgba(5,150,105,.35); }
+  .reg-card { position: relative; z-index: 2; margin: -6px 14px 0; background: #fff; border-radius: 22px; padding: 18px 14px 16px; box-shadow: 0 10px 30px rgba(15,23,42,.08); display: flex; flex-direction: column; gap: 12px; }
+  .reg-row { display: flex; align-items: center; gap: 8px; }
+  .reg-row .reg-field { flex: 1; min-width: 0; }
+  .reg-field { position: relative; }
+  .reg-field input { width: 100%; height: 50px; padding: 0 14px 0 48px; font-size: 14px; color: #111827; background: #f3f5f7; border: 1px solid #edf0f3; border-radius: 15px; outline: none; transition: all .18s; font-family: 'Plus Jakarta Sans', sans-serif; }
+  .reg-field input::placeholder { color: #9ca3af; }
+  .reg-field input:focus { background: #fff; border-color: #10B981; box-shadow: 0 0 0 3px rgba(16,185,129,.12); }
+  .reg-ic { position: absolute; left: 17px; top: 50%; transform: translateY(-50%); color: #4b5563; font-size: 15px; pointer-events: none; width: 18px; text-align: center; }
+  .reg-ic-wa { color: #16a34a; font-size: 17px; }
+  .reg-otp-btn { flex-shrink: 0; height: 50px; padding: 0 16px; border: none; border-radius: 15px; background: #10B981; color: #fff; font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer; box-shadow: 0 4px 12px rgba(16,185,129,.3); transition: background .18s; }
+  .reg-otp-btn:hover { background: #059669; }
+  .reg-otp-btn:disabled { opacity: .6; cursor: not-allowed; box-shadow: none; }
+  .reg-eye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border: none; background: none; color: #4b5563; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .reg-terms { display: flex; align-items: center; gap: 10px; padding: 2px 2px; cursor: pointer; }
+  .reg-terms input { width: 20px; height: 20px; flex-shrink: 0; accent-color: #10B981; cursor: pointer; }
+  .reg-terms span { font-size: 12px; color: #374151; line-height: 1.4; }
+  .reg-terms a { color: #10B981; font-weight: 700; }
+  .reg-submit { width: 100%; height: 54px; margin-top: 2px; border: none; border-radius: 16px; background: linear-gradient(90deg,#10B981,#059669); color: #fff; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 8px 20px rgba(16,185,129,.32); display: flex; align-items: center; justify-content: center; gap: 4px; font-family: 'Plus Jakarta Sans', sans-serif; }
+  .reg-submit:active { transform: scale(.985); }
+  .reg-submit:disabled { opacity: .65; cursor: not-allowed; }
+  .reg-login { text-align: center; padding: 20px 24px 6px; margin-top: auto; }
+  .reg-or { display: flex; align-items: center; gap: 12px; color: #4b5563; font-size: 13px; font-weight: 500; }
+  .reg-or::before, .reg-or::after { content: ''; flex: 1; height: 1px; background: #d9e2dd; }
+  .reg-login button { margin-top: 6px; border: none; background: none; color: #10B981; font-size: 14px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; }
+  .reg-wave { display: block; width: 100%; height: 54px; margin-top: 6px; }
 </style>
 
 <div id="authOverlay" style="display:none;opacity:0" class="fixed inset-0 bg-white z-[60] flex flex-col">
   <div id="authInner" class="w-full h-full flex flex-col overflow-y-auto">
 
     <!-- Header -->
-    <div class="relative px-6 pb-5 border-b border-gray-100" style="padding-top: max(24px, env(safe-area-inset-top, 24px))">
+    <div class="auth-head relative px-6 pb-5 border-b border-gray-100" style="padding-top: max(24px, env(safe-area-inset-top, 24px))">
       <!-- Logo + Judul dinamis -->
       <div class="flex items-center gap-3 mb-1">
         <div class="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
@@ -4119,7 +4165,7 @@ h3.text-sm.font-bold.text-gray-800 {
     </div>
 
     <!-- Tabs -->
-    <div class="flex gap-6 px-6 pt-4 border-b border-gray-100">
+    <div class="auth-tabs flex gap-6 px-6 pt-4 border-b border-gray-100">
       <button id="tabLogin" onclick="switchTab('login')" class="auth-tab-line atab active">Masuk</button>
       <button id="tabReg" onclick="switchTab('register')" class="auth-tab-line atab">Daftar</button>
     </div>
@@ -4192,61 +4238,66 @@ h3.text-sm.font-bold.text-gray-800 {
     <!-- ══════════════════════════════════════
          FORM DAFTAR AKUN BARU (REGISTER)
     ══════════════════════════════════════ -->
-    <div id="regForm" style="display:none" class="px-6 py-5">
-      <div class="space-y-5">
-
-        <!-- 1. Nama Lengkap -->
-        <div>
-          <label class="auth-label">Nama Lengkap</label>
-          <div class="relative">
-            <input id="regName" type="text" placeholder="Nama lengkap kamu"
-              class="auth-inp inp"/>
-            <i class="fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+    <div id="regForm" style="display:none" class="reg-wrap">
+      <!-- HERO daftar: logo + judul + ilustrasi kurir pegang kardus -->
+      <div class="reg-hero" style="padding-top:max(18px, env(safe-area-inset-top, 18px))">
+        <button type="button" onclick="closeAuth()" class="reg-close" aria-label="Tutup"><i class="fa-solid fa-xmark"></i></button>
+        <svg class="reg-hero-city" viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 60V38h14v22zM16 60V26h10v34zM28 60V34h16v26zM46 60V16h8v44zM56 60V30h14v30zM72 60V10h12v50zM86 60V36h18v24zM106 60V22h10v38zM118 60V32h14v28zM134 60V14h9v46zM145 60V40h16v20zM163 60V24h12v36zM177 60V34h10v26zM189 60V28h11v32z"/></svg>
+        <div class="reg-hero-txt">
+          <div class="reg-brand">
+            <img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/w_96,h_96,c_fill,f_png/v1777071286/file_00000000061071f4a2bf027d7ff5df98_gaknb3.png" alt="" width="36" height="36">
+            <span>Yalla<b>Mart</b></span>
           </div>
+          <h2>Selamat Bergabung<br>dengan YallaMart!</h2>
+          <p>Buat akun dan nikmati kemudahan berbelanja.</p>
+          <span class="reg-underline"></span>
+        </div>
+        <div class="reg-hero-art">
+          <!-- Ilustrasi kurir pegang kardus (latar transparan). Gagal muat → ikon kardus. -->
+          <picture>
+            <source srcset="daftar-kurir.webp" type="image/webp">
+            <img id="regHeroImg" src="daftar-kurir.png" alt="Kurir YallaMart" decoding="async" onerror="this.parentNode.style.display='none';this.parentNode.nextElementSibling.style.display='flex'">
+          </picture>
+          <div class="reg-hero-fallback" style="display:none"><i class="fa-solid fa-box-open"></i></div>
+        </div>
+      </div>
+
+      <!-- KARTU FORM -->
+      <div class="reg-card">
+        <!-- 1. Nama Lengkap -->
+        <div class="reg-field">
+          <i class="fa-solid fa-user reg-ic"></i>
+          <input id="regName" type="text" placeholder="Nama lengkap kamu" autocomplete="name"/>
         </div>
 
         <!-- 2. Email + Kirim OTP Email -->
-        <div>
-          <label class="auth-label">Email</label>
-          <div class="flex items-center gap-3">
-            <div class="relative flex-1">
-              <input id="regEmail" type="email" placeholder="email@contoh.com"
-                class="auth-inp inp" style="padding-left:42px"/>
-              <i class="fa-solid fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
-            </div>
-            <button id="regOtpBtn" type="button" onclick="sendRegOtp()"
-              class="auth-otp-btn auth-otp-btn-email">
-              <i class="fa-solid fa-paper-plane mr-1.5 text-emerald-600 text-xs"></i> Kirim OTP
-            </button>
+        <div class="reg-row">
+          <div class="reg-field">
+            <i class="fa-solid fa-envelope reg-ic"></i>
+            <input id="regEmail" type="email" placeholder="Email kamu" autocomplete="email"/>
           </div>
+          <button id="regOtpBtn" type="button" onclick="sendRegOtp()" class="reg-otp-btn">Kirim OTP</button>
         </div>
 
         <!-- 3. Kode OTP Email -->
         <div>
-          <label class="auth-label">Kode OTP Email</label>
-          <div class="relative">
-            <input id="regOtp" type="text" inputmode="numeric" maxlength="6" placeholder="· · · · · ·"
-              class="auth-inp auth-inp-otp inp"/>
-            <i class="fa-solid fa-shield-halved absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" style="left:12px"></i>
+          <div class="reg-field">
+            <i class="fa-solid fa-shield-halved reg-ic"></i>
+            <input id="regOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Kode OTP Email" autocomplete="one-time-code"/>
           </div>
           <p id="regOtpHint" class="auth-hint"><i class="fa-solid fa-circle-check"></i> Kode OTP dikirim ke email kamu</p>
         </div>
 
-        <!-- 4. Nomor WhatsApp + Kirim OTP WA -->
+        <!-- 4. Nomor WhatsApp (+ Kirim OTP WA, disembunyikan) -->
         <div>
-          <label class="auth-label">Nomor WhatsApp</label>
-          <div class="flex items-center gap-3">
-            <div class="relative flex-1">
-              <input id="regPhone" type="tel" placeholder="20xxxxxxxxxx"
-                class="auth-inp inp" style="padding-left:42px"/>
-              <i class="fa-brands fa-whatsapp absolute left-3.5 top-1/2 -translate-y-1/2 text-green-500 text-sm pointer-events-none"></i>
+          <div class="reg-row">
+            <div class="reg-field">
+              <i class="fa-brands fa-whatsapp reg-ic reg-ic-wa"></i>
+              <input id="regPhone" type="tel" inputmode="tel" placeholder="Nomor WhatsApp (20xxxxxxxxxx)" autocomplete="tel"/>
             </div>
             <!-- SEMBUNYIKAN SEMENTARA sampai Meta Business aktif — cukup hapus style display:none
                  (di sini & di blok "Kode OTP WhatsApp" di bawah) untuk menampilkan lagi. Fungsi sendRegOtpWa() TIDAK diubah. -->
-            <button id="regOtpWaBtn" type="button" onclick="sendRegOtpWa()"
-              class="auth-otp-btn auth-otp-btn-wa" style="display:none">
-              <i class="fa-brands fa-whatsapp mr-1.5 text-green-600"></i> Kirim OTP
-            </button>
+            <button id="regOtpWaBtn" type="button" onclick="sendRegOtpWa()" class="reg-otp-btn" style="display:none">Kirim OTP</button>
           </div>
           <!-- Keterangan disembunyikan sementara (bareng WA OTP) — hapus style display:none untuk menampilkan lagi -->
           <p class="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1" style="display:none">
@@ -4257,43 +4308,39 @@ h3.text-sm.font-bold.text-gray-800 {
 
         <!-- 5. Kode OTP WhatsApp — SEMBUNYIKAN SEMENTARA sampai Meta Business aktif (hapus style display:none untuk menampilkan lagi) -->
         <div style="display:none">
-          <label class="auth-label">Kode OTP WhatsApp</label>
-          <div class="relative">
-            <input id="regOtpWa" type="text" inputmode="numeric" maxlength="6" placeholder="· · · · · ·"
-              class="auth-inp auth-inp-otp inp"/>
+          <div class="reg-field">
+            <i class="fa-brands fa-whatsapp reg-ic reg-ic-wa"></i>
+            <input id="regOtpWa" type="text" inputmode="numeric" maxlength="6" placeholder="Kode OTP WhatsApp"/>
           </div>
           <p id="regOtpWaHint" class="auth-hint wa"><i class="fa-brands fa-whatsapp"></i> Kode OTP dikirim ke WhatsApp kamu</p>
         </div>
 
         <!-- 6. Kata Sandi -->
-        <div>
-          <label class="auth-label">Kata Sandi</label>
-          <div class="relative">
-            <input id="regPwd" type="password" placeholder="Min. 8 karakter"
-              class="auth-inp inp pr-10"/>
-            <i class="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
-            <button type="button" onclick="tglPwd('regPwd')" class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-600 transition-colors">
-              <i class="fa-solid fa-eye text-xs"></i>
-            </button>
-          </div>
+        <div class="reg-field">
+          <i class="fa-solid fa-lock reg-ic"></i>
+          <input id="regPwd" type="password" placeholder="Kata sandi (min. 6 karakter)" autocomplete="new-password" style="padding-right:42px"/>
+          <button type="button" onclick="tglPwd('regPwd');var i=this.querySelector('i');i.className=document.getElementById('regPwd').type==='password'?'fa-solid fa-eye-slash':'fa-solid fa-eye'" class="reg-eye" aria-label="Tampilkan kata sandi"><i class="fa-solid fa-eye-slash"></i></button>
         </div>
 
         <!-- Syarat & Ketentuan -->
-        <div class="flex items-start gap-2.5">
-          <input id="regTerms" type="checkbox" class="mt-0.5 accent-primary w-3.5 h-3.5 flex-shrink-0"/>
-          <span class="text-[11px] text-gray-500 leading-snug">
-            Setuju dengan <a href="#" class="text-emerald-600 font-semibold">Syarat & Ketentuan</a> YallaMart
-          </span>
-        </div>
+        <label class="reg-terms">
+          <input id="regTerms" type="checkbox"/>
+          <span>Saya setuju dengan <a href="#" onclick="event.preventDefault()">Syarat &amp; Ketentuan</a> YallaMart</span>
+        </label>
 
-      </div>
-
-      <!-- Tombol Buat Akun -->
-      <div style="padding-bottom: max(24px, env(safe-area-inset-bottom, 24px))">
-        <button type="button" onclick="doRegister()" class="auth-main-btn mt-5">
+        <!-- Tombol Buat Akun (selector JS: #regForm button[onclick="doRegister()"]) -->
+        <button type="button" onclick="doRegister()" class="reg-submit">
           Buat Akun <i class="fa-solid fa-user-plus ml-1.5 text-xs"></i>
         </button>
       </div>
+
+      <!-- Sudah punya akun -->
+      <div class="reg-login">
+        <div class="reg-or"><span>Sudah punya akun?</span></div>
+        <button type="button" onclick="switchTab('login')">Masuk di sini <i class="fa-solid fa-arrow-right"></i></button>
+      </div>
+      <svg class="reg-wave" viewBox="0 0 400 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30 C90 0 160 55 250 28 C320 8 360 22 400 14 V60 H0Z" fill="#10B981" opacity=".18"/><path d="M0 42 C110 20 180 62 270 40 C330 26 370 38 400 30 V60 H0Z" fill="#10B981" opacity=".28"/></svg>
+      <div style="height:env(safe-area-inset-bottom,0px);background:#cdeee0"></div>
     </div>
 
   </div>
@@ -13629,7 +13676,10 @@ window.closeAuth=()=>{const ov=document.getElementById('authOverlay');ov.style.o
 window.closeAuthOv=e=>{if(e.target===document.getElementById('authOverlay'))closeAuth();};
 window.switchTab=t=>{
   document.getElementById('loginForm').style.display=t==='login'?'block':'none';
-  document.getElementById('regForm').style.display=t==='register'?'block':'none';
+  document.getElementById('regForm').style.display=t==='register'?'flex':'none';
+  // Mode daftar: header & tab umum disembunyikan, form daftar punya hero sendiri
+  var _ov=document.getElementById('authOverlay'); if(_ov) _ov.classList.toggle('auth-reg-mode', t==='register');
+  var _in=document.getElementById('authInner'); if(_in) _in.scrollTop=0;
   document.getElementById('tabLogin').className='auth-tab-line atab'+(t==='login'?' active':'');
   document.getElementById('tabReg').className='auth-tab-line atab'+(t==='register'?' active':'');
   var title=document.getElementById('authTitle');
