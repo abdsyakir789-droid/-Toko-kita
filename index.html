@@ -2486,6 +2486,12 @@ h3.text-sm.font-bold.text-gray-800 {
 
 </div>
 
+<!-- Aplikasi Android (Capacitor): splash native hijau polos langsung ditutup DI SINI,
+     tepat setelah splash website ada di halaman → yang terlihat splash website ini. -->
+<script>
+try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) window.Capacitor.Plugins.SplashScreen.hide({ fadeOutDuration: 0 }); } catch (e) {}
+</script>
+
 <script>
 (function() {
   var splash = document.getElementById('splashScreen');
@@ -29687,5 +29693,195 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 
+<!-- ═══════════════════════════════════════════════════════════════
+     JEMBATAN APLIKASI ANDROID (Capacitor) — HANYA aktif di aplikasi.
+     Di browser / PWA iOS seluruh blok ini langsung berhenti (return).
+     1. Splash ditutup begitu halaman siap (batas aman 8 dtk di config).
+     2. Status bar hijau YallaMart.
+     3. Tombol Back Android: tutup halaman/overlay paling atas dulu →
+        lalu kembali ke Beranda → baru keluar (tekan 2x).
+     4. GPS lewat plugin native (navigator.geolocation diarahkan ke
+        Capacitor Geolocation) — semua fitur lokasi ikut otomatis.
+     ═══════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  var C = window.Capacitor;
+  var isNative = false;
+  try { isNative = !!(C && C.isNativePlatform && C.isNativePlatform()); } catch (e) {}
+  if (!isNative) return;
+  var P = C.Plugins || {};
+  window._ymIsNativeApp = true;
+
+  // ── 1. Splash native (hijau polos) ditutup SEGERA ──
+  // Website punya splash sendiri (#splashScreen, hijau #10B981) yang sudah
+  // tampil saat skrip ini jalan → splash native langsung disingkirkan supaya
+  // yang terlihat adalah splash buatan website, bukan ditutupi splash Capacitor.
+  try { if (P.SplashScreen) P.SplashScreen.hide({ fadeOutDuration: 0 }); } catch (e) {}
+
+  // ── 2. Status bar hijau, ikon putih ──
+  try {
+    if (P.StatusBar) {
+      P.StatusBar.setOverlaysWebView({ overlay: false }).catch(function () {});
+      P.StatusBar.setBackgroundColor({ color: '#10B981' }).catch(function () {});
+      P.StatusBar.setStyle({ style: 'DARK' }).catch(function () {});
+    }
+  } catch (e) {}
+
+  // ── 3. Tombol Back Android ──
+  // Overlay = elemen position:fixed yang tampil & menutupi sebagian besar layar.
+  // Yang paling atas (z-index terbesar, lalu urutan DOM terakhir) ditutup dengan
+  // MENGETUK tombol tutup/kembali miliknya sendiri → perilakunya sama persis
+  // seperti user mengetuk tombol itu (state, GPS, scroll ikut dibereskan).
+  var CLOSE_RE = /close|tutup|cancel|batal|back|hide|dismiss|kembali|\.remove\(\)/i;
+  var ICON_SEL = '.fa-arrow-left,.fa-chevron-left,.fa-xmark,.fa-times,.fa-angle-left';
+  function isShown(el) {
+    var cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.05) return false;
+    var r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }
+  function topOverlay() {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    // Cara utama: elemen yang BENAR-BENAR terlihat paling atas di tengah layar,
+    // lalu naik ke induknya sampai ketemu overlay fixed yang besar. Ini tepat
+    // walau dua overlay punya z-index sama (urutan buka ≠ urutan DOM).
+    var pts = [[0.5, 0.5], [0.5, 0.3], [0.5, 0.75]];
+    for (var k = 0; k < pts.length; k++) {
+      var el0 = document.elementFromPoint(vw * pts[k][0], vh * pts[k][1]);
+      for (var e = el0; e && e !== document.body; e = e.parentElement) {
+        if (e.id === 'mobileBottomNav') break;
+        var cs0 = getComputedStyle(e);
+        if (cs0.position !== 'fixed') continue;
+        var r0 = e.getBoundingClientRect();
+        if (r0.width >= vw * 0.8 && r0.height >= vh * 0.5 && isShown(e)) return e;
+      }
+    }
+    // Cadangan: z-index terbesar (sama → yang terakhir di DOM)
+    var best = null, bestZ = -Infinity;
+    var all = document.body.querySelectorAll('div,section,aside,nav');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.id === 'mobileBottomNav') continue;
+      var cs = getComputedStyle(el);
+      if (cs.position !== 'fixed') continue;
+      if (!isShown(el)) continue;
+      var r = el.getBoundingClientRect();
+      if (r.width < vw * 0.8 || r.height < vh * 0.5) continue;      // header/toast/nav kecil diabaikan
+      var z = parseInt(cs.zIndex, 10); if (isNaN(z)) z = 0;
+      if (z >= bestZ) { bestZ = z; best = el; }                     // sama z → yang terakhir di DOM
+    }
+    return best;
+  }
+  function findCloseBtn(ov) {
+    var top = ov.getBoundingClientRect().top;
+    var cands = ov.querySelectorAll('button,[onclick],a[role="button"]');
+    var iconBtn = null, textBtn = null, iconAny = null;
+    for (var i = 0; i < cands.length; i++) {
+      var b = cands[i];
+      if (!isShown(b)) continue;
+      var oc = b.getAttribute('onclick') || '';
+      var hasIcon = !!b.querySelector(ICON_SEL) || (b.matches && b.matches(ICON_SEL));
+      var nearTop = b.getBoundingClientRect().top < top + 140;
+      if (hasIcon && nearTop && !iconBtn) iconBtn = b;               // panah/✕ di bagian atas = tombol tutup utama
+      if (hasIcon && !iconAny) iconAny = b;                          // ✕ di posisi lain (mis. popup promo)
+      if (!textBtn && CLOSE_RE.test(oc) && !/submit|save|simpan|kirim|pasang|bayar|hapus|delete/i.test(oc)) textBtn = b;
+    }
+    return iconBtn || textBtn || iconAny;
+  }
+  var _lastBack = 0;
+  function onBack() {
+    var ov = topOverlay();
+    if (ov) {
+      var btn = findCloseBtn(ov);
+      if (btn) { btn.click(); return; }
+      ov.style.display = 'none';                                      // cadangan: sembunyikan saja
+      document.body.style.overflow = '';
+      return;
+    }
+    var home = document.getElementById('page-home');
+    if (home && !home.classList.contains('active')) {
+      var nav = document.getElementById('mnav-home');
+      if (nav) nav.click(); else if (window.showPage) window.showPage('home');
+      return;
+    }
+    var now = Date.now();
+    if (now - _lastBack < 2000) { try { P.App.exitApp(); } catch (e) {} return; }
+    _lastBack = now;
+    if (window.showToast) window.showToast('Tekan sekali lagi untuk keluar', 'green');
+  }
+  window._ymNativeBack = onBack;   // dipakai juga untuk uji
+  try { if (P.App) P.App.addListener('backButton', onBack); } catch (e) {}
+
+  // ── 4. GPS native ──
+  var Geo = P.Geolocation;
+  if (Geo && navigator.geolocation) {
+    var _permAsked = null;
+    function ensurePerm() {
+      if (_permAsked) return _permAsked;
+      _permAsked = Geo.checkPermissions().then(function (p) {
+        if (p && (p.location === 'granted' || p.coarseLocation === 'granted')) return true;
+        return Geo.requestPermissions().then(function (r) { return !!(r && (r.location === 'granted' || r.coarseLocation === 'granted')); });
+      }).catch(function () { return true; }).then(function (ok) { if (!ok) _permAsked = null; return ok; });
+      return _permAsked;
+    }
+    function toPos(p) {
+      return { coords: p.coords, timestamp: p.timestamp || Date.now() };
+    }
+    function toErr(e, denied) {
+      var msg = (e && e.message) || String(e || 'Lokasi tidak tersedia');
+      var code = denied || /denied|permission/i.test(msg) ? 1 : (/timeout/i.test(msg) ? 3 : 2);
+      return { code: code, message: msg, PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 };
+    }
+    function opts(o) {
+      o = o || {};
+      return { enableHighAccuracy: !!o.enableHighAccuracy, timeout: o.timeout || 20000, maximumAge: o.maximumAge || 0 };
+    }
+    var webGeo = {
+      getCurrentPosition: navigator.geolocation.getCurrentPosition.bind(navigator.geolocation),
+      watchPosition: navigator.geolocation.watchPosition.bind(navigator.geolocation),
+      clearWatch: navigator.geolocation.clearWatch.bind(navigator.geolocation)
+    };
+    var _seq = 0, _watches = {};
+    var nativeGeo = {
+      getCurrentPosition: function (ok, fail, o) {
+        ensurePerm().then(function (granted) {
+          if (!granted) { if (fail) fail(toErr('Izin lokasi ditolak', true)); return; }
+          return Geo.getCurrentPosition(opts(o)).then(function (p) { ok(toPos(p)); });
+        }).catch(function (e) { if (fail) fail(toErr(e)); });
+      },
+      watchPosition: function (ok, fail, o) {
+        var id = ++_seq;
+        _watches[id] = { cancelled: false, cbId: null };
+        ensurePerm().then(function (granted) {
+          var w = _watches[id];
+          if (!w || w.cancelled) return;
+          if (!granted) { if (fail) fail(toErr('Izin lokasi ditolak', true)); return; }
+          return Geo.watchPosition(opts(o), function (p, err) {
+            if (!_watches[id] || _watches[id].cancelled) return;
+            if (err) { if (fail) fail(toErr(err)); return; }
+            if (p) ok(toPos(p));
+          }).then(function (cbId) {
+            if (!_watches[id] || _watches[id].cancelled) { Geo.clearWatch({ id: cbId }).catch(function () {}); return; }
+            _watches[id].cbId = cbId;
+          });
+        }).catch(function (e) { if (fail) fail(toErr(e)); });
+        return id;
+      },
+      clearWatch: function (id) {
+        var w = _watches[id];
+        if (!w) { try { webGeo.clearWatch(id); } catch (e) {} return; }
+        w.cancelled = true;
+        if (w.cbId) Geo.clearWatch({ id: w.cbId }).catch(function () {});
+        delete _watches[id];
+      }
+    };
+    try {
+      Object.defineProperty(navigator, 'geolocation', { configurable: true, get: function () { return nativeGeo; } });
+    } catch (e) {
+      try { navigator.geolocation.getCurrentPosition = nativeGeo.getCurrentPosition; navigator.geolocation.watchPosition = nativeGeo.watchPosition; navigator.geolocation.clearWatch = nativeGeo.clearWatch; } catch (e2) {}
+    }
+  }
+})();
+</script>
 </body>
 </html>
