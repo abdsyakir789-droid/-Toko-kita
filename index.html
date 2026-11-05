@@ -5232,11 +5232,41 @@ window.uploadToCloudinary      = uploadToCloudinary;
 const R2_WORKER_URL = window._R2_URL;
 const R2_AUTH_TOKEN = window._R2_TOKEN;
 
-async function uploadToR2(file, onProgress, folder) {
+// Kompres TANPA membuang transparansi — khusus gambar yang perlu latar transparan
+// (popup promo). Hasil WebP (alpha tetap, ukuran kecil); browser yang tak bisa
+// encode WebP otomatis jatuh ke PNG. compressImage() biasa (JPG) TIDAK diubah.
+async function compressImageKeepAlpha(file, maxW = 1080, quality = 0.86) {
+  return new Promise((resolve, reject) => {
+    let url = null;
+    const timer = setTimeout(() => { cleanup(); reject(new Error('Proses foto terlalu lama. Coba pilih foto lain.')); }, 15000);
+    const cleanup = () => { clearTimeout(timer); if (url) { try { URL.revokeObjectURL(url); } catch (_e) {} url = null; } };
+    try { url = URL.createObjectURL(file); } catch (e) { cleanup(); reject(new Error('Gagal membaca file foto.')); return; }
+    const img = new Image();
+    img.onerror = () => { cleanup(); reject(new Error('File foto rusak atau tidak didukung.')); };
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxW / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); // canvas default transparan
+        c.toBlob(b => { cleanup(); b ? resolve(b) : reject(new Error('Gagal mengompres foto.')); }, 'image/webp', quality);
+      } catch (err) { cleanup(); reject(err); }
+    };
+    img.src = url;
+  });
+}
+window.compressImageKeepAlpha = compressImageKeepAlpha;
+
+// opts.keepAlpha = true → gambar PNG/WebP/GIF dikompres ke WebP (transparansi tetap).
+// Tanpa opts → perilaku lama persis (kompres ke JPG).
+async function uploadToR2(file, onProgress, folder, opts) {
+  const _keepAlpha = !!(opts && opts.keepAlpha) && /^image\/(png|webp|gif)$/i.test(file && file.type || '');
   // Kompresi dulu pakai fungsi yang sudah ada
-  const blob = await compressImage(file);
+  const blob = _keepAlpha ? await compressImageKeepAlpha(file) : await compressImage(file);
+  const _fname = !_keepAlpha ? 'photo.jpg' : (blob.type === 'image/webp' ? 'photo.webp' : 'photo.png');
   const fd = new FormData();
-  fd.append('file', blob, 'photo.jpg');
+  fd.append('file', blob, _fname);
   fd.append('folder', folder || 'ads'); // default folder: ads
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -29325,7 +29355,8 @@ window.savePopupPromo = async function() {
     let imgUrl = st.photoUrl;
     let imgPublicId = '';
     if (st.photoFile) {
-      const result = await uploadToR2(st.photoFile, null, 'popups');
+      // keepAlpha: PNG transparan tetap transparan (tidak jadi JPG berlatar hitam)
+      const result = await uploadToR2(st.photoFile, null, 'popups', { keepAlpha: true });
       imgUrl = (result && typeof result === 'object') ? result.secure_url : result;
       imgPublicId = (result && typeof result === 'object') ? (result.public_id||'') : '';
       if (!imgUrl || !imgUrl.startsWith('http')) throw new Error('URL gambar tidak valid');
