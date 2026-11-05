@@ -4096,9 +4096,18 @@ h3.text-sm.font-bold.text-gray-800 {
   .auth-hint.wa { color: #16a34a; }
 
   /* ── Tampilan DAFTAR baru (hero + kartu form) ── */
-  #authOverlay.auth-reg-mode .auth-head,
-  #authOverlay.auth-reg-mode .auth-tabs { display: none; }
-  #authOverlay.auth-reg-mode { background: #f3faf6; }
+  /* Header & tab lama disembunyikan: Masuk & Daftar masing-masing punya hero sendiri */
+  #authOverlay .auth-head,
+  #authOverlay .auth-tabs { display: none; }
+  #authOverlay { background: #f3faf6 !important; }
+  .login-hero-art { padding-top: 34px; }
+  .login-hero-art img { max-height: 190px; }
+  .login-ask { font-size: 14px; color: #374151; font-weight: 500; }
+  .reg-login .login-ask + button { margin-top: 0; padding-left: 6px; }
+  #loginForm .reg-login { margin-top: 0; }
+  .login-city { position: relative; height: 92px; margin-top: auto; }
+  .login-city svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .login-shop { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: 58px; height: 52px; border-radius: 12px 12px 6px 6px; background: linear-gradient(180deg,#34d399,#10B981); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 6px 16px rgba(16,185,129,.35); }
   .reg-wrap { flex-direction: column; flex: 1 0 auto; background: linear-gradient(180deg,#e8f8ef 0%,#f3faf6 38%,#f3faf6 100%); }
   .reg-hero { position: relative; display: flex; align-items: flex-end; padding: 18px 0 0 22px; min-height: 210px; overflow: hidden; }
   .reg-hero-city { position: absolute; right: 0; bottom: 0; width: 70%; height: 70px; fill: #10B981; opacity: .1; pointer-events: none; }
@@ -4173,66 +4182,79 @@ h3.text-sm.font-bold.text-gray-800 {
     <!-- ══════════════════════════════════════
          FORM MASUK AKUN (LOGIN)
     ══════════════════════════════════════ -->
-    <div id="loginForm" class="px-6 py-5 flex flex-col flex-1">
-      <div class="space-y-5">
-
-        <!-- Email -->
-        <div>
-          <label class="auth-label">Email Akun</label>
-          <div class="relative">
-            <input id="loginEmail" type="email" placeholder="email@contoh.com"
-              class="auth-inp inp"/>
-            <i class="fa-solid fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+    <div id="loginForm" class="reg-wrap" style="display:flex">
+      <!-- HERO masuk: logo + judul + ilustrasi tas belanja -->
+      <div class="reg-hero" style="padding-top:max(18px, env(safe-area-inset-top, 18px))">
+        <button type="button" onclick="closeAuth()" class="reg-close" aria-label="Tutup"><i class="fa-solid fa-xmark"></i></button>
+        <svg class="reg-hero-city" viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 60V38h14v22zM16 60V26h10v34zM28 60V34h16v26zM46 60V16h8v44zM56 60V30h14v30zM72 60V10h12v50zM86 60V36h18v24zM106 60V22h10v38zM118 60V32h14v28zM134 60V14h9v46zM145 60V40h16v20zM163 60V24h12v36zM177 60V34h10v26zM189 60V28h11v32z"/></svg>
+        <div class="reg-hero-txt">
+          <div class="reg-brand">
+            <img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/w_96,h_96,c_fill,f_png/v1777071286/file_00000000061071f4a2bf027d7ff5df98_gaknb3.png" alt="" width="36" height="36">
+            <span>Yalla<b>Mart</b></span>
           </div>
+          <h2>Selamat Datang<br>Kembali!</h2>
+          <p>Senang melihat Anda kembali.</p>
+          <span class="reg-underline"></span>
+        </div>
+        <div class="reg-hero-art login-hero-art">
+          <!-- Ilustrasi tas belanja (latar transparan). Gagal muat → ikon tas. -->
+          <picture>
+            <source srcset="masuk-tas.webp" type="image/webp">
+            <img id="loginHeroImg" src="masuk-tas.png" alt="Tas belanja YallaMart" decoding="async" onerror="this.parentNode.style.display='none';this.parentNode.nextElementSibling.style.display='flex'">
+          </picture>
+          <div class="reg-hero-fallback" style="display:none"><i class="fa-solid fa-bag-shopping"></i></div>
+        </div>
+      </div>
+
+      <!-- KARTU FORM -->
+      <div class="reg-card">
+        <!-- Email -->
+        <div class="reg-field">
+          <i class="fa-solid fa-envelope reg-ic"></i>
+          <input id="loginEmail" type="email" placeholder="Email kamu" autocomplete="email"/>
         </div>
 
         <!-- Kata Sandi -->
-        <div>
-          <label class="auth-label">Kata Sandi Akun</label>
-          <div class="relative">
-            <input id="loginPwd" type="password" placeholder="Kata sandi"
-              class="auth-inp inp pr-10"/>
-            <i class="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
-            <button type="button" onclick="tglPwd('loginPwd')" class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-600 transition-colors">
-              <i class="fa-solid fa-eye text-xs"></i>
-            </button>
-          </div>
+        <div class="reg-field">
+          <i class="fa-solid fa-lock reg-ic"></i>
+          <input id="loginPwd" type="password" placeholder="Kata sandi" autocomplete="current-password" style="padding-right:42px"/>
+          <button type="button" onclick="tglPwd('loginPwd');var i=this.querySelector('i');i.className=document.getElementById('loginPwd').type==='password'?'fa-solid fa-eye-slash':'fa-solid fa-eye'" class="reg-eye" aria-label="Tampilkan kata sandi"><i class="fa-solid fa-eye-slash"></i></button>
         </div>
 
-        <!-- Nomor HP/WA + Kirim OTP -->
-        <div>
-          <label class="auth-label">Nomor HP / WhatsApp <span style="font-weight:400;color:#9ca3af;font-size:11px">(opsional)</span></label>
-          <div class="flex items-center gap-3">
-            <div class="relative flex-1">
-              <input id="loginWaPhone" type="tel" placeholder="20xxxxxxxxxx"
-                class="auth-inp inp" style="padding-left:42px"/>
-              <i class="fa-brands fa-whatsapp absolute left-3.5 top-1/2 -translate-y-1/2 text-green-500 text-sm pointer-events-none"></i>
+        <!-- Masuk via WhatsApp OTP — DISEMBUNYIKAN (atas permintaan). Elemen & fungsi sendLoginOtpWa() tetap ada;
+             hapus style display:none untuk menampilkan lagi. -->
+        <div style="display:none">
+          <div class="reg-row">
+            <div class="reg-field">
+              <i class="fa-brands fa-whatsapp reg-ic reg-ic-wa"></i>
+              <input id="loginWaPhone" type="tel" placeholder="Nomor WhatsApp (20xxxxxxxxxx)"/>
             </div>
-            <button id="loginWaOtpBtn" type="button" onclick="sendLoginOtpWa()"
-              class="auth-otp-btn auth-otp-btn-wa">
-              <i class="fa-brands fa-whatsapp mr-1.5 text-green-600"></i> Kirim OTP
-            </button>
+            <button id="loginWaOtpBtn" type="button" onclick="sendLoginOtpWa()" class="reg-otp-btn">Kirim OTP</button>
           </div>
-        </div>
-
-        <!-- Kode OTP WA login -->
-        <div>
-          <label class="auth-label">Kode OTP Wa/HP</label>
-          <div class="relative">
-            <input id="loginWaOtp" type="text" inputmode="numeric" maxlength="6" placeholder="· · · · · ·"
-              class="auth-inp auth-inp-otp inp"/>
+          <div class="reg-field" style="margin-top:12px">
+            <i class="fa-solid fa-shield-halved reg-ic"></i>
+            <input id="loginWaOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Kode OTP WhatsApp"/>
           </div>
           <p id="loginWaHint" class="auth-hint wa"><i class="fa-brands fa-whatsapp"></i> Kode OTP dikirim ke WhatsApp kamu</p>
         </div>
 
-      </div>
-
-      <!-- Tombol Masuk -->
-      <div style="padding-bottom: max(16px, env(safe-area-inset-bottom, 16px))">
-        <button type="button" onclick="doLogin()" class="auth-main-btn mt-6">
+        <!-- Tombol Masuk (selector JS: #loginForm button[onclick="doLogin()"]) -->
+        <button type="button" onclick="doLogin()" class="reg-submit" style="margin-top:6px">
           Masuk Sekarang <i class="fa-solid fa-arrow-right ml-1.5 text-xs"></i>
         </button>
       </div>
+
+      <!-- Belum punya akun -->
+      <div class="reg-login" style="padding-top:26px">
+        <span class="login-ask">Belum punya akun?</span>
+        <button type="button" onclick="switchTab('register')">Daftar di sini <i class="fa-solid fa-arrow-right"></i></button>
+      </div>
+      <!-- Dekorasi bawah: siluet kota + toko YallaMart -->
+      <div class="login-city" aria-hidden="true">
+        <svg viewBox="0 0 400 90" preserveAspectRatio="none"><path d="M0 90V62h18V48h14v14h10V36h16v54zM70 90V44h12V30h18v60zM112 90V54h20v36zM270 90V40h16v50zM292 90V28h12V18h12v72zM326 90V50h20v40zM352 90V34h16v56zM374 90V58h26v32z" fill="#10B981" opacity=".16"/><path d="M0 90V76C80 62 140 84 200 78C270 70 330 60 400 70V90Z" fill="#10B981" opacity=".22"/></svg>
+        <span class="login-shop"><i class="fa-solid fa-store"></i></span>
+      </div>
+      <div style="height:env(safe-area-inset-bottom,0px);background:#cdeee0"></div>
     </div>
 
     <!-- ══════════════════════════════════════
@@ -13675,7 +13697,7 @@ window.closeAuth=()=>{const ov=document.getElementById('authOverlay');ov.style.o
 };
 window.closeAuthOv=e=>{if(e.target===document.getElementById('authOverlay'))closeAuth();};
 window.switchTab=t=>{
-  document.getElementById('loginForm').style.display=t==='login'?'block':'none';
+  document.getElementById('loginForm').style.display=t==='login'?'flex':'none';
   document.getElementById('regForm').style.display=t==='register'?'flex':'none';
   // Mode daftar: header & tab umum disembunyikan, form daftar punya hero sendiri
   var _ov=document.getElementById('authOverlay'); if(_ov) _ov.classList.toggle('auth-reg-mode', t==='register');
