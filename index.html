@@ -25281,9 +25281,24 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
      digabung shops(lat & lng sudah diisi). Hanya tampil mat'am ≤ 1 km.
      ============================================================ -->
 <style>
-  #matamTerdekatOverlay .mt-me-lbl{background:#2563eb !important;color:#fff !important;border:none !important;font-size:10px !important;font-weight:700 !important;box-shadow:0 2px 6px rgba(0,0,0,.2) !important;border-radius:8px !important;padding:2px 6px !important}
-  #matamTerdekatOverlay .mt-me-lbl::before{border-bottom-color:#2563eb !important}
-  #matamTerdekatOverlay .leaflet-popup-content{margin:10px 12px}
+  /* Peta Mat'am = MapLibre GL native (gaya peta Nuqto: putar + miring 3D) */
+  /* .mt-me & .mt-pin = elemen marker MapLibre: JANGAN set position (bawaan .maplibregl-marker = absolute,
+     sekaligus jadi acuan label di dalamnya). Kalau ditimpa relative, marker ke-2 dst bergeser ke bawah. */
+  #matamTerdekatOverlay .mt-me{width:22px;height:22px;cursor:default}
+  #matamTerdekatOverlay .mt-me-dot{width:22px;height:22px;box-sizing:border-box;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 4px rgba(37,99,235,.3),0 2px 6px rgba(0,0,0,.3)}
+  #matamTerdekatOverlay .mt-me.mt-drag{cursor:grab}
+  #matamTerdekatOverlay .mt-me-lbl{position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);white-space:nowrap;background:#2563eb;color:#fff;font-size:10px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.2);border-radius:8px;padding:2px 6px;pointer-events:none}
+  #matamTerdekatOverlay .mt-me-lbl::before{content:'';position:absolute;bottom:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-bottom-color:#2563eb}
+  #matamTerdekatOverlay .mt-pin{width:32px;height:38px;cursor:pointer}
+  #matamTerdekatOverlay .mt-pin-lbl{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:1px;white-space:nowrap;font-size:11.5px;font-weight:800;color:#111827;text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 0 6px rgba(255,255,255,.85);max-width:160px;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+  #matamTerdekatOverlay .maplibregl-popup-content{border-radius:14px;padding:12px 14px;box-shadow:0 8px 28px rgba(0,0,0,.18)}
+  #matamTerdekatOverlay .maplibregl-popup-close-button{font-size:18px;padding:0 6px;color:#6b7280}
+  #matamTerdekatOverlay .mt-zoom-ctrl{position:absolute;left:12px;top:12px;z-index:450;display:flex;flex-direction:column;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 4px 14px rgba(28,27,23,.14);overflow:hidden;color:#10B981}
+  #matamTerdekatOverlay .mt-zoom-ctrl button{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;padding:0;color:inherit}
+  #matamTerdekatOverlay .mt-zoom-ctrl button:active{background:rgba(0,0,0,.06)}
+  #matamTerdekatOverlay .mt-zoom-div{height:1px;margin:0 8px;background:#e5e7eb}
+  #matamTerdekatOverlay .mt-locate-btn{position:absolute;left:12px;top:158px;z-index:450;width:46px;height:46px;border-radius:14px;background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 14px rgba(28,27,23,.14);display:flex;align-items:center;justify-content:center;color:#10B981;font-size:17px;cursor:pointer;padding:0}
+  #matamTerdekatOverlay .mt-locate-btn:active{transform:scale(.92)}
   @keyframes mtspin{to{transform:rotate(360deg)}}
 </style>
 <div id="matamTerdekatOverlay" style="display:none;position:fixed;inset:0;z-index:900;background:#fff;flex-direction:column">
@@ -25297,6 +25312,20 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
   </div>
   <div id="mtMapWrap" style="flex:1;min-height:0;position:relative;background:#eef2f6">
     <div id="mtMap" style="position:absolute;inset:0"></div>
+    <div class="mt-zoom-ctrl">
+      <button type="button" onclick="_mtZoom(1)" aria-label="Perbesar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <div class="mt-zoom-div"></div>
+      <button type="button" onclick="_mtZoom(-1)" aria-label="Perkecil">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <div class="mt-zoom-div"></div>
+      <button type="button" onclick="_mtToggleTilt()" aria-label="Miringkan (3D)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </button>
+    </div>
+    <button type="button" class="mt-locate-btn" onclick="_mtLocate()" aria-label="Kembali ke lokasi saya" title="Kembali ke lokasi saya"><i class="fa-solid fa-location-crosshairs"></i></button>
     <div id="mtMapLoading" style="position:absolute;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#eef2f6;pointer-events:none">
       <div style="width:34px;height:34px;border:3px solid #d1d5db;border-top-color:#10B981;border-radius:50%;animation:mtspin .8s linear infinite"></div>
       <p style="margin:0;font-size:12px;color:#6b7280;font-weight:600">Memuat peta...</p>
@@ -25309,7 +25338,9 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
 (function(){
   const RADIUS_M = 1000; // hanya mat'am dalam 1 km dari user
   const DEFAULT_CENTER = { lat: 30.0605, lng: 31.4900 }; // fallback area Rehab, Cairo
-  let _mtMap = null, _mtLayer = null, _mtUserMarker = null;
+  let _mtMap = null, _mtUserMarker = null;
+  let _mtMarkers = [];         // marker MapLibre yang sedang tampil (pin mat'am + titik user)
+  let _mtRouteCoords = null;   // garis rute aktif, [[lng,lat],...]
   let _mtUser = null;    // {lat,lng} lokasi user
   let _mtShops = null;   // cache daftar mat'am (null=belum dimuat)
   let _mtManual = false; // true kalau lokasi di-set manual (GPS gagal)
@@ -25323,7 +25354,6 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
   let _mtFetchCenter = null;   // pusat lokasi saat data terakhir diambil
   let _mtWatchId = null;       // id watchPosition (live tracking)
   let _mtLastTrackPt = null;   // titik GPS terakhir (utk throttle update)
-  let _mtRouteLine = null;     // garis rute (ikuti jalan) ke mat'am terpilih
   let _mtSelectedUid = null;   // mat'am yang rutenya sedang ditampilkan
   let _mtFetchRetry = 0;       // penghitung percobaan ulang saat fetch data mat'am gagal
 
@@ -25353,140 +25383,141 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     ov.style.display = 'none';
     document.body.style.overflow = '';
     _mtStopWatch(); // matikan GPS live supaya tidak boros baterai
-    if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; _mtLayer = null; _mtUserMarker = null; }
+    _mtDestroyMap();
   }
 
-  // Lazy-load MapLibre GL + plugin Leaflet (dipakai utk basemap vektor OpenFreeMap
-  // yang bisa dipaksa berlabel Latin). Hanya dimuat saat fitur dibuka pertama kali.
+  // ── Peta Mat'am: MapLibre GL NATIVE — tampilan SAMA dengan peta Nuqto ──────
+  // Style vektor kustom di atas OpenFreeMap (TANPA API key, boleh komersial),
+  // label Latin, bisa diputar (2 jari) & dimiringkan 3D (tombol / geser 2 jari).
+  // Riwayat: dulu raster CARTO Voyager — sejak Nov 2026 CARTO mewajibkan API key
+  // sehingga peta hanya menampilkan tulisan "API KEY REQUIRED".
+  const _MT_LAT = ['coalesce', ['get', 'name:id'], ['get', 'name:latin'], ['get', 'name:en'], ['get', 'name']];
+  const _MT_STYLE = {
+    version: 8,
+    glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    sources: { om: { type: 'vector', url: 'https://tiles.openfreemap.org/planet', attribution: '&copy; OpenFreeMap &copy; OpenStreetMap' } },
+    layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': '#f4f3ef' } },
+      { id: 'landuse-resid', type: 'fill', source: 'om', 'source-layer': 'landuse', filter: ['in', 'class', 'residential', 'suburb', 'neighbourhood'], paint: { 'fill-color': '#eae7df' } },
+      { id: 'landuse-other', type: 'fill', source: 'om', 'source-layer': 'landuse', filter: ['in', 'class', 'commercial', 'industrial', 'retail', 'university', 'hospital', 'school'], paint: { 'fill-color': '#efe9df', 'fill-opacity': 0.7 } },
+      { id: 'landcover', type: 'fill', source: 'om', 'source-layer': 'landcover', filter: ['in', 'class', 'grass', 'wood', 'forest', 'meadow', 'park', 'garden', 'recreation_ground', 'scrub', 'heath'], paint: { 'fill-color': '#b3e09b', 'fill-opacity': 0.85 } },
+      { id: 'park', type: 'fill', source: 'om', 'source-layer': 'park', filter: ['!=', 'class', 'protected_area'], paint: { 'fill-color': '#a6dd8f', 'fill-opacity': 0.9 } },
+      { id: 'landuse-green', type: 'fill', source: 'om', 'source-layer': 'landuse', filter: ['in', 'class', 'park', 'recreation_ground', 'grass', 'garden', 'meadow', 'pitch', 'playground', 'golf_course', 'cemetery'], paint: { 'fill-color': '#b3e09b', 'fill-opacity': 0.8 } },
+      { id: 'water', type: 'fill', source: 'om', 'source-layer': 'water', paint: { 'fill-color': '#a9d3f2' } },
+      { id: 'building', type: 'fill', source: 'om', 'source-layer': 'building', minzoom: 12, paint: { 'fill-color': '#e6e0d2', 'fill-outline-color': '#ccc5b4' } },
+      { id: 'road-casing', type: 'line', source: 'om', 'source-layer': 'transportation', filter: ['in', 'class', 'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'street'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#d8d4ca', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.6, 16, 11] } },
+      { id: 'road-minor', type: 'line', source: 'om', 'source-layer': 'transportation', filter: ['in', 'class', 'minor', 'street', 'service', 'tertiary'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.8, 16, 6] } },
+      { id: 'road-arterial', type: 'line', source: 'om', 'source-layer': 'transportation', filter: ['in', 'class', 'secondary', 'primary'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.4, 16, 8] } },
+      { id: 'road-highway-casing', type: 'line', source: 'om', 'source-layer': 'transportation', filter: ['in', 'class', 'motorway', 'trunk'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#f2b95a', 'line-width': ['interpolate', ['linear'], ['zoom'], 9, 2.4, 16, 12] } },
+      { id: 'road-highway', type: 'line', source: 'om', 'source-layer': 'transportation', filter: ['in', 'class', 'motorway', 'trunk'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#fbd274', 'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1.4, 16, 9] } },
+      { id: 'boundary', type: 'line', source: 'om', 'source-layer': 'boundary', filter: ['<=', 'admin_level', 4], paint: { 'line-color': '#c9c4b8', 'line-dasharray': [3, 2], 'line-width': 1 } },
+      { id: 'place-city', type: 'symbol', source: 'om', 'source-layer': 'place', filter: ['in', 'class', 'city', 'town'], layout: { 'text-field': _MT_LAT, 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 8, 13, 14, 22], 'text-pitch-alignment': 'viewport', 'text-rotation-alignment': 'viewport' }, paint: { 'text-color': '#3c4043', 'text-halo-color': '#f4f3ef', 'text-halo-width': 1.6 } },
+      { id: 'road-name', type: 'symbol', source: 'om', 'source-layer': 'transportation_name', minzoom: 13, layout: { 'text-field': _MT_LAT, 'text-font': ['Noto Sans Regular'], 'symbol-placement': 'line', 'text-size': 13, 'text-pitch-alignment': 'viewport' }, paint: { 'text-color': '#1c1c1c', 'text-halo-color': '#ffffff', 'text-halo-width': 1.8 } },
+      { id: 'place-other', type: 'symbol', source: 'om', 'source-layer': 'place', filter: ['in', 'class', 'suburb', 'neighbourhood', 'quarter', 'village'], layout: { 'text-field': _MT_LAT, 'text-font': ['Noto Sans Regular'], 'text-size': 12, 'text-pitch-alignment': 'viewport', 'text-rotation-alignment': 'viewport' }, paint: { 'text-color': '#70757a', 'text-halo-color': '#f4f3ef', 'text-halo-width': 1.4 } }
+    ]
+  };
+  // Cadangan kalau OpenFreeMap sedang gangguan: raster OpenStreetMap standar (tanpa key).
+  const _MT_STYLE_OSM = {
+    version: 8,
+    sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 19, attribution: '&copy; OpenStreetMap' } },
+    layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+  };
+
+  // Lazy-load MapLibre GL (hanya saat fitur dibuka pertama kali).
   let _mtMLPromise = null;
   function _mtEnsureMapLibre() {
     if (_mtMLPromise) return _mtMLPromise;
     _mtMLPromise = new Promise((resolve) => {
-      if (L.maplibreGL) return resolve(true);
-      const loadPlugin = () => {
-        if (L.maplibreGL) return resolve(true);
-        const p = document.createElement('script');
-        p.src = 'https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js';
-        p.onload = () => resolve(!!L.maplibreGL);
-        p.onerror = () => resolve(false);
-        document.head.appendChild(p);
-      };
-      if (window.maplibregl) return loadPlugin();
-      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'; document.head.appendChild(css);
+      if (window.maplibregl) return resolve(true);
+      if (!document.querySelector('link[href*="maplibre-gl@4.7.1/dist/maplibre-gl.css"]')) {
+        const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'; document.head.appendChild(css);
+      }
       const s = document.createElement('script'); s.src = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
-      s.onload = loadPlugin; s.onerror = () => resolve(false); document.head.appendChild(s);
+      s.onload = () => resolve(!!window.maplibregl);
+      s.onerror = () => { _mtMLPromise = null; resolve(false); }; // boleh dicoba lagi saat dibuka ulang
+      document.head.appendChild(s);
     });
     return _mtMLPromise;
   }
 
-  function _mtForceLatinLabels(mm) {
-    try {
-      const layers = (mm.getStyle().layers) || [];
-      layers.forEach(l => {
-        if (l.type === 'symbol' && l.layout && l.layout['text-field']) {
-          try { mm.setLayoutProperty(l.id, 'text-field', ['coalesce', ['get', 'name:latin'], ['get', 'name:en'], ['get', 'name']]); } catch (e) {}
-        }
-      });
-    } catch (e) {}
-  }
+  const _MT_LOADER_HTML = '<div style="width:34px;height:34px;border:3px solid #d1d5db;border-top-color:#10B981;border-radius:50%;animation:mtspin .8s linear infinite"></div><p style="margin:0;font-size:12px;color:#6b7280;font-weight:600">Memuat peta...</p>';
 
-  // Bangunan OpenFreeMap defaultnya terlalu terang (nyaris tak terlihat di zoom menengah).
-  // Pertajam warna isi + garis tepi supaya bangunan jelas terlihat, bukan cuma jalan.
-  function _mtEnhanceBuildings(mm) {
-    try {
-      if (mm.getLayer('building')) {
-        mm.setPaintProperty('building', 'fill-color', '#dcd3c0');
-        mm.setPaintProperty('building', 'fill-outline-color', '#a99e83');
-      }
-      if (mm.getLayer('building-3d')) {
-        mm.setPaintProperty('building-3d', 'fill-extrusion-color', '#d8cfba');
-        mm.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0.9);
-      }
-    } catch (e) {}
+  function _mtClearMarkers() {
+    _mtMarkers.forEach(m => { try { m.remove(); } catch (e) {} });
+    _mtMarkers = [];
+    _mtUserMarker = null;
   }
-
-  function _mtAddRasterFallback(hide) {
-    if (!_mtMap) return;
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO'
-    });
-    tiles.on('load', () => { _mtBasemapReady = true; _mtTryFit(); hide(); });
-    tiles.addTo(_mtMap);
-  }
-
-  // Plugin rotasi peta (leaflet-rotate) — dimuat sekali, khusus fitur mat'am.
-  // HARUS siap SEBELUM L.map dibuat karena opsi rotate dibaca saat inisialisasi.
-  let _mtRotatePromise = null;
-  function _mtEnsureRotate() {
-    if (_mtRotatePromise) return _mtRotatePromise;
-    _mtRotatePromise = new Promise((resolve) => {
-      if (L.Map && L.Map.prototype && L.Map.prototype.setBearing) return resolve(true);
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js';
-      s.onload = () => resolve(!!(L.Map && L.Map.prototype && L.Map.prototype.setBearing));
-      s.onerror = () => resolve(false);
-      document.head.appendChild(s);
-    });
-    return _mtRotatePromise;
+  function _mtDestroyMap() {
+    _mtClearMarkers();
+    _mtRouteCoords = null; _mtSelectedUid = null;
+    if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; }
   }
 
   function _mtInitMap() {
-    if (_mtMap) { try { _mtMap.remove(); } catch (e) {} _mtMap = null; }
+    _mtDestroyMap();
     const loader = document.getElementById('mtMapLoading');
-    if (loader) loader.style.display = 'flex';
-    // Muat plugin rotasi DULU, baru bangun peta (kalau gagal, peta tetap jalan tanpa rotasi).
-    _mtEnsureRotate().then((canRotate) => {
-      if (!_mtOvVisible()) return; // sudah ditutup sebelum plugin siap
-      _mtBuildMap(!!canRotate);
+    if (loader) { loader.innerHTML = _MT_LOADER_HTML; loader.style.display = 'flex'; }
+    _mtEnsureMapLibre().then((ok) => {
+      if (!_mtOvVisible()) return; // sudah ditutup sebelum library siap
+      if (!ok || !window.maplibregl) { _mtMapFailed(); return; }
+      try { _mtBuildMap(); } catch (e) { console.warn('[matam] peta gagal dibuat', e); _mtMapFailed(); }
     });
   }
 
-  function _mtBuildMap(canRotate) {
+  // Peta gagal (CDN/WebGL) — daftar mat'am di bawah tetap jalan.
+  function _mtMapFailed() {
+    _mtDestroyMap();
+    const l = document.getElementById('mtMapLoading');
+    if (l) {
+      l.innerHTML = '<i class="fa-solid fa-map" style="font-size:26px;color:#cbd5e1"></i><p style="margin:0;font-size:12px;color:#6b7280;font-weight:600;text-align:center;padding:0 24px">Peta gagal dimuat.<br>Daftar mat\'am di bawah tetap bisa dipakai.</p>';
+      l.style.display = 'flex';
+    }
+  }
+
+  function _mtBuildMap() {
     let _loaderHidden = false;
     const hideLoader = () => { if (_loaderHidden) return; _loaderHidden = true; const l = document.getElementById('mtMapLoading'); if (l) l.style.display = 'none'; };
     const c = _mtUser || DEFAULT_CENTER;
-    const opts = { zoomControl: true, fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false };
-    // Aktifkan rotasi peta: dua jari di HP (touchRotate), Shift+drag di desktop, + tombol kompas.
-    if (canRotate) {
-      opts.rotate = true;
-      opts.touchRotate = true;
-      opts.shiftKeyRotate = true;
-      opts.bearing = 0;
-      opts.rotateControl = { closeOnZeroBearing: false, position: 'topleft' };
-    }
-    _mtMap = L.map('mtMap', opts).setView([c.lat, c.lng], 15);
-    _mtLayer = L.layerGroup().addTo(_mtMap);
-    // Kalau user geser/zoom peta sendiri, jangan auto-fit lagi (biar tidak menyentak)
-    _mtMap.on('dragstart', () => { _mtUserMoved = true; });
-    _mtMap.on('zoomstart', () => { if (!_mtProg) _mtUserMoved = true; });
-    // Tombol "lokasi saya" tepat di bawah kontrol zoom (+/-): klik = balik ke tampilan
-    // lokasi kamu semula (auto-fit), berapa pun zoom/geser peta sebelumnya.
-    const _MtLocateCtrl = L.Control.extend({
-      options: { position: 'topleft' },
-      onAdd: function () {
-        const bar = L.DomUtil.create('div', 'leaflet-bar');
-        const a = L.DomUtil.create('a', '', bar);
-        a.href = '#'; a.title = 'Kembali ke lokasi saya'; a.setAttribute('role', 'button');
-        a.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i>';
-        a.style.cssText = 'display:flex;align-items:center;justify-content:center;font-size:15px;color:#10B981';
-        L.DomEvent.on(a, 'click', function (e) { L.DomEvent.stop(e); _mtLocateAndFit(); });
-        L.DomEvent.disableClickPropagation(bar);
-        return bar;
-      }
+    const map = new maplibregl.Map({
+      container: 'mtMap', style: _MT_STYLE, center: [c.lng, c.lat], zoom: 15,
+      pitch: 0, bearing: 0, attributionControl: false,          // DATAR secara default (sama Nuqto)
+      dragRotate: true, pitchWithRotate: true, maxPitch: 85
     });
-    _mtMap.addControl(new _MtLocateCtrl());
-    requestAnimationFrame(() => { if (_mtMap) _mtMap.invalidateSize(); });
-    // Basemap RASTER (CARTO Voyager): label Latin, tampil bersih, DAN bisa ikut berputar
-    // saat peta diputar. (Basemap vektor MapLibre GL tidak dipakai di sini karena plugin
-    // Leaflet-nya tidak mendukung bearing → tak bisa ikut berputar.)
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO'
+    _mtMap = map;
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+    // OpenFreeMap gagal SEBELUM peta tampil → ganti ke raster OSM sekali saja.
+    let _swapped = false;
+    map.on('error', () => {
+      if (_swapped || _mtBasemapReady || _mtMap !== map) return;
+      _swapped = true;
+      try { map.setStyle(_MT_STYLE_OSM); } catch (e) {}
     });
-    tiles.on('load', () => { _mtBasemapReady = true; _mtTryFit(); hideLoader(); });
-    tiles.addTo(_mtMap);
-    // Pengaman: sembunyikan loader walau event telat/tak terpicu
-    setTimeout(() => { if (_mtMap) { _mtMap.invalidateSize(); _mtBasemapReady = true; _mtTryFit(); } hideLoader(); }, 3500);
+    map.on('load', () => { if (_mtMap !== map) return; _mtBasemapReady = true; map.resize(); _mtTryFit(); hideLoader(); });
+    map.on('style.load', () => { if (_mtMap === map && _mtRouteCoords) _mtPaintRoute(false); }); // rute ikut pindah saat ganti style
+    // Kalau user geser/zoom peta sendiri, jangan auto-fit lagi (biar tidak menyentak).
+    // originalEvent hanya ada kalau gerakan berasal dari jari/mouse, bukan dari program.
+    map.on('dragstart', (e) => { if (e && e.originalEvent) _mtUserMoved = true; });
+    map.on('zoomstart', (e) => { if (e && e.originalEvent && !_mtProg) _mtUserMoved = true; });
+    // WebGL context bisa hilang saat app di-background lama → izinkan browser memulihkan.
+    try {
+      const cv = map.getCanvas();
+      cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); }, false);
+      cv.addEventListener('webglcontextrestored', () => { try { map.resize(); } catch (e) {} }, false);
+    } catch (e) {}
+    requestAnimationFrame(() => { if (_mtMap === map) map.resize(); });
+    // Pengaman: sembunyikan loader walau event 'load' telat/tak terpicu
+    setTimeout(() => { if (_mtMap === map) { map.resize(); _mtBasemapReady = true; _mtTryFit(); } hideLoader(); }, 3500);
+    if (_mtUser) _mtDraw(_mtManual); // lokasi sudah didapat duluan → langsung gambar titik & pin
   }
+
+  // Tombol peta (zoom, miring 3D, lokasi) — dipanggil dari HTML
+  window._mtZoom = function (d) { if (_mtMap) { _mtUserMoved = true; d > 0 ? _mtMap.zoomIn() : _mtMap.zoomOut(); } };
+  window._mtToggleTilt = function () {
+    if (!_mtMap) return;
+    if (_mtMap.getPitch() < 5) _mtMap.easeTo({ pitch: 65, duration: 500 });
+    else _mtMap.easeTo({ pitch: 0, bearing: 0, duration: 500 });
+  };
+  window._mtLocate = function () { _mtLocateAndFit(); };
 
   // Overlay Mat'am masih terbuka? (dipakai untuk hentikan retry saat user menutup)
   function _mtOvVisible() { const o = document.getElementById('matamTerdekatOverlay'); return !!o && o.style.display !== 'none'; }
@@ -25581,53 +25612,58 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
 
   function _mtSetUser(lat, lng, keepMsg) {
     _mtUser = { lat: Number(lat), lng: Number(lng) };
-    if (_mtMap) _mtProgView(() => _mtMap.setView([_mtUser.lat, _mtUser.lng], _mtMap.getZoom() < 14 ? 15 : _mtMap.getZoom(), { animate: false }));
+    if (_mtMap) _mtProgView(() => _mtMap.jumpTo({ center: [_mtUser.lng, _mtUser.lat], zoom: _mtMap.getZoom() < 14 ? 15 : _mtMap.getZoom() }));
     _mtDraw(keepMsg);
     if (!_mtFetchedOnce && !_mtFetching) { _mtFetchShops(); } // _mtFetchedOnce dikunci di dalam _mtFetchShops HANYA saat sukses
   }
 
   function _mtDraw(keepMsg) {
-    if (!_mtMap || !_mtLayer) return;
-    _mtLayer.clearLayers();
-    // Titik user — draggable supaya user bisa mengoreksi lokasi manual
-    if (_mtUser) {
-      const meIcon = L.divIcon({ className: '', html: '<div style="width:20px;height:20px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 4px rgba(37,99,235,.3)"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
-      _mtUserMarker = L.marker([_mtUser.lat, _mtUser.lng], { icon: meIcon, draggable: _mtManual, zIndexOffset: 1000 }).addTo(_mtLayer);
-      _mtUserMarker.bindTooltip(_mtManual ? 'Geser ke lokasimu' : 'Lokasi kamu', { permanent: true, direction: 'bottom', offset: [0, 10], className: 'mt-me-lbl' });
-      _mtUserMarker.on('dragend', (e) => {
-        const ll = e.target.getLatLng(); _mtUser = { lat: ll.lat, lng: ll.lng }; _mtManual = true;
-        // geser jauh dari titik data terakhir → ambil ulang mat'am sekitar; kalau dekat cukup redraw (view tetap)
-        if (_mtFetchCenter && _mtHaversineM(_mtUser.lat, _mtUser.lng, _mtFetchCenter.lat, _mtFetchCenter.lng) > 800) { _mtShops = null; _mtFetchShops(); }
-        else { _mtDraw(true); }
-      });
-    }
     const sub = document.getElementById('mtSubtitle');
+    if (_mtMap) _mtClearMarkers();
+    // Hitung jarak (Haversine) & saring hanya yang ≤ 1 km
+    const near = (_mtShops && _mtUser)
+      ? _mtShops.map(s => ({ ...s, d: _mtHaversineM(_mtUser.lat, _mtUser.lng, s.lat, s.lng) }))
+          .filter(s => s.d <= RADIUS_M)
+          .sort((a, b) => a.d - b.d)
+      : [];
+    // Pin mat'am dengan nama jelas. (Garis rute TIDAK digambar di sini — hanya muncul
+    // saat nama mat'am di daftar bawah diklik, lihat _mtShowRoute.)
+    if (_mtMap) {
+      near.forEach(s => {
+        const el = document.createElement('div');
+        el.className = 'mt-pin';
+        // Pin teardrop + simbol garpu & pisau; nama mat'am TEPAT DI BAWAH pin
+        el.innerHTML = `<svg width="32" height="38" viewBox="0 0 24 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C6.48 0 2 4.48 2 10c0 6.5 10 18 10 18s10-11.5 10-18C22 4.48 17.52 0 12 0z" fill="#10B981" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <i class="fa-solid fa-utensils" style="position:absolute;top:7px;left:0;right:0;text-align:center;color:#fff;font-size:11px;line-height:1"></i>
+          <div class="mt-pin-lbl">${_mtEsc(s.name)}</div>`;
+        const popup = new maplibregl.Popup({ offset: 40, maxWidth: '240px', closeButton: true })
+          .setHTML(`<div style="text-align:center;min-width:130px"><b style="font-size:13px">${_mtEsc(s.name)}</b><br><span style="color:#10B981;font-weight:700">${_mtFmt(s.d)} dari kamu</span><br><button onclick="closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="margin-top:8px;background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:6px 14px;border-radius:10px;cursor:pointer">Lihat Mat'am</button></div>`);
+        const mk = new maplibregl.Marker({ element: el, anchor: 'bottom', pitchAlignment: 'viewport', rotationAlignment: 'viewport' })
+          .setLngLat([s.lng, s.lat]).setPopup(popup).addTo(_mtMap);
+        _mtMarkers.push(mk);
+      });
+      // Titik user (ditambah TERAKHIR supaya di atas pin) — draggable saat lokasi manual
+      if (_mtUser) {
+        const el = document.createElement('div');
+        el.className = 'mt-me' + (_mtManual ? ' mt-drag' : '');
+        el.innerHTML = '<div class="mt-me-dot"></div><div class="mt-me-lbl">' + (_mtManual ? 'Geser ke lokasimu' : 'Lokasi kamu') + '</div>';
+        const mk = new maplibregl.Marker({ element: el, anchor: 'center', draggable: _mtManual, pitchAlignment: 'viewport', rotationAlignment: 'viewport' })
+          .setLngLat([_mtUser.lng, _mtUser.lat]).addTo(_mtMap);
+        mk.on('dragend', () => {
+          const ll = mk.getLngLat(); _mtUser = { lat: ll.lat, lng: ll.lng }; _mtManual = true;
+          // geser jauh dari titik data terakhir → ambil ulang mat'am sekitar; kalau dekat cukup redraw (view tetap)
+          if (_mtFetchCenter && _mtHaversineM(_mtUser.lat, _mtUser.lng, _mtFetchCenter.lat, _mtFetchCenter.lng) > 800) { _mtShops = null; _mtFetchShops(); }
+          else { _mtDraw(true); }
+        });
+        _mtUserMarker = mk;
+        _mtMarkers.push(mk);
+      }
+    }
     if (_mtShops === null) { sub.textContent = "Memuat mat'am..."; return; }
     if (!_mtUser) return;
-    // Hitung jarak (Haversine) & saring hanya yang ≤ 1 km
-    const near = _mtShops.map(s => ({ ...s, d: _mtHaversineM(_mtUser.lat, _mtUser.lng, s.lat, s.lng) }))
-      .filter(s => s.d <= RADIUS_M)
-      .sort((a, b) => a.d - b.d);
     if (!(keepMsg && _mtManual)) {
       sub.textContent = near.length ? (near.length + " mat'am dalam radius 1 km") : "Tidak ada mat'am dalam radius 1 km";
     }
-    // Pin mat'am dengan nama jelas. (Garis rute TIDAK digambar di sini — hanya muncul
-    // saat nama mat'am di daftar bawah diklik, lihat _mtShowRoute.)
-    near.forEach(s => {
-      const pin = L.divIcon({
-        className: '', iconSize: [0, 0], html: `<div style="position:relative;display:inline-block;transform:translate(-50%,-100%)">
-          <!-- Pin marker mat'am: teardrop + simbol garpu & pisau (fork & knife) -->
-          <div style="position:relative;width:32px;height:38px">
-            <svg width="32" height="38" viewBox="0 0 24 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C6.48 0 2 4.48 2 10c0 6.5 10 18 10 18s10-11.5 10-18C22 4.48 17.52 0 12 0z" fill="#10B981" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/></svg>
-            <i class="fa-solid fa-utensils" style="position:absolute;top:7px;left:0;right:0;text-align:center;color:#fff;font-size:11px;line-height:1"></i>
-          </div>
-          <!-- Nama mat'am TEPAT DI BAWAH pin; glow tipis mengikuti kontur huruf (bukan kotak) -->
-          <div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:1px;white-space:nowrap;font-size:11.5px;font-weight:800;color:#111827;text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff,0 0 6px rgba(255,255,255,.85);max-width:160px;overflow:hidden;text-overflow:ellipsis">${_mtEsc(s.name)}</div>
-        </div>`
-      });
-      L.marker([s.lat, s.lng], { icon: pin }).addTo(_mtLayer)
-        .bindPopup(`<div style="text-align:center;min-width:130px"><b style="font-size:13px">${_mtEsc(s.name)}</b><br><span style="color:#10B981;font-weight:700">${_mtFmt(s.d)} dari kamu</span><br><button onclick="closeMatamTerdekat();viewSellerStore('${_mtEsc(s.uid)}')" style="margin-top:8px;background:#10B981;color:#fff;border:none;font-weight:700;font-size:12px;padding:6px 14px;border-radius:10px;cursor:pointer">Lihat Mat'am</button></div>`);
-    });
     _mtLastNear = near;
     _mtTryFit();
     _mtRenderList(near);
@@ -25640,13 +25676,14 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
   // titik user tetap muat; maxZoom 17. Dipakai tombol lokasi.
   function _mtFit() {
     if (!_mtMap || !_mtUser) return;
-    try { _mtMap.invalidateSize(); } catch (e) {}
+    try { _mtMap.resize(); } catch (e) {}
     _mtProgView(() => {
       if (_mtLastNear.length) {
-        const pts = [[_mtUser.lat, _mtUser.lng]].concat(_mtLastNear.map(s => [s.lat, s.lng]));
-        try { _mtMap.fitBounds(pts, { padding: [60, 60], maxZoom: 17, animate: false }); } catch (e) {}
+        const b = new maplibregl.LngLatBounds([_mtUser.lng, _mtUser.lat], [_mtUser.lng, _mtUser.lat]);
+        _mtLastNear.forEach(s => b.extend([s.lng, s.lat]));
+        try { _mtMap.fitBounds(b, { padding: 60, maxZoom: 17, duration: 0 }); } catch (e) {}
       } else {
-        try { _mtMap.setView([_mtUser.lat, _mtUser.lng], 16, { animate: false }); } catch (e) {}
+        try { _mtMap.jumpTo({ center: [_mtUser.lng, _mtUser.lat], zoom: 16 }); } catch (e) {}
       }
     });
   }
@@ -25690,10 +25727,36 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
   // Hanya tampil saat nama mat'am di daftar bawah diklik. Klik lagi mat'am yang
   // sama = sembunyikan (toggle). Garis lurus solid tampil instan, lalu di-upgrade
   // jadi rute jalan sungguhan begitu ORS balas. Garis rute ditaruh langsung di
-  // _mtMap (bukan _mtLayer) supaya tidak terhapus saat marker digambar ulang.
+  // layer GeoJSON terpisah dari marker, jadi tidak terhapus saat marker digambar ulang.
   function _mtClearRoute() {
     _mtSelectedUid = null;
-    if (_mtRouteLine) { try { _mtMap.removeLayer(_mtRouteLine); } catch (e) {} _mtRouteLine = null; }
+    _mtRouteCoords = null;
+    if (_mtMap) {
+      try { if (_mtMap.getLayer('mt-route')) _mtMap.removeLayer('mt-route'); } catch (e) {}
+      try { if (_mtMap.getSource('mt-route')) _mtMap.removeSource('mt-route'); } catch (e) {}
+    }
+  }
+  // Gambar/perbarui garis rute (GeoJSON) dari _mtRouteCoords; fit = fokuskan peta ke rute.
+  function _mtPaintRoute(fit) {
+    const map = _mtMap;
+    if (!map || !_mtRouteCoords) return;
+    const add = () => {
+      if (_mtMap !== map || !_mtRouteCoords) return;
+      const data = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: _mtRouteCoords } };
+      try {
+        if (map.getSource('mt-route')) map.getSource('mt-route').setData(data);
+        else {
+          map.addSource('mt-route', { type: 'geojson', data: data });
+          map.addLayer({ id: 'mt-route', type: 'line', source: 'mt-route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#10B981', 'line-width': 5, 'line-opacity': 0.95 } });
+        }
+      } catch (e) {}
+    };
+    if (map.isStyleLoaded()) add(); else map.once('idle', add);
+    if (fit) {
+      const b = new maplibregl.LngLatBounds(_mtRouteCoords[0], _mtRouteCoords[0]);
+      _mtRouteCoords.forEach(c => b.extend(c));
+      _mtProgView(() => { try { map.fitBounds(b, { padding: 70, maxZoom: 17, duration: 600 }); } catch (e) {} });
+    }
   }
   async function _mtFetchRoadRoute(fLat, fLng, tLat, tLng) {
     if (!window._ORS_API_KEY) return null;
@@ -25707,25 +25770,23 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
       const data = await res.json();
       const coords = data && data.features && data.features[0] && data.features[0].geometry && data.features[0].geometry.coordinates;
       if (!Array.isArray(coords) || !coords.length) throw new Error('geometri kosong');
-      return coords.map(c => [c[1], c[0]]); // ORS [lng,lat] → Leaflet [lat,lng]
+      return coords; // ORS [lng,lat] = format MapLibre, langsung pakai
     } catch (e) { return null; }
   }
   window._mtShowRoute = async function (uid) {
-    if (!_mtMap || !_mtUser) return;
+    if (!_mtUser) return;
     if (_mtSelectedUid === uid) { _mtClearRoute(); return; } // klik lagi = toggle off
     const s = (_mtLastNear || []).find(x => x.uid === uid);
     if (!s) return;
     _mtSelectedUid = uid;
-    if (_mtRouteLine) { try { _mtMap.removeLayer(_mtRouteLine); } catch (e) {} _mtRouteLine = null; }
     // 1) garis lurus SOLID dulu (instan) + fokuskan peta ke rute
-    _mtRouteLine = L.polyline([[_mtUser.lat, _mtUser.lng], [s.lat, s.lng]], { color: '#10B981', weight: 5, opacity: .9 }).addTo(_mtMap);
-    _mtProgView(() => { try { _mtMap.fitBounds([[_mtUser.lat, _mtUser.lng], [s.lat, s.lng]], { padding: [70, 70], maxZoom: 17, animate: true }); } catch (e) {} });
+    _mtRouteCoords = [[_mtUser.lng, _mtUser.lat], [s.lng, s.lat]];
+    _mtPaintRoute(true);
     // 2) upgrade jadi rute mengikuti JALAN (kalau ORS berhasil & pilihan masih sama)
     const path = await _mtFetchRoadRoute(_mtUser.lat, _mtUser.lng, s.lat, s.lng);
     if (path && _mtSelectedUid === uid && _mtMap) {
-      if (_mtRouteLine) { try { _mtMap.removeLayer(_mtRouteLine); } catch (e) {} }
-      _mtRouteLine = L.polyline(path, { color: '#10B981', weight: 5, opacity: .95 }).addTo(_mtMap);
-      _mtProgView(() => { try { _mtMap.fitBounds(_mtRouteLine.getBounds(), { padding: [70, 70], maxZoom: 17, animate: true }); } catch (e) {} });
+      _mtRouteCoords = path;
+      _mtPaintRoute(true);
     }
   };
 
@@ -26383,6 +26444,69 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
   #kirimBarangOverlay .kb-chip.kb-chip-active{border-color:#10B981;background:#ECFDF5}
   #kirimBarangOverlay .kb-chip.kb-chip-active i,#kirimBarangOverlay .kb-chip.kb-chip-active span{color:#059669}
   #kirimBarangOverlay .kb-chip:active{transform:scale(.97)}
+  /* ── Tampilan baru Kirim Barang (hero + kartu lokasi) ── */
+  #kirimBarangOverlay .kb-hero{position:relative;overflow:hidden;display:flex;align-items:stretch;min-height:168px;background:linear-gradient(180deg,#e7f8ef 0%,#effaf4 62%,#f8fafc 100%);padding:16px 0 10px 16px;margin-bottom:12px}
+  #kirimBarangOverlay .kb-hero-city{position:absolute;left:0;right:0;bottom:0;width:100%;height:58px;fill:#10B981;opacity:.09;pointer-events:none}
+  #kirimBarangOverlay .kb-hero-txt{position:relative;z-index:1;flex:1 1 56%;min-width:0;padding-right:4px}
+  #kirimBarangOverlay .kb-brand{display:flex;align-items:center;gap:7px;margin-bottom:10px}
+  #kirimBarangOverlay .kb-brand img{width:30px;height:30px;border-radius:9px;box-shadow:0 2px 6px rgba(16,185,129,.25)}
+  #kirimBarangOverlay .kb-brand span{font-size:19px;font-weight:900;color:#065f46;letter-spacing:-.3px}
+  #kirimBarangOverlay .kb-brand b{color:#10B981;font-weight:900}
+  #kirimBarangOverlay .kb-hero h3{margin:0 0 6px;font-size:clamp(17px,5.1vw,23px);line-height:1.18;font-weight:900;color:#064e3b;letter-spacing:-.3px}
+  #kirimBarangOverlay .kb-hero h3 em{font-style:normal;color:#10B981}
+  #kirimBarangOverlay .kb-hero p{margin:0;font-size:11.5px;line-height:1.45;color:#4b5563;font-weight:500;max-width:210px}
+  #kirimBarangOverlay .kb-hero-art{position:relative;z-index:1;flex:0 0 40%;max-width:230px;display:flex;align-items:flex-end;justify-content:center}
+  #kirimBarangOverlay .kb-hero-art picture{display:block;width:100%}
+  #kirimBarangOverlay .kb-hero-art img{width:100%;height:auto;max-height:170px;object-fit:contain;object-position:bottom;display:block;margin-bottom:-10px}
+  #kirimBarangOverlay .kb-hero-fallback{width:104px;height:104px;margin:0 auto 6px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#34d399,#059669);color:#fff;font-size:44px;align-items:center;justify-content:center;box-shadow:0 10px 26px rgba(5,150,105,.35)}
+  #kirimBarangOverlay .kb-hero-pin{position:absolute;top:0;right:14px;font-size:24px;color:#10B981;opacity:.85;filter:drop-shadow(0 3px 4px rgba(16,185,129,.3))}
+  #kirimBarangOverlay .kb-warn{display:flex;align-items:flex-start;gap:8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:10px 12px;margin-bottom:14px;color:#DC2626;font-size:12px;font-weight:700;line-height:1.5}
+  #kirimBarangOverlay .kb-warn i{margin-top:3px;flex-shrink:0}
+  #kirimBarangOverlay .kb-loc{background:#fff;border:1px solid #eef0f2;border-radius:18px;padding:12px 12px 10px;margin-bottom:12px;box-shadow:0 2px 10px rgba(15,23,42,.05)}
+  #kirimBarangOverlay .kb-loc-top{position:relative;display:flex;align-items:center;gap:11px;padding:2px 0 10px}
+  #kirimBarangOverlay .kb-loc-city{position:absolute;right:30px;bottom:8px;width:150px;height:34px;fill:#10B981;opacity:.08;pointer-events:none}
+  #kirimBarangOverlay .kb-loc-ic{position:relative;width:42px;height:42px;border-radius:50%;background:#10B981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;box-shadow:0 4px 10px rgba(16,185,129,.3)}
+  #kirimBarangOverlay .kb-loc-main{position:relative;flex:1;min-width:0}
+  #kirimBarangOverlay .kb-loc-main label{display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:1px}
+  #kirimBarangOverlay .kb-loc-main input{width:100%;border:none;outline:none;background:transparent;padding:2px 0;font-size:15px;font-weight:800;color:#111827}
+  #kirimBarangOverlay .kb-loc-main input::placeholder{color:#1f2937;font-weight:800;opacity:1}
+  #kirimBarangOverlay .kb-loc-main input:focus::placeholder{color:#9ca3af}
+  #kirimBarangOverlay .kb-loc-go{position:relative;width:32px;height:32px;border:none;background:none;color:#111827;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;border-radius:50%}
+  #kirimBarangOverlay .kb-loc-go:active{background:#f3f4f6}
+  #kirimBarangOverlay .kb-loc-actions{display:flex;align-items:center;background:#ECFDF5;border-radius:12px;min-height:40px}
+  #kirimBarangOverlay .kb-loc-actions button{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;border:none;background:none;color:#047857;font-size:12.5px;font-weight:700;padding:10px 6px;cursor:pointer;border-radius:12px}
+  #kirimBarangOverlay .kb-loc-actions button:active{background:#d1fae5}
+  #kirimBarangOverlay .kb-loc-actions button:disabled{opacity:.6}
+  #kirimBarangOverlay .kb-loc-actions i{color:#10B981;font-size:14px}
+  #kirimBarangOverlay .kb-loc-sep{width:1px;align-self:stretch;margin:9px 0;background:#a7f3d0}
+  #kirimBarangOverlay .kb-loc-hint{margin:7px 2px 0;font-size:10px;color:#9ca3af;line-height:1.4}
+  #kirimBarangOverlay .kb-sec{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:800;color:#111827;margin:4px 0 9px}
+  #kirimBarangOverlay .kb-sec-ic{width:22px;height:22px;border-radius:50%;background:#10B981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+  #kirimBarangOverlay .kb-field{position:relative;display:flex;align-items:center;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:0 12px 0 40px;transition:border-color .15s}
+  #kirimBarangOverlay .kb-field:focus-within{border-color:#10B981}
+  #kirimBarangOverlay .kb-field-ic{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#10B981;font-size:15px;pointer-events:none}
+  #kirimBarangOverlay .kb-field input,#kirimBarangOverlay .kb-field textarea{width:100%;border:none;outline:none;background:transparent;font-size:14px;color:#111827;padding:12px 0}
+  #kirimBarangOverlay .kb-field-area{align-items:flex-start;padding-bottom:20px}
+  #kirimBarangOverlay .kb-field-area .kb-field-ic{top:22px}
+  #kirimBarangOverlay .kb-field textarea{resize:none}
+  #kirimBarangOverlay .kb-count{position:absolute;right:12px;bottom:7px;font-size:10.5px;color:#9ca3af;font-weight:600}
+  #kirimBarangOverlay .kb-help{font-size:10px;color:#9ca3af;margin:5px 2px 16px;line-height:1.4}
+  #kirimBarangOverlay .kb-chip{position:relative;padding:12px 2px 10px;gap:5px;border-radius:14px;box-shadow:0 1px 4px rgba(15,23,42,.05)}
+  #kirimBarangOverlay .kb-chip .kb-chip-ic{font-size:22px}
+  #kirimBarangOverlay .kb-chip .kb-chip-name{font-size:10.5px;font-weight:700;color:#374151}
+  #kirimBarangOverlay .kb-chip .kb-chip-fee{font-size:9px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap}
+  #kirimBarangOverlay .kb-chip .kb-chip-fee.kb-free{color:#059669}
+  #kirimBarangOverlay .kb-chip-check{display:none;position:absolute;top:-7px;right:-6px;width:20px;height:20px;border-radius:50%;background:#10B981;color:#fff;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 5px rgba(16,185,129,.4)}
+  #kirimBarangOverlay .kb-chip .kb-chip-check i{font-size:9px;color:#fff}
+  #kirimBarangOverlay .kb-chip.kb-chip-active .kb-chip-check{display:flex}
+  #kirimBarangOverlay .kb-chip.kb-chip-active .kb-chip-name{color:#047857}
+  #kirimBarangOverlay .kb-chip.kb-chip-active .kb-chip-fee{color:#dc2626}
+  #kirimBarangOverlay .kb-chip.kb-chip-active .kb-chip-fee.kb-free{color:#059669}
+  #kirimBarangOverlay .kb-foot{position:relative;overflow:hidden;background:#fff;border-top:1px solid #f1f5f9;padding:12px 16px 0}
+  #kirimBarangOverlay .kb-cta{position:relative;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(90deg,#10B981,#059669);color:#fff;font-weight:800;font-size:16px;border:none;border-radius:999px;padding:15px 52px;box-shadow:0 8px 20px rgba(16,185,129,.35);cursor:pointer}
+  #kirimBarangOverlay .kb-cta:not(:disabled):active{transform:scale(.98)}
+  #kirimBarangOverlay .kb-cta.opacity-50{box-shadow:none}
+  #kirimBarangOverlay .kb-cta-arrow{position:absolute;right:22px;top:50%;transform:translateY(-50%);font-size:14px}
   @keyframes kbRadar{0%{transform:scale(.6);opacity:.7}100%{transform:scale(2.2);opacity:0}}
   #kbFindingState .kb-radar{position:absolute;inset:0;border-radius:50%;border:2px solid #10B981;animation:kbRadar 1.8s ease-out infinite}
   #kbFindingState .kb-radar.d2{animation-delay:.6s}
@@ -26391,84 +26515,127 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 <div id="kirimBarangOverlay" style="display:none;position:fixed;inset:0;z-index:62;background:#f8fafc;flex-direction:column">
   <!-- Header -->
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeKirimBarangYallaKurir()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
-    <h2 class="font-bold text-base flex-1">Kirim Barang</h2>
-    <button onclick="openBarangSaya()" title="Barang Saya" class="flex items-center gap-1.5 text-primary bg-pl px-2.5 py-1.5 rounded-full hover:brightness-95 transition-all active:scale-95">
+    <button onclick="closeKirimBarangYallaKurir()" aria-label="Kembali" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-800"></i></button>
+    <h2 class="font-extrabold text-[17px] flex-1 text-gray-900">Kirim Barang</h2>
+    <button onclick="openBarangSaya()" title="Barang Saya" class="flex items-center gap-1.5 text-primary bg-pl px-3 py-1.5 rounded-full hover:brightness-95 transition-all active:scale-95" style="border:1px solid #a7f3d0">
       <i class="fa-solid fa-box-open text-[13px]"></i>
       <span class="text-[11px] font-bold">Barang Saya</span>
     </button>
   </div>
+  <!-- Siluet kota (dekorasi) — dipakai ulang di hero & kartu lokasi -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="kbCitySym" viewBox="0 0 200 60"><path d="M0 60V38h14v22zM16 60V26h10v34zM28 60V34h16v26zM46 60V16h8v44zM56 60V30h14v30zM72 60V10h12v50zM86 60V36h18v24zM106 60V22h10v38zM118 60V32h14v28zM134 60V14h9v46zM145 60V40h16v20zM163 60V24h12v36zM177 60V34h10v26zM189 60V28h11v32z"/></symbol>
+  </svg>
   <!-- Body -->
-  <div class="flex-1 overflow-y-auto px-4 py-4">
-    <p class="text-sm text-gray-500 mb-4">Titip antar barang ke tujuan lewat mitra kurir YallaMart. Isi lokasi & jenis barang, lalu cari kurir terdekat.</p>
-
-    <!-- Catatan penting: batas berat + pengecekan barang -->
-    <div style="text-align:center;background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:11px 12px;margin-bottom:16px">
-      <p style="color:#DC2626;font-size:13px;font-weight:700;line-height:1.55;margin:0">
-        <i class="fa-solid fa-triangle-exclamation" style="margin-right:5px"></i>Berat barang maksimal 25 kg. Kurir akan mengecek &amp; memastikan barang apa yang dikirim.
-      </p>
-    </div>
-
-    <!-- Lokasi -->
-    <label class="text-xs font-bold text-gray-700 mb-1.5 block">Dari (lokasi penjemputan)</label>
-    <div class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 bg-white mb-1.5">
-      <i class="fa-solid fa-location-dot text-primary text-sm flex-shrink-0"></i>
-      <input id="kbFromInput" type="text" oninput="_kbValidate()" placeholder="Alamat asal / patokan" class="flex-1 py-2.5 text-sm bg-transparent outline-none"/>
-    </div>
-    <div class="flex gap-2 mb-1.5">
-      <button id="kbGpsBtn" onclick="_kbDetectLocation()" title="Deteksi lokasi saat ini" class="flex-1 flex items-center justify-center gap-1.5 bg-pl text-primary text-xs font-bold rounded-xl py-2"><i class="fa-solid fa-crosshairs"></i>GPS lokasi saya</button>
-      <button onclick="_kbOpenMap('from')" class="flex-1 flex items-center justify-center gap-1.5 bg-pl text-primary text-xs font-bold rounded-xl py-2"><i class="fa-solid fa-map-location-dot"></i>Pilih di peta</button>
-    </div>
-    <p id="kbFromCoordHint" class="text-[10px] text-gray-400 mb-3.5">Pakai GPS atau pilih titik di peta untuk lokasi akurat.</p>
-
-    <label class="text-xs font-bold text-gray-700 mb-1.5 block">Ke (alamat tujuan)</label>
-    <div class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 bg-white mb-1.5">
-      <i class="fa-solid fa-flag-checkered text-gray-400 text-sm flex-shrink-0"></i>
-      <input id="kbToInput" type="text" oninput="_kbValidate()" placeholder="Alamat tujuan / patokan" class="flex-1 py-2.5 text-sm bg-transparent outline-none"/>
-    </div>
-    <div class="flex mb-1.5">
-      <button onclick="_kbOpenMap('to')" class="w-full flex items-center justify-center gap-1.5 bg-pl text-primary text-xs font-bold rounded-xl py-2"><i class="fa-solid fa-map-location-dot"></i>Pilih tujuan di peta</button>
-    </div>
-    <p id="kbToCoordHint" class="text-[10px] text-gray-400 mb-4">Pilih titik tujuan di peta untuk lokasi akurat.</p>
-
-    <!-- Jenis barang -->
-    <label class="text-xs font-bold text-gray-700 mb-2 block">Jenis Barang</label>
-    <div id="kbJenisGrid" class="grid grid-cols-5 gap-1.5 mb-3">
-      <button type="button" data-jenis="Elektronik" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-laptop"></i><span>Elektronik</span><span style="font-size:8px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+100/200</span></button>
-      <button type="button" data-jenis="Perhiasan" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-gem"></i><span>Perhiasan</span><span style="font-size:8px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+200</span></button>
-      <button type="button" data-jenis="Dokumen" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-file-lines"></i><span>Dokumen</span><span style="font-size:8px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+50</span></button>
-      <button type="button" data-jenis="Uang" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-money-bill-wave"></i><span>Uang</span><span style="font-size:8px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+50</span></button>
-      <button type="button" data-jenis="Umum" onclick="_kbSelectJenis(this)" class="kb-chip"><i class="fa-solid fa-box"></i><span>Umum</span><span style="font-size:8px;font-weight:800;color:#059669;line-height:1;white-space:nowrap">Gratis</span></button>
-    </div>
-
-    <!-- Sub-tipe Elektronik (muncul saat Elektronik dipilih) -->
-    <div id="kbElecSubRow" style="display:none;margin-bottom:16px">
-      <label class="text-xs font-bold text-gray-700 mb-2 block">Tipe Elektronik</label>
-      <div class="grid grid-cols-2 gap-1.5">
-        <button type="button" data-elec="Laptop" onclick="_kbSelectElecSub(this)" class="kb-chip"><i class="fa-solid fa-laptop"></i><span>Laptop</span><span style="font-size:9px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+200 LE</span></button>
-        <button type="button" data-elec="HP" onclick="_kbSelectElecSub(this)" class="kb-chip"><i class="fa-solid fa-mobile-screen-button"></i><span>HP</span><span style="font-size:9px;font-weight:800;color:#dc2626;line-height:1;white-space:nowrap">+100 LE</span></button>
+  <div class="flex-1 overflow-y-auto" style="padding-bottom:14px">
+    <!-- HERO: brand + judul + ilustrasi kurir naik motor -->
+    <div class="kb-hero">
+      <svg class="kb-hero-city" preserveAspectRatio="none"><use href="#kbCitySym"/></svg>
+      <div class="kb-hero-txt">
+        <div class="kb-brand">
+          <img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/w_96,h_96,c_fill,f_png/v1777071286/file_00000000061071f4a2bf027d7ff5df98_gaknb3.png" alt="" width="30" height="30">
+          <span>Yalla<b>Mart</b></span>
+        </div>
+        <h3>Kirim barang<br>dengan <em>mudah &amp; aman</em></h3>
+        <p>YallaMart siap mengantarkan barang Anda sampai tujuan</p>
+      </div>
+      <div class="kb-hero-art">
+        <!-- Ilustrasi kurir (latar transparan): WebP 51 KB, cadangan PNG utk HP lama. Gagal muat → ikon motor. -->
+        <picture>
+          <source srcset="kirim-barang-kurir.webp" type="image/webp">
+          <img id="kbHeroImg" src="kirim-barang-kurir.png" width="480" height="490" alt="Kurir YallaMart" decoding="async" onerror="this.parentNode.style.display='none';this.parentNode.nextElementSibling.style.display='flex'">
+        </picture>
+        <div class="kb-hero-fallback" style="display:none"><i class="fa-solid fa-motorcycle"></i></div>
+        <i class="fa-solid fa-location-dot kb-hero-pin"></i>
       </div>
     </div>
-    <div id="kbJenisSpacer" style="height:4px"></div>
 
-    <!-- No. WhatsApp penerima (WAJIB) -->
-    <label class="text-xs font-bold text-gray-700 mb-1.5 block">No. WhatsApp Penerima <span style="color:#ef4444">*</span></label>
-    <div class="relative">
-      <i class="fa-brands fa-whatsapp absolute left-3.5 top-1/2 -translate-y-1/2 text-green-500 text-sm pointer-events-none"></i>
-      <input id="kbRecipientPhone" type="tel" inputmode="tel" oninput="_kbValidate()" placeholder="cth: +20 100 123 4567" class="w-full border border-gray-200 rounded-xl pl-10 pr-3 py-2.5 text-sm bg-white outline-none"/>
+    <div class="px-4">
+      <!-- Catatan penting: batas berat + pengecekan barang -->
+      <div class="kb-warn">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>Berat barang maksimal 25 kg. Kurir akan mengecek &amp; memastikan barang apa yang dikirim.</span>
+      </div>
+
+      <!-- DARI -->
+      <div class="kb-loc">
+        <div class="kb-loc-top">
+          <svg class="kb-loc-city" preserveAspectRatio="none"><use href="#kbCitySym"/></svg>
+          <span class="kb-loc-ic"><i class="fa-solid fa-location-dot"></i></span>
+          <div class="kb-loc-main">
+            <label for="kbFromInput">Dari (lokasi penjemputan)</label>
+            <input id="kbFromInput" type="text" oninput="_kbValidate()" placeholder="Alamat asal / patokan" autocomplete="off"/>
+          </div>
+          <button type="button" class="kb-loc-go" onclick="_kbOpenMap('from')" aria-label="Pilih lokasi penjemputan di peta"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div class="kb-loc-actions">
+          <button id="kbGpsBtn" type="button" onclick="_kbDetectLocation()" title="Deteksi lokasi saat ini"><i class="fa-solid fa-crosshairs"></i>GPS lokasi saya</button>
+          <span class="kb-loc-sep"></span>
+          <button type="button" onclick="_kbOpenMap('from')"><i class="fa-solid fa-map-location-dot"></i>Pilih di peta</button>
+        </div>
+        <p id="kbFromCoordHint" class="kb-loc-hint">Pakai GPS atau pilih titik di peta untuk lokasi akurat.</p>
+      </div>
+
+      <!-- KE -->
+      <div class="kb-loc">
+        <div class="kb-loc-top">
+          <svg class="kb-loc-city" preserveAspectRatio="none"><use href="#kbCitySym"/></svg>
+          <span class="kb-loc-ic"><i class="fa-solid fa-flag"></i></span>
+          <div class="kb-loc-main">
+            <label for="kbToInput">Ke (alamat tujuan)</label>
+            <input id="kbToInput" type="text" oninput="_kbValidate()" placeholder="Alamat tujuan / patokan" autocomplete="off"/>
+          </div>
+          <button type="button" class="kb-loc-go" onclick="_kbOpenMap('to')" aria-label="Pilih alamat tujuan di peta"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div class="kb-loc-actions">
+          <button type="button" onclick="_kbOpenMap('to')"><i class="fa-solid fa-map-pin"></i>Pilih tujuan di peta</button>
+        </div>
+        <p id="kbToCoordHint" class="kb-loc-hint">Pilih titik tujuan di peta untuk lokasi akurat.</p>
+      </div>
+
+      <!-- Jenis barang -->
+      <div class="kb-sec"><span class="kb-sec-ic"><i class="fa-solid fa-tag"></i></span>Jenis Barang</div>
+      <div id="kbJenisGrid" class="grid grid-cols-5 gap-1.5 mb-3">
+        <button type="button" data-jenis="Elektronik" onclick="_kbSelectJenis(this)" class="kb-chip"><em class="kb-chip-check"><i class="fa-solid fa-check"></i></em><i class="fa-solid fa-mobile-screen-button kb-chip-ic" style="color:#2563eb"></i><span class="kb-chip-name">Elektronik</span><span class="kb-chip-fee">+100/200</span></button>
+        <button type="button" data-jenis="Perhiasan" onclick="_kbSelectJenis(this)" class="kb-chip"><em class="kb-chip-check"><i class="fa-solid fa-check"></i></em><i class="fa-solid fa-gem kb-chip-ic" style="color:#0ea5e9"></i><span class="kb-chip-name">Perhiasan</span><span class="kb-chip-fee">+200</span></button>
+        <button type="button" data-jenis="Dokumen" onclick="_kbSelectJenis(this)" class="kb-chip"><em class="kb-chip-check"><i class="fa-solid fa-check"></i></em><i class="fa-solid fa-file-lines kb-chip-ic" style="color:#3b82f6"></i><span class="kb-chip-name">Dokumen</span><span class="kb-chip-fee">+50</span></button>
+        <button type="button" data-jenis="Uang" onclick="_kbSelectJenis(this)" class="kb-chip"><em class="kb-chip-check"><i class="fa-solid fa-check"></i></em><i class="fa-solid fa-money-bill-wave kb-chip-ic" style="color:#16a34a"></i><span class="kb-chip-name">Uang</span><span class="kb-chip-fee">+50</span></button>
+        <button type="button" data-jenis="Umum" onclick="_kbSelectJenis(this)" class="kb-chip"><em class="kb-chip-check"><i class="fa-solid fa-check"></i></em><i class="fa-solid fa-box kb-chip-ic" style="color:#b45309"></i><span class="kb-chip-name">Umum</span><span class="kb-chip-fee kb-free">Gratis</span></button>
+      </div>
+
+      <!-- Sub-tipe Elektronik (muncul saat Elektronik dipilih) -->
+      <div id="kbElecSubRow" style="display:none;margin-bottom:16px">
+        <label class="text-xs font-bold text-gray-700 mb-2 block">Tipe Elektronik</label>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button type="button" data-elec="Laptop" onclick="_kbSelectElecSub(this)" class="kb-chip"><em class="kb-chip-check"><i class="fa-solid fa-check"></i></em><i class="fa-solid fa-laptop kb-chip-ic" style="color:#2563eb"></i><span class="kb-chip-name">Laptop</span><span class="kb-chip-fee">+200 LE</span></button>
+          <button type="button" data-elec="HP" onclick="_kbSelectElecSub(this)" class="kb-chip"><em class="kb-chip-check"><i class="fa-solid fa-check"></i></em><i class="fa-solid fa-mobile-screen-button kb-chip-ic" style="color:#2563eb"></i><span class="kb-chip-name">HP</span><span class="kb-chip-fee">+100 LE</span></button>
+        </div>
+      </div>
+      <div id="kbJenisSpacer" style="height:4px"></div>
+
+      <!-- No. WhatsApp penerima (WAJIB) -->
+      <div class="kb-sec"><span class="kb-sec-ic"><i class="fa-brands fa-whatsapp"></i></span>No. WhatsApp Penerima <span style="color:#ef4444;margin-left:2px">*</span></div>
+      <div class="kb-field">
+        <i class="fa-solid fa-phone kb-field-ic"></i>
+        <input id="kbRecipientPhone" type="tel" inputmode="tel" oninput="_kbValidate()" placeholder="Contoh: +20 100 123 4567"/>
+      </div>
+      <p class="kb-help">Wajib &amp; pakai kode negara mana pun (mis. +20 Mesir, +62 Indonesia) supaya penerima bisa dihubungi via WhatsApp.</p>
+
+      <!-- Catatan -->
+      <div class="kb-sec"><span class="kb-sec-ic"><i class="fa-solid fa-align-left"></i></span>Catatan untuk kurir (opsional)</div>
+      <div class="kb-field kb-field-area">
+        <i class="fa-solid fa-pen kb-field-ic"></i>
+        <textarea id="kbNotesInput" rows="2" maxlength="100" oninput="_kbNoteCount()" placeholder="Contoh: barang mudah pecah, hubungi sebelum jemput"></textarea>
+        <span id="kbNotesCount" class="kb-count">0/100</span>
+      </div>
     </div>
-    <p class="text-[10px] text-gray-400 mt-1 mb-4">Wajib &amp; pakai kode negara mana pun (mis. +20 Mesir, +62 Indonesia) supaya penerima bisa dihubungi via WhatsApp.</p>
-
-    <!-- Catatan -->
-    <label class="text-xs font-bold text-gray-700 mb-1.5 block">Catatan untuk kurir (opsional)</label>
-    <textarea id="kbNotesInput" rows="2" placeholder="Contoh: barang mudah pecah, hubungi sebelum jemput" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white outline-none resize-none"></textarea>
   </div>
   <!-- Footer -->
-  <div class="bg-white border-t border-gray-100 px-4 pt-3" style="flex-shrink:0;padding-bottom:max(20px,env(safe-area-inset-bottom,20px))">
+  <div class="kb-foot" style="flex-shrink:0;padding-bottom:max(18px,env(safe-area-inset-bottom,18px))">
     <div id="kbOngkirBox" class="rounded-2xl px-4 py-2.5 mb-2.5 bg-pl/60 flex items-center" style="min-height:44px">
       <span class="w-full text-center text-xs font-medium text-gray-400"><i class="fa-solid fa-circle-info mr-1"></i>Pilih titik Dari &amp; Ke untuk lihat estimasi ongkir</span>
     </div>
-    <button id="kbCariKurirBtn" onclick="_kbCariKurir()" disabled class="w-full bg-primary text-white font-bold rounded-2xl py-3.5 text-sm opacity-50 cursor-not-allowed flex items-center justify-center gap-2"><i class="fa-solid fa-magnifying-glass"></i>Cari Kurir</button>
+    <button id="kbCariKurirBtn" onclick="_kbCariKurir()" disabled class="kb-cta opacity-50 cursor-not-allowed"><i class="fa-solid fa-magnifying-glass"></i>Cari Kurir<i class="fa-solid fa-chevron-right kb-cta-arrow"></i></button>
   </div>
 
   <!-- Finding-courier state -->
@@ -26780,6 +26947,7 @@ window.openKirimBarangYallaKurir = async function() {
   document.getElementById('kbFromInput').value = '';
   document.getElementById('kbToInput').value = '';
   const notes = document.getElementById('kbNotesInput'); if (notes) notes.value = '';
+  _kbNoteCount();
   const rp = document.getElementById('kbRecipientPhone'); if (rp) rp.value = '';
   document.querySelectorAll('#kbJenisGrid [data-jenis]').forEach(b => b.classList.remove('kb-chip-active'));
   document.querySelectorAll('#kbElecSubRow [data-elec]').forEach(b => b.classList.remove('kb-chip-active'));
@@ -26909,6 +27077,12 @@ window._kbSelectElecSub = function(btn) {
   window._kbState.itemFee = _KB_ELEC_FEE[sub] != null ? _KB_ELEC_FEE[sub] : 0;
   _kbValidate();
   if (window._kbRenderOngkirBox) _kbRenderOngkirBox();
+};
+
+// Penghitung karakter catatan kurir (maks 100)
+window._kbNoteCount = function() {
+  const t = document.getElementById('kbNotesInput'), c = document.getElementById('kbNotesCount');
+  if (t && c) c.textContent = (t.value || '').length + '/100';
 };
 
 window._kbValidate = function() {
@@ -27272,7 +27446,7 @@ function _kbInitCourierMap(order) {
           return;
         } catch (e) {}
       }
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20 }).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map); // cadangan (CARTO kini wajib API key)
     });
     const mkIcon = (color, label) => L.divIcon({
       className: 'yk-route-pin',
@@ -27711,7 +27885,7 @@ window._kbOpenMap = function(target) {
           return;
         } catch (e) { /* jatuh ke raster */ }
       }
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map); // cadangan (CARTO kini wajib API key)
     });
     const marker = L.marker([clat, clng], { draggable: true, icon: _kbFlagIcon(target === 'from' ? 'start' : 'finish') }).addTo(map);
     // Taruh/geser pin sendiri = bukan patokan lagi → kolom nanti pakai koordinat.
@@ -28746,7 +28920,7 @@ window._ykShowRoute = function(orderId) {
           return;
         } catch (e) {}
       }
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map); // cadangan (CARTO kini wajib API key)
     });
     const mkIcon = (color, label) => L.divIcon({
       className: 'yk-route-pin',
