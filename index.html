@@ -29647,5 +29647,45 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 
+<!-- ═══════════════════════════════════════════════════════════════
+     APLIKASI ANDROID (Capacitor): salin foto ke memori SAAT DIPILIH.
+     Di WebView Android, izin baca file dari galeri bisa kedaluwarsa
+     beberapa saat setelah dipilih → upload yang baru jalan belakangan
+     (Pasang Iklan, varian, edit iklan, dll.) gagal "File foto rusak atau
+     tidak didukung". Fix: event 'change' asli ditahan sebentar, isi file
+     dibaca ke memori, input diisi salinan itu, lalu 'change' dikirim ulang
+     → semua handler lama otomatis memakai salinan yang aman.
+     HANYA aktif di aplikasi Capacitor; di browser tidak ada yang berubah.
+     ═══════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  function isNativeApp() {
+    try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch (e) { return false; }
+  }
+  if (!isNativeApp() || typeof DataTransfer === 'undefined') return;
+  document.addEventListener('change', function (e) {
+    var input = e.target;
+    if (!input || input.tagName !== 'INPUT' || input.type !== 'file') return;
+    if (e._ymSnapshot) return;                       // event kiriman ulang kita sendiri → biarkan lewat
+    var files = Array.prototype.slice.call(input.files || []);
+    if (!files.length) return;
+    e.stopImmediatePropagation();                    // tahan handler lama sampai salinan siap
+    Promise.all(files.map(function (f) {
+      return f.arrayBuffer().then(function (buf) {
+        return new File([buf], f.name || 'photo.jpg', { type: f.type || 'image/jpeg', lastModified: f.lastModified || Date.now() });
+      });
+    })).then(function (copies) {
+      try { var dt = new DataTransfer(); copies.forEach(function (c) { dt.items.add(c); }); input.files = dt.files; } catch (err) {}
+    }).catch(function (err) {
+      console.warn('[foto] gagal salin ke memori, pakai file asli:', err && err.message);
+    }).then(function () {
+      var ev = new Event('change', { bubbles: true });
+      ev._ymSnapshot = true;
+      input.dispatchEvent(ev);                       // jalankan handler lama (onchange) dengan salinan
+    });
+  }, true);
+})();
+</script>
+
 </body>
 </html>
