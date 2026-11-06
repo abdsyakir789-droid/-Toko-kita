@@ -68,7 +68,7 @@
 </script>
 <title>Yalla Mart — Premium Marketplace</title>
 <link rel="manifest" href="/manifest.json"/>
-<meta name="theme-color" content="#10B981"/>
+<meta name="theme-color" content="#ffffff"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="YallaMart"/>
@@ -31179,11 +31179,16 @@ document.addEventListener('DOMContentLoaded', () => {
   //  mis. refresh dalam sesi yang sama.)
   try { if (P.SplashScreen && !document.getElementById('splashScreen')) P.SplashScreen.hide({ fadeOutDuration: 0 }); } catch (e) {}
 
-  // ── 2. Status bar & bar navigasi PUTIH, ikon gelap (menyatu dgn header putih) ──
-  // Sejak edge-to-edge (Play Console): warna bar dari tema Android (putih) + ikon gelap lewat
-  // SystemBars bawaan Capacitor (style LIGHT = ikon gelap). Plugin StatusBar lama (API usang)
-  // sudah dicopot; blok P.StatusBar di bawah hanya utk APK lama yang masih memasangnya.
-  try { if (P.SystemBars && P.SystemBars.setStyle) P.SystemBars.setStyle({ style: 'LIGHT' }).catch(function () {}); } catch (e) {}
+  // ── 2. Status bar: latar HITAM + ikon putih; bar navigasi bawah: PUTIH + ikon gelap ──
+  // Latar diatur native (MainActivity: pita hitam setinggi status bar + latar putih). Di sini hanya
+  // warna ikon per bar lewat SystemBars bawaan Capacitor (DARK = ikon putih, LIGHT = ikon gelap).
+  // Plugin StatusBar lama (API usang) sudah dicopot; blok P.StatusBar di bawah hanya utk APK lama.
+  try {
+    if (P.SystemBars && P.SystemBars.setStyle) {
+      P.SystemBars.setStyle({ style: 'DARK', bar: 'StatusBar' }).catch(function () {});
+      P.SystemBars.setStyle({ style: 'LIGHT', bar: 'NavigationBar' }).catch(function () {});
+    }
+  } catch (e) {}
   try {
     if (P.StatusBar) {
       P.StatusBar.setOverlaysWebView({ overlay: false }).catch(function () {});
