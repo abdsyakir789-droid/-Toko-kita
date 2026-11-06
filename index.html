@@ -31179,16 +31179,16 @@ document.addEventListener('DOMContentLoaded', () => {
   //  mis. refresh dalam sesi yang sama.)
   try { if (P.SplashScreen && !document.getElementById('splashScreen')) P.SplashScreen.hide({ fadeOutDuration: 0 }); } catch (e) {}
 
-  // ── 2. Status bar hijau, ikon putih ──
-  // Sejak edge-to-edge (Play Console): warna bar dari tema Android (hijau) + ikon putih lewat
-  // SystemBars bawaan Capacitor. Plugin StatusBar lama (API usang) sudah dicopot dari aplikasi;
-  // blok P.StatusBar di bawah tetap ada untuk APK lama yang masih memasangnya.
-  try { if (P.SystemBars && P.SystemBars.setStyle) P.SystemBars.setStyle({ style: 'DARK' }).catch(function () {}); } catch (e) {}
+  // ── 2. Status bar & bar navigasi PUTIH, ikon gelap (menyatu dgn header putih) ──
+  // Sejak edge-to-edge (Play Console): warna bar dari tema Android (putih) + ikon gelap lewat
+  // SystemBars bawaan Capacitor (style LIGHT = ikon gelap). Plugin StatusBar lama (API usang)
+  // sudah dicopot; blok P.StatusBar di bawah hanya utk APK lama yang masih memasangnya.
+  try { if (P.SystemBars && P.SystemBars.setStyle) P.SystemBars.setStyle({ style: 'LIGHT' }).catch(function () {}); } catch (e) {}
   try {
     if (P.StatusBar) {
       P.StatusBar.setOverlaysWebView({ overlay: false }).catch(function () {});
-      P.StatusBar.setBackgroundColor({ color: '#10B981' }).catch(function () {});
-      P.StatusBar.setStyle({ style: 'DARK' }).catch(function () {});
+      P.StatusBar.setBackgroundColor({ color: '#FFFFFF' }).catch(function () {});
+      P.StatusBar.setStyle({ style: 'LIGHT' }).catch(function () {});
     }
   } catch (e) {}
 
