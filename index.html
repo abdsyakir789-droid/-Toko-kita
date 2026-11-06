@@ -31335,6 +31335,51 @@ document.addEventListener('DOMContentLoaded', () => {
   window._ymNativeBack = onBack;   // dipakai juga untuk uji
   try { if (P.App) P.App.addListener('backButton', onBack); } catch (e) {}
 
+  // ── 3b. Deep link: link app.yallamart.my.id (dari WA dll) membuka aplikasi ──
+  // Aplikasi sudah jalan → appUrlOpen → buka tujuan di dalam app (_bcOpenLink: ?p= produk,
+  // ?go=/?chatId= rute notif). Aplikasi baru dibuka lewat link → getLaunchUrl.
+  var _dlLast = '', _dlAt = 0;
+  function _dlHandle(url, cold) {
+    try {
+      if (!url) return;
+      var u = new URL(url);
+      if (!window._bcIsInternal || !window._bcIsInternal(u)) return;
+      if (url === _dlLast && Date.now() - _dlAt < 4000) return;   // cegah dobel
+      _dlLast = url; _dlAt = Date.now();
+      var pid = u.searchParams.get('p');
+      if (cold && pid) {
+        if (location.search.indexOf('p=' + pid) >= 0) return;          // sudah ditangani handleDeepLink
+        (function wait(n) {                                             // tunggu daftar produk siap
+          var ads = (window._S && window._S.fbAds) || [];
+          if (ads.length && typeof window.openDetail === 'function') window.openDetail(pid);
+          else if (n < 30) setTimeout(function () { wait(n + 1); }, 500);
+        })(0);
+        return;
+      }
+      if (window._bcOpenLink) window._bcOpenLink(u.href);
+    } catch (e) {}
+  }
+  try {
+    if (P.App) {
+      P.App.addListener('appUrlOpen', function (ev) { _dlHandle(ev && ev.url, false); });
+      if (P.App.getLaunchUrl) P.App.getLaunchUrl().then(function (r) { _dlHandle(r && r.url, true); }).catch(function () {});
+    }
+  } catch (e) {}
+
+  // ── 3c. Bagikan native: WebView Android tidak punya navigator.share → pakai plugin Share
+  // (menu bagikan Android: WA, IG, Telegram...). Semua tombol bagikan yang ada otomatis ikut.
+  try {
+    if (P.Share && P.Share.share) {
+      Object.defineProperty(navigator, 'share', {
+        configurable: true, writable: true,
+        value: function (d) {
+          d = d || {};
+          return P.Share.share({ title: d.title || 'YallaMart', text: d.text || '', url: d.url || undefined, dialogTitle: 'Bagikan' }).then(function () {});
+        }
+      });
+    }
+  } catch (e) {}
+
   // ── 4. GPS native ──
   var Geo = P.Geolocation;
   if (Geo && navigator.geolocation) {
