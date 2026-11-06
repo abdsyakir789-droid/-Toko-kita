@@ -2542,7 +2542,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
   <div id="toaPanel">
     <div class="toa-header">
       <button onclick="closeToaPanel()" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors flex-shrink-0">
-        <i class="fa-solid fa-arrow-left text-gray-600 text-sm"></i>
+        <i class="fa-solid fa-chevron-left text-gray-600 text-sm"></i>
       </button>
       <div class="flex-1 min-w-0">
         <p class="text-base font-black text-gray-900 tracking-tight">Pesan Siaran</p>
@@ -2566,7 +2566,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
   <!-- Header -->
   <div class="notif-fs-header">
     <button id="notifFsBackBtn" type="button" class="notif-fs-back" onclick="closeNotifFullScreen()" aria-label="Kembali">
-      <i class="fa-solid fa-arrow-left text-sm" style="pointer-events:none"></i>
+      <i class="fa-solid fa-chevron-left text-sm" style="pointer-events:none"></i>
     </button>
     <div class="notif-fs-title flex items-center gap-2">
       <i class="fa-solid fa-bell text-white/80 text-sm"></i>
@@ -2621,7 +2621,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
   <!-- Header -->
   <div style="background:#10B981;padding:16px;display:flex;align-items:center;gap:12px;flex-shrink:0">
     <button onclick="closeReviewFullScreen()" style="background:rgba(255,255,255,.2);border:none;cursor:pointer;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
     </button>
     <p style="font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;font-weight:700;color:#fff;margin:0;flex:1">Ulasan Saya</p>
   </div>
@@ -2639,7 +2639,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
 <div id="reviewWriteScreen" style="display:none;position:fixed;inset:0;z-index:10000;background:#fff;flex-direction:column;overflow:hidden">
   <div style="background:#10B981;padding:16px;display:flex;align-items:center;gap:12px;flex-shrink:0">
     <button onclick="closeReviewWrite()" style="background:rgba(255,255,255,.2);border:none;cursor:pointer;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
     </button>
     <p style="font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;font-weight:700;color:#fff;margin:0">Tulis Ulasan</p>
   </div>
@@ -2672,7 +2672,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
   <div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #f1f5f9;flex-shrink:0">
     <div style="display:flex;align-items:center;gap:12px;padding:14px 16px 10px">
       <button onclick="closeOrderFullScreen()" style="width:36px;height:36px;border-radius:50%;background:#f3f4f6;border:none;display:flex;align-items:center;justify-content:center;color:#374151;cursor:pointer;flex-shrink:0">
-        <i class="fa-solid fa-arrow-left" style="font-size:14px"></i>
+        <i class="fa-solid fa-chevron-left" style="font-size:14px"></i>
       </button>
       <span style="flex:1;font-size:17px;font-weight:800;color:#111827">Pesanan Saya</span>
     </div>
@@ -2691,7 +2691,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
 <div id="orderDetailScreen" style="display:none;position:fixed;inset:0;z-index:501;background:#f8fafc;flex-direction:column">
   <div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:12px;padding:14px 16px;flex-shrink:0">
     <button onclick="closeOrderDetail()" style="width:36px;height:36px;border-radius:50%;background:#f3f4f6;border:none;display:flex;align-items:center;justify-content:center;color:#374151;cursor:pointer;flex-shrink:0">
-      <i class="fa-solid fa-arrow-left" style="font-size:14px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:14px"></i>
     </button>
     <span style="flex:1;font-size:17px;font-weight:800;color:#111827">Rincian Pesanan</span>
   </div>
@@ -3533,7 +3533,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
   <div id="recentlyViewedScreen" style="display:none;position:fixed;inset:0;z-index:9999;background:#f8fafc;overflow-y:auto;-webkit-overflow-scrolling:touch;">
     <div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e2e8f0;padding:16px;display:flex;align-items:center;gap:12px">
       <button onclick="closeRecentlyViewedFull()" style="width:36px;height:36px;border-radius:50%;background:#f1f5f9;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
       </button>
       <div>
         <p style="font-size:16px;font-weight:800;color:#0f172a;margin:0;letter-spacing:-.03em">Baru Dilihat</p>
@@ -3566,7 +3566,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
 
       <!-- Back button -->
       <button onclick="showPage('home')" class="back-btn-glass">
-        <i class="fa-solid fa-arrow-left text-sm"></i>
+        <i class="fa-solid fa-chevron-left text-sm"></i>
       </button>
 
       <!-- Profile row: Avatar + Name + Buttons — all inside cover -->
@@ -3662,7 +3662,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
   <!-- Header -->
   <div style="background:linear-gradient(to right,#10B981,#059669);padding:14px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;position:sticky;top:0;z-index:1">
     <button onclick="closeFollowingStores()" style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-      <i class="fa-solid fa-arrow-left" style="font-size:14px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:14px"></i>
     </button>
     <span style="font-weight:800;font-size:15px;color:#fff;flex:1">Toko yang Diikuti</span>
     <button onclick="_clearFollowingCache();openFollowingStores()" title="Refresh" style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -3931,7 +3931,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
   <div style="background:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div style="display:flex;align-items:center;gap:10px">
       <button onclick="toggleCart()" style="width:34px;height:34px;background:none;border:none;color:#111827;cursor:pointer;display:flex;align-items:center;justify-content:center">
-        <i class="fa-solid fa-arrow-left" style="font-size:14px"></i>
+        <i class="fa-solid fa-chevron-left" style="font-size:14px"></i>
       </button>
       <span style="font-weight:800;font-size:15px;color:#111827">Keranjang Saya (<span id="cartCount">0</span>)</span>
     </div>
@@ -4383,7 +4383,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
     <div class="bg-gradient-to-br from-primary to-pdd px-5 flex items-center justify-between flex-shrink-0" style="padding-top:max(env(safe-area-inset-top),14px);padding-bottom:14px;">
       <div class="flex items-center gap-3">
         <button onclick="closePostModal()" class="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors flex-shrink-0">
-          <i class="fa-solid fa-arrow-left text-sm"></i>
+          <i class="fa-solid fa-chevron-left text-sm"></i>
         </button>
         <div>
           <h3 class="font-black text-white text-base flex items-center gap-2">
@@ -4587,7 +4587,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
       <div id="detailSliderTrack" class="flex h-full" style="transition:transform .3s ease;will-change:transform"></div>
       <!-- Back button -->
       <button onclick="closeDetailDirect()" class="absolute top-4 left-4 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-sm transition-colors shadow-lg" style="z-index:5">
-        <i class="fa-solid fa-arrow-left text-base"></i>
+        <i class="fa-solid fa-chevron-left text-base"></i>
       </button>
 
       <!-- Nomor slide -->
@@ -4848,7 +4848,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
   <div class="flex-shrink-0 bg-white border-b border-gray-100 shadow-sm">
     <div class="flex items-center px-4 py-3 gap-3 max-w-2xl mx-auto w-full">
       <button onclick="closeChatList()" class="w-9 h-9 flex items-center justify-center rounded-2xl hover:bg-gray-100 transition-colors flex-shrink-0">
-        <i class="fa-solid fa-arrow-left text-gray-700 text-base"></i>
+        <i class="fa-solid fa-chevron-left text-gray-700 text-base"></i>
       </button>
       <h2 class="flex-1 text-center font-black text-gray-900 text-base tracking-tight">Chat</h2>
       <button onclick="toggleChatSearch()" id="chatSearchBtn" class="w-9 h-9 flex items-center justify-center rounded-2xl hover:bg-gray-100 transition-colors flex-shrink-0">
@@ -4886,7 +4886,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
   <div class="flex-shrink-0 bg-white border-b border-gray-100 shadow-sm">
     <div class="flex items-center gap-3 px-4 py-3 max-w-2xl mx-auto w-full">
       <button onclick="closeChatRoom()" class="w-9 h-9 flex items-center justify-center rounded-2xl hover:bg-gray-100 transition-colors flex-shrink-0">
-        <i class="fa-solid fa-arrow-left text-gray-700 text-base"></i>
+        <i class="fa-solid fa-chevron-left text-gray-700 text-base"></i>
       </button>
       <button onclick="viewSellerStore(window._S.activeChatOther)" class="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:opacity-75 transition-opacity">
         <div id="chatRoomAvatarWrap" class="flex-shrink-0 relative">
@@ -4902,7 +4902,7 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
           <div id="chatStatusRow" class="flex items-center gap-1.5 h-4">
             <span id="chatOnlineText" class="text-[10px] text-green-500 font-semibold" style="display:none">● Online</span>
             <span id="chatOfflineText" class="text-[10px] text-gray-400 font-medium flex items-center gap-1" style="display:none">
-              <i class="fa-solid fa-store text-[8px]"></i> Ketuk untuk lihat etalase
+              <i id="chatOfflineIcon" class="fa-solid fa-store text-[8px]"></i> <span id="chatOfflineLabel">Ketuk untuk lihat etalase</span>
             </span>
             <span id="chatTypingText" class="text-[10px] text-primary font-semibold italic" style="display:none">sedang mengetik...</span>
           </div>
@@ -6169,6 +6169,9 @@ window._FB = {
       .on('postgres_changes', {
         event: 'DELETE', schema: 'public', table: 'chat_messages', filter: `chat_id=eq.${chatId}`
       }, payload => { loadMsgs(); })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `chat_id=eq.${chatId}`
+      }, payload => { try { if (payload && payload.new && payload.new.is_read && window._chatMarkTickRead) window._chatMarkTickRead(payload.new.id); } catch(e) {} })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); if(window._S._activeChatReload === loadMsgs) window._S._activeChatReload = null; };
@@ -6297,6 +6300,11 @@ window._FB = {
     if(!window._S.user) return;
     try {
       const key = 'presence:' + window._S.user.uid;
+      // "Aktif X lalu": catat waktu terakhir aktif (tidak dihapus saat offline)
+      const _seenKey = 'seen:' + window._S.user.uid;
+      fetch(`${_REDIS_URL}/set/${encodeURIComponent(_seenKey)}/${Date.now()}/ex/5184000`, {
+        method: 'GET', headers: { Authorization: 'Bearer ' + _REDIS_TOKEN }
+      }).catch(()=>{});
       if(isOnline) {
         // SET dengan TTL 90 detik — auto-expire kalau user tutup app
         await fetch(`${_REDIS_URL}/set/${encodeURIComponent(key)}/1/ex/90`, {
@@ -6312,6 +6320,9 @@ window._FB = {
                 method: 'GET',
                 headers: { Authorization: 'Bearer ' + _REDIS_TOKEN }
               });
+              fetch(`${_REDIS_URL}/set/${encodeURIComponent('seen:'+window._S.user.uid)}/${Date.now()}/ex/5184000`, {
+                method: 'GET', headers: { Authorization: 'Bearer ' + _REDIS_TOKEN }
+              }).catch(()=>{});
             } catch(e) {}
           }, 30000);
         }
@@ -6445,11 +6456,12 @@ window._FB = {
       // Poll Redis setiap 15 detik — cukup responsif untuk presence
       const check = async () => {
         try {
-          const res = await fetch(`${_REDIS_URL}/get/${encodeURIComponent('presence:'+otherUid)}`, {
+          const res = await fetch(`${_REDIS_URL}/mget/${encodeURIComponent('presence:'+otherUid)}/${encodeURIComponent('seen:'+otherUid)}`, {
             headers: { Authorization: 'Bearer ' + _REDIS_TOKEN }
           });
           const json = await res.json();
-          callback(json.result === '1');
+          const _r = Array.isArray(json.result) ? json.result : [];
+          callback(_r[0] === '1', Number(_r[1]) || 0);
         } catch(e) { callback(false); }
       };
       check(); // cek langsung saat pertama dibuka
@@ -8336,7 +8348,7 @@ window.renderNotifFull = function(notifs) {
           </div>
           <p class="text-sm text-gray-500 mt-0.5 leading-relaxed" id="fs-bc-msg-${rawDocId}" style="${(n.message||'').length>120?'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden':'display:block'}">${n.message||''}</p>
           ${(n.message||'').length>120?`<button id="fs-bc-btn-${rawDocId}" onclick="event.stopPropagation();event.preventDefault();toggleFsBcExpand('${rawDocId}')" class="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">Baca selengkapnya <i class="fa-solid fa-chevron-down text-[8px]"></i></button>`:''}
-          ${(window._bcHasImage && window._bcHasImage(n)) ? '' : `<p class="text-xs text-gray-400 mt-1.5">${timeStr}</p>`}
+          ${(window._bcHasImage && window._bcHasImage(n)) ? '' : `${window._bcLinkChip ? window._bcLinkChip(n) : ''}<p class="text-xs text-gray-400 mt-1.5">${timeStr}</p>`}
         </div>
         ${(window._bcHasImage && window._bcHasImage(n)) ? `<div style="flex-basis:100%;width:100%;min-width:0">${window._bcImageHtml(n)}<p class="text-xs text-gray-400 mt-1.5">${timeStr}</p></div>` : ''}
       </div>`;
@@ -8897,7 +8909,7 @@ window.renderToaPanel = function(notifs) {
         </div>
         <p class="text-sm text-gray-800 mt-0.5 leading-relaxed" id="toa-bc-msg-${rawDocId}" style="word-break:break-word;${isLong?'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden':'display:block'}">${isLong ? msgPreviewHtml : msgFullHtml}</p>
         ${isLong?`<button onclick="event.stopPropagation();event.preventDefault();toggleToaBcExpand('${rawDocId}')" id="toa-bc-btn-${rawDocId}" class="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">Baca selengkapnya <i class="fa-solid fa-chevron-down text-[8px]"></i></button>`:''}
-        ${(window._bcHasImage && window._bcHasImage(n)) ? '' : (timeStr ? `<p class="text-xs text-gray-400 mt-1.5">${timeStr}</p>` : '')}
+        ${(window._bcHasImage && window._bcHasImage(n)) ? '' : `${window._bcLinkChip ? window._bcLinkChip(n) : ''}${timeStr ? `<p class="text-xs text-gray-400 mt-1.5">${timeStr}</p>` : ''}`}
       </div>
       ${(window._bcHasImage && window._bcHasImage(n)) ? `<div style="flex-basis:100%;width:100%;min-width:0">${window._bcImageHtml(n)}${timeStr ? `<p class="text-xs text-gray-400 mt-1.5">${timeStr}</p>` : ''}</div>` : ''}
     </div>`;
@@ -8929,7 +8941,60 @@ window._bcImageHtml = function(n) {
   if (!window._bcHasImage(n)) return '';
   const url = n.image_url || n.imageUrl;
   const safe = String(url).replace(/"/g, '%22').replace(/'/g, '%27').replace(/</g, '%3C').replace(/>/g, '%3E');
-  return `<img src="${safe}" alt="" loading="lazy" onclick="event.stopPropagation();event.preventDefault();_bcViewImage('${safe}')" style="width:100%;height:auto;max-height:420px;object-fit:cover;display:block;border-radius:0;cursor:zoom-in;background:#f3f4f6" onerror="this.style.display='none'">`;
+  const link = window._bcLink(n);
+  const act = link ? `_bcOpenLink(decodeURIComponent('${encodeURIComponent(link)}'))` : `_bcViewImage('${safe}')`;
+  return `<img src="${safe}" alt="" loading="lazy" onclick="event.stopPropagation();event.preventDefault();${act}" style="width:100%;height:auto;max-height:420px;object-fit:cover;display:block;border-radius:0;cursor:${link ? 'pointer' : 'zoom-in'};background:#f3f4f6" onerror="this.style.display='none'">`;
+};
+
+// ── Link tujuan pesan siaran ──
+// Diterima: https/http saja (wa.me, instagram, facebook, link iklan YallaMart, dll).
+// Tanpa skema → ditambah https://. Path "/?p=ID" → domain aplikasi ini.
+window._bcNormLink = function(raw) {
+  let t = String(raw || '').trim();
+  if (!t) return '';
+  if (/^[/?]/.test(t)) t = location.origin + (t[0] === '?' ? '/' : '') + t;
+  else if (!/^[a-z][a-z0-9+.-]*:/i.test(t)) t = 'https://' + t;
+  try {
+    const u = new URL(t);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return '';
+    if (!u.hostname || u.hostname.indexOf('.') < 0 && u.hostname !== 'localhost') return '';
+    return u.href;
+  } catch (e) { return ''; }
+};
+window._bcLink = function(n) {
+  const raw = n && (n.link_url || n.linkUrl);
+  return raw ? window._bcNormLink(raw) : '';
+};
+window._bcIsInternal = function(u) {
+  const h = u.hostname.toLowerCase();
+  return h === location.hostname.toLowerCase() || h === 'app.yallamart.my.id' || h === 'yallamart.my.id' || h === 'www.yallamart.my.id';
+};
+window._bcOpenLink = function(href) {
+  let u; try { u = new URL(href); } catch (e) { return; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return;
+  if (window._bcIsInternal(u)) {
+    // Link YallaMart → buka di dalam aplikasi (tutup panel Toa / notifikasi dulu)
+    try { const tp = document.getElementById('toaPanel'); if (typeof window.closeToaPanel === 'function') window.closeToaPanel(); } catch (e) {}
+    try { if (typeof window.closeNotifFullScreen === 'function') window.closeNotifFullScreen(); } catch (e) {}
+    const p = u.searchParams;
+    const pid = p.get('p');
+    if (pid && typeof window.openDetail === 'function') { setTimeout(function(){ window.openDetail(pid); }, 150); return; }
+    if ((p.get('go') || p.get('chatId')) && typeof window._routePushGo === 'function') { window._routePushGo(p); return; }
+    return; // link beranda → cukup kembali ke aplikasi
+  }
+  // Link luar (WA, IG, Facebook, situs lain) → aplikasi/browser bawaan HP
+  window.open(u.href, '_blank', 'noopener');
+};
+// Tombol "Buka link" untuk siaran TANPA gambar
+window._bcLinkChip = function(n) {
+  const link = window._bcLink(n);
+  if (!link) return '';
+  let host = ''; try { host = new URL(link).hostname.replace(/^www\./, ''); } catch (e) {}
+  const lbl = /(^|\.)wa\.me$|whatsapp/.test(host) ? 'Buka WhatsApp'
+    : /instagram/.test(host) ? 'Buka Instagram'
+    : /facebook|fb\.com/.test(host) ? 'Buka Facebook'
+    : (function(){ try { return window._bcIsInternal(new URL(link)) ? 'Lihat di YallaMart' : 'Buka link'; } catch(e) { return 'Buka link'; } })();
+  return `<button type="button" onclick="event.stopPropagation();event.preventDefault();_bcOpenLink(decodeURIComponent('${encodeURIComponent(link)}'))" class="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1.5"><i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px"></i>${lbl}</button>`;
 };
 window._bcViewImage = function(url) {
   let ov = document.getElementById('bcImageViewer');
@@ -10674,7 +10739,7 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
               ${!me?`<p class="text-[10px] font-bold mb-0.5 opacity-70">${m.sender_name||m.senderName||''}</p>`:''}
               ${m.parent_text ? `<div class="chat-quote-preview"><p class="qp-name">${(m.parent_sender||'').replace(/</g,'&lt;')}</p><p class="qp-text">${(m.parent_text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p></div>` : ''}
               <span>${(m.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
-              ${timeStr?`<span class="msg-time-inline">${timeStr}</span>`:''}
+              ${timeStr?`<span class="msg-time-inline">${timeStr}${(me && window._chatTickHtml) ? window._chatTickHtml(m) : ''}</span>`:''}
             </div>
             `}
             
@@ -10688,6 +10753,8 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
     if(window._attachLongPressDelete) window._attachLongPressDelete();
     // Mark as read setiap kali pesan baru masuk dan chat sedang terbuka
     if(window.markChatRead) markChatRead(chatId);
+    // Centang biru: tandai pesan lawan bicara sudah dibaca (hanya bila layar terlihat)
+    if(window._chatMarkMsgsRead && msgs.some(m => !isMe(m) && !m.is_read)) window._chatMarkMsgsRead(chatId);
   });
 }
 // ── Kirim push notif ke penerima pesan (via Webpushr) ─────────
@@ -11276,9 +11343,13 @@ function startChatRealtime(chatId, otherUid, otherName) {
   });
   // Listener online presence
   if(window._S.presenceUnsub){ window._S.presenceUnsub(); window._S.presenceUnsub=null; }
-  window._S.presenceUnsub = window._FB.listenPresence(otherUid, isOnline => {
+  window._S._otherOnline = false; window._S._otherLastSeen = 0;
+  window._S.presenceUnsub = window._FB.listenPresence(otherUid, (isOnline, lastSeen) => {
     window._S._otherOnline = isOnline;
+    if(isOnline) window._S._otherLastSeen = Date.now();
+    else if(lastSeen) window._S._otherLastSeen = Math.max(window._S._otherLastSeen || 0, lastSeen);
     _refreshOnlineStatus();
+    if(window._chatRefreshTicks) window._chatRefreshTicks();
   });
   // Set own presence ke online
   window._FB.setPresence(true).catch(()=>{});
@@ -11294,7 +11365,76 @@ function _refreshOnlineStatus() {
   if(dot) dot.style.display = online ? 'block' : 'none';
   if(onlineText) onlineText.style.display = online ? 'inline' : 'none';
   if(offlineText) offlineText.style.display = online ? 'none' : 'inline';
+  // "Aktif X lalu" — kalau belum ada catatan, tetap "Ketuk untuk lihat etalase"
+  const _lbl = document.getElementById('chatOfflineLabel');
+  const _ico = document.getElementById('chatOfflineIcon');
+  if(_lbl && !online) {
+    const _seenTxt = window._fmtLastSeen ? window._fmtLastSeen(window._S._otherLastSeen) : '';
+    _lbl.textContent = _seenTxt || 'Ketuk untuk lihat etalase';
+    if(_ico) _ico.className = _seenTxt ? 'fa-regular fa-clock text-[8px]' : 'fa-solid fa-store text-[8px]';
+  }
 }
+
+// ── "Aktif X lalu" + centang pesan (✓ terkirim, ✓✓ sampai, ✓✓ biru dibaca) ──
+window._fmtLastSeen = function(ts){
+  ts = Number(ts) || 0; if(!ts) return '';
+  const diff = Math.max(0, Date.now() - ts), m = Math.floor(diff / 60000);
+  if(m < 1) return 'Aktif baru saja';
+  if(m < 60) return 'Aktif ' + m + ' menit lalu';
+  const h = Math.floor(m / 60);
+  if(h < 24) return 'Aktif ' + h + ' jam lalu';
+  const d = Math.floor(h / 24);
+  if(d === 1) return 'Aktif kemarin';
+  if(d < 7) return 'Aktif ' + d + ' hari lalu';
+  return 'Aktif ' + new Date(ts).toLocaleDateString('id-ID', { day:'numeric', month:'short' });
+};
+window._chatTickSvg = function(state){
+  const col = state === 'read' ? '#53bdeb' : 'rgba(233,237,239,0.65)';
+  if(state === 'sent') return '<svg width="12" height="10" viewBox="0 0 16 11" fill="none" stroke="'+col+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.8l3.4 3.4L13 1.5"/></svg>';
+  return '<svg width="16" height="10" viewBox="0 0 20 11" fill="none" stroke="'+col+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.2 5.8l3.4 3.4L12.7 1.5"/><path d="M8.6 8.4l.8.8L17.5 1.5"/></svg>';
+};
+window._chatTickState = function(read, ts){
+  if(read) return 'read';
+  const seen = window._S && (window._S._otherOnline ? Date.now() : window._S._otherLastSeen);
+  return (seen && ts && seen >= ts) ? 'delivered' : 'sent';
+};
+window._chatTickHtml = function(m){
+  if(!m || !m.id) return '';
+  const ts = Date.parse(m.created_at || '') || 0;
+  const read = !!m.is_read;
+  const st = window._chatTickState(read, ts);
+  return '<span class="ym-tick" data-tick-id="'+m.id+'" data-ts="'+ts+'" data-read="'+(read?1:0)+'" data-state="'+st+'" style="display:inline-block;margin-left:3px;vertical-align:-1px">'+window._chatTickSvg(st)+'</span>';
+};
+window._chatRefreshTicks = function(){
+  document.querySelectorAll('#chatMessages .ym-tick').forEach(function(el){
+    const st = window._chatTickState(el.getAttribute('data-read') === '1', Number(el.getAttribute('data-ts')) || 0);
+    if(el.getAttribute('data-state') !== st){ el.setAttribute('data-state', st); el.innerHTML = window._chatTickSvg(st); }
+  });
+};
+window._chatMarkTickRead = function(id){
+  if(!id) return;
+  document.querySelectorAll('#chatMessages .ym-tick[data-tick-id="'+id+'"]').forEach(function(el){
+    el.setAttribute('data-read','1'); el.setAttribute('data-state','read'); el.innerHTML = window._chatTickSvg('read');
+  });
+};
+window._chatMarkMsgsRead = function(chatId){
+  if(!chatId || !window._S || !window._S.user || !window._supaFetch) return;
+  if(document.visibilityState && document.visibilityState !== 'visible') return;
+  if(window._chatMarkReadBusy === chatId) return;
+  window._chatMarkReadBusy = chatId;
+  Promise.resolve(window._supaFetch('/rest/v1/rpc/mark_chat_messages_read', { method:'POST', body: JSON.stringify({ p_chat_id: chatId }) }))
+    .catch(function(){})
+    .then(function(){ if(window._chatMarkReadBusy === chatId) window._chatMarkReadBusy = null; });
+};
+// Kembali ke aplikasi saat chat masih terbuka → tandai dibaca + segarkan "Aktif X lalu"
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState !== 'visible') return;
+  const ov = document.getElementById('chatRoomOverlay');
+  if(ov && ov.style.display !== 'none' && window._S && window._S.activeChatId){
+    window._chatMarkMsgsRead(window._S.activeChatId);
+    _refreshOnlineStatus();
+  }
+});
 
 window.openChatList=()=>{
   if(!window._S.user){showToast('Login dulu untuk melihat pesan','red');openAuth('login');return;}
@@ -15266,6 +15406,14 @@ renderUserState();
         <input id="broadcastImageInput" type="file" accept="image/*" class="hidden" onchange="_bcPickImage(this)"/>
         <p class="text-[10px] text-gray-400 mt-1">Muncul di daftar Toa semua pengguna & notifikasi Android. Di iPhone, notifikasi layar hanya teks.</p>
       </div>
+      <!-- Link tujuan (opsional) — gambar siaran diketuk → buka link ini -->
+      <div>
+        <label class="text-[11px] font-bold text-gray-600 mb-1 block">Link Tujuan <span class="text-gray-400 font-normal">(opsional)</span></label>
+        <input id="broadcastLink" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="500"
+          placeholder="Contoh: wa.me/20123…, instagram.com/…, link iklan YallaMart"
+          class="inp w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none"/>
+        <p class="text-[10px] text-gray-400 mt-1">Saat gambar diketuk, pengguna diarahkan ke link ini. Link iklan YallaMart dibuka langsung di dalam aplikasi. Tanpa gambar: muncul tombol "Buka link".</p>
+      </div>
       <!-- Preview pinned badge -->
       <div class="bg-purple-50 border border-purple-100 rounded-xl p-3 flex items-start gap-2">
         <i class="fa-solid fa-thumbtack text-purple-400 text-xs mt-0.5"></i>
@@ -15350,6 +15498,9 @@ window.sendBroadcastMassal = async function() {
   const body  = document.getElementById('broadcastBody').value.trim();
   if(!title) { showToast('Judul pesan wajib diisi', 'red'); return; }
   if(!body)  { showToast('Isi pesan wajib diisi', 'red'); return; }
+  const _linkRaw = (document.getElementById('broadcastLink')?.value || '').trim();
+  const linkUrl = _linkRaw ? window._bcNormLink(_linkRaw) : '';
+  if(_linkRaw && !linkUrl) { showToast('Link tujuan tidak valid', 'red'); return; }
 
   const btn = document.getElementById('broadcastSendBtn');
   btn.disabled = true;
@@ -15376,13 +15527,18 @@ window.sendBroadcastMassal = async function() {
       type: 'official_broadcast', is_sticky: true, is_read: false,
       sender_name: u.name || 'Developer', sender_email: u.email,
       broadcast_id: broadcastId, created_at: new Date().toISOString(),
-      image_url: imageUrl
+      image_url: imageUrl,
+      ...(linkUrl ? { link_url: linkUrl } : {})
     }));
     for(let i = 0; i < rows.length; i += 500) {
-      await window._supaFetch('/rest/v1/notifications', {
+      const _ins = await window._supaFetch('/rest/v1/notifications', {
         method: 'POST', prefer: 'return=minimal',
         body: JSON.stringify(rows.slice(i, i+500))
       });
+      if(_ins && _ins.ok === false) {
+        const _t = await _ins.text().catch(()=> '');
+        throw new Error('Simpan siaran gagal (HTTP ' + _ins.status + ') ' + _t.slice(0,120));
+      }
     }
     alert('✅ Pesan siaran berhasil dikirim ke ' + rows.length + ' pengguna!');
     showToast('✅ Siaran terkirim ke ' + rows.length + ' pengguna!', 'green');
@@ -15393,6 +15549,7 @@ window.sendBroadcastMassal = async function() {
     const pushUserIds = allUsers.filter(u2 => u2.uid).map(u2 => u2.uid);
     window.sendBroadcastPushBatch(pushUserIds, title, body, imageUrl).catch(function(e){ console.warn('[broadcast push enqueue]', e.message); });
     _bcClearImage();
+    const _bl = document.getElementById('broadcastLink'); if(_bl) _bl.value = '';
 
   } catch(e) {
     console.error('[Broadcast] Error:', e);
@@ -15434,7 +15591,8 @@ window._bcClearImage = function() {
 // → Cloudflare Queue, yang tak menjangkau FCM & prioritasnya tak terjamin).
 // TAHAP B (rilis Capacitor): Android lewat topik FCM + anti notif ganda (push_subscriptions.platform).
 window.sendBroadcastPushBatch = async function(userIds, title, body, image) {
-  const payload = { title: title || '📢 Pesan Siaran YallaMart', body: body, url: '/' };
+  // Notif di layar HP diketuk → buka YallaMart langsung ke panel Toa (bukan ke link tujuan)
+  const payload = { title: title || '📢 Pesan Siaran YallaMart', body: body, url: '/?go=toa' };
   if (image) payload.image = image; // gambar besar di notifikasi Android (FCM & Chrome Android)
   const r = await fetch(`${window._SUPA_URL}/functions/v1/quick-responder`, {
     method: 'POST',
@@ -16740,7 +16898,7 @@ window.removeVerification = async function() {
     <div class="bg-gradient-to-br from-primary to-pdd px-5 flex items-center justify-between flex-shrink-0" style="padding-top:max(env(safe-area-inset-top),14px);padding-bottom:14px;">
       <div class="flex items-center gap-3">
         <button onclick="closeEditAd()" class="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors flex-shrink-0">
-          <i class="fa-solid fa-arrow-left text-sm"></i>
+          <i class="fa-solid fa-chevron-left text-sm"></i>
         </button>
         <div>
           <h3 class="font-black text-white text-base flex items-center gap-2">
@@ -17338,7 +17496,7 @@ document.getElementById('editIsYallaFood')?.addEventListener('change', function(
   <div style="flex-shrink:0;background:linear-gradient(to right,#10B981,#0d9488);padding:max(env(safe-area-inset-top),10px) 20px 10px 20px">
     <div style="display:flex;align-items:center;gap:12px">
       <button onclick="closeAdminYallaCare()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer">
-        <i class="fa-solid fa-arrow-left" style="font-size:13px"></i>
+        <i class="fa-solid fa-chevron-left" style="font-size:13px"></i>
       </button>
       <div style="flex:1">
         <p style="color:#fff;font-weight:900;font-size:17px;margin:0">YallaCare Inbox</p>
@@ -17361,7 +17519,7 @@ document.getElementById('editIsYallaFood')?.addEventListener('change', function(
   <div style="flex-shrink:0;background:linear-gradient(to right,#10B981,#0d9488);padding:max(env(safe-area-inset-top),10px) 20px 10px 20px">
     <div style="display:flex;align-items:center;gap:12px">
       <button onclick="closeYcAdminChat()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer">
-        <i class="fa-solid fa-arrow-left" style="font-size:13px"></i>
+        <i class="fa-solid fa-chevron-left" style="font-size:13px"></i>
       </button>
       <div id="ycAdminChatHeader" style="flex:1">
         <p style="color:#fff;font-weight:900;font-size:16px;margin:0">User</p>
@@ -17393,7 +17551,7 @@ document.getElementById('editIsYallaFood')?.addEventListener('change', function(
   <div style="flex-shrink:0;background:linear-gradient(to right,#10B981,#0d9488);padding:max(env(safe-area-inset-top),10px) 20px 10px 20px">
     <div style="display:flex;align-items:center;gap:12px">
       <button onclick="closeYallaCare()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer">
-        <i class="fa-solid fa-arrow-left" style="font-size:13px"></i>
+        <i class="fa-solid fa-chevron-left" style="font-size:13px"></i>
       </button>
       <div style="flex:1">
         <p style="color:#fff;font-weight:900;font-size:17px;margin:0">YallaCare</p>
@@ -18084,7 +18242,7 @@ function updateYcBadge(count) {
   <!-- Header -->
   <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0">
     <button onclick="closeSettings()" style="background:none;border:none;cursor:pointer;color:#111827;padding:4px;display:flex;align-items:center">
-      <i class="fa-solid fa-arrow-left" style="font-size:18px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:18px"></i>
     </button>
     <span style="font-size:16px;font-weight:900;color:#111827">Pengaturan</span>
   </div>
@@ -18248,7 +18406,7 @@ function updateYcBadge(count) {
   <!-- Header -->
   <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0">
     <button onclick="closeUbahProfil()" style="background:none;border:none;cursor:pointer;color:#111827;padding:4px;display:flex;align-items:center">
-      <i class="fa-solid fa-arrow-left" style="font-size:18px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:18px"></i>
     </button>
     <span style="font-size:16px;font-weight:900;color:#111827">Ubah Profil</span>
   </div>
@@ -18316,7 +18474,7 @@ function updateYcBadge(count) {
   <!-- Header -->
   <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0">
     <button onclick="closeAlamatSaya()" style="background:none;border:none;cursor:pointer;color:#111827;padding:4px;display:flex;align-items:center">
-      <i class="fa-solid fa-arrow-left" style="font-size:18px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:18px"></i>
     </button>
     <span style="font-size:16px;font-weight:900;color:#111827">Alamat Saya</span>
   </div>
@@ -18350,7 +18508,7 @@ function updateYcBadge(count) {
   <!-- Header -->
   <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0">
     <button onclick="closeBuyerAddress()" style="background:none;border:none;cursor:pointer;color:#111827;padding:4px;display:flex;align-items:center">
-      <i class="fa-solid fa-arrow-left" style="font-size:18px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:18px"></i>
     </button>
     <span style="font-size:16px;font-weight:900;color:#111827">Alamat Pembeli</span>
   </div>
@@ -18366,7 +18524,7 @@ function updateYcBadge(count) {
 <div id="formGantiNama" style="display:none;position:fixed;inset:0;z-index:99996;background:#fff;flex-direction:column;transform:translateY(-100%);transition:transform .35s cubic-bezier(.4,0,.2,1)">
   <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0">
     <button onclick="closeSubForm('formGantiNama')" style="background:none;border:none;cursor:pointer;color:#111827;padding:4px;display:flex;align-items:center">
-      <i class="fa-solid fa-arrow-left" style="font-size:18px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:18px"></i>
     </button>
     <span style="font-size:16px;font-weight:900;color:#111827">Ganti Nama Akun</span>
   </div>
@@ -18406,7 +18564,7 @@ function updateYcBadge(count) {
 <div id="formGantiEmail" style="display:none;position:fixed;inset:0;z-index:99996;background:#fff;flex-direction:column;transform:translateY(-100%);transition:transform .35s cubic-bezier(.4,0,.2,1)">
   <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0">
     <button onclick="closeSubForm('formGantiEmail')" style="background:none;border:none;cursor:pointer;color:#111827;padding:4px;display:flex;align-items:center">
-      <i class="fa-solid fa-arrow-left" style="font-size:18px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:18px"></i>
     </button>
     <span style="font-size:16px;font-weight:900;color:#111827">Ganti Email</span>
   </div>
@@ -18469,7 +18627,7 @@ function updateYcBadge(count) {
 <div id="formGantiPassword" style="display:none;position:fixed;inset:0;z-index:99996;background:#fff;flex-direction:column;transform:translateY(-100%);transition:transform .35s cubic-bezier(.4,0,.2,1)">
   <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0">
     <button onclick="closeSubForm('formGantiPassword')" style="background:none;border:none;cursor:pointer;color:#111827;padding:4px;display:flex;align-items:center">
-      <i class="fa-solid fa-arrow-left" style="font-size:18px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:18px"></i>
     </button>
     <span style="font-size:16px;font-weight:900;color:#111827">Ganti Password</span>
   </div>
@@ -18514,7 +18672,7 @@ function updateYcBadge(count) {
 <div id="formGantiHP" style="display:none;position:fixed;inset:0;z-index:99996;background:#fff;flex-direction:column;transform:translateY(-100%);transition:transform .35s cubic-bezier(.4,0,.2,1)">
   <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0">
     <button onclick="closeSubForm('formGantiHP')" style="background:none;border:none;cursor:pointer;color:#111827;padding:4px;display:flex;align-items:center">
-      <i class="fa-solid fa-arrow-left" style="font-size:18px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:18px"></i>
     </button>
     <span style="font-size:16px;font-weight:900;color:#111827">Ganti Nomor HP</span>
   </div>
@@ -18908,7 +19066,7 @@ window.saveGantiHP = async function() {
   <!-- Header -->
   <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0;box-shadow:0 1px 6px rgba(0,0,0,.04)">
     <button onclick="closeKeamananAkun()" style="background:none;border:none;cursor:pointer;color:#111827;padding:4px;display:flex;align-items:center">
-      <i class="fa-solid fa-arrow-left" style="font-size:18px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:18px"></i>
     </button>
     <span style="font-size:16px;font-weight:900;color:#111827">Keamanan Akun</span>
   </div>
@@ -19272,7 +19430,7 @@ window.requirePin = function(callback) {
   <!-- Top bar -->
   <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;flex-shrink:0">
     <button onclick="closeImgLightbox()" style="background:none;border:none;color:#fff;padding:4px;cursor:pointer">
-      <i class="fa-solid fa-arrow-left" style="font-size:20px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:20px"></i>
     </button>
     <span id="lightboxCounter" style="color:#fff;font-size:14px;font-weight:600">1/1</span>
     <div style="width:28px"></div>
@@ -19399,7 +19557,7 @@ window.requirePin = function(callback) {
 <div id="wishlistOverlay" style="display:none;position:fixed;inset:0;z-index:9998;background:#f9fafb;flex-direction:column">
   <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff;border-bottom:1px solid #e5e7eb">
     <button onclick="closeWishlist()" style="background:none;border:none;cursor:pointer;color:#374151">
-      <i class="fa-solid fa-arrow-left" style="font-size:18px"></i>
+      <i class="fa-solid fa-chevron-left" style="font-size:18px"></i>
     </button>
     <span style="font-size:16px;font-weight:900;color:#111827">Wishlist Saya</span>
   </div>
@@ -19600,6 +19758,21 @@ window._routePushGo = function(params) {
   if (go === 'ykchat') {
     _routeWhenReady(() => typeof window.openYkChat === 'function', function() {
       window.openYkChat(params.get('oid'), params.get('nm') || 'Chat', params.get('st') || 'diambil', params.get('ou') || '');
+    });
+    return;
+  }
+
+  // ── PESAN SIARAN: buka panel Toa. Saat app baru dibuka dari tertutup, daftar
+  // notifikasi mungkin belum termuat → render ulang sebentar kemudian bila panel masih terbuka.
+  if (go === 'toa') {
+    _routeWhenReady(() => typeof window.openToaPanel === 'function', function() {
+      window.openToaPanel();
+      [1500, 4000].forEach(function(ms) {
+        setTimeout(function() {
+          const ov = document.getElementById('toaPanelOverlay');
+          if (ov && ov.classList.contains('open') && typeof window.renderToaPanel === 'function') window.renderToaPanel(window._S.notifs || []);
+        }, ms);
+      });
     });
     return;
   }
@@ -20961,7 +21134,7 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
   <!-- Header: Tombol Back + Input -->
   <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white">
     <button onclick="closeSearchOverlay()" class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
     </button>
     <div class="relative flex-1">
       <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -21297,7 +21470,7 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
   <!-- Header -->
   <div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px;display:flex;align-items:center;gap:12px;">
     <button onclick="closeIklanSaya()" style="width:36px;height:36px;border-radius:50%;border:none;background:#f3f4f6;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 5-7 7 7 7"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
     </button>
     <div style="flex:1">
       <p style="margin:0;font-size:16px;font-weight:800;color:#111827;line-height:1.2">Iklan Saya</p>
@@ -22521,7 +22694,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <div id="kelolaTokoScreen" style="display:none;position:fixed;inset:0;z-index:9999;background:#f8fafc;overflow-y:auto;-webkit-overflow-scrolling:touch;">
   <div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e2e8f0;padding:16px;display:flex;align-items:center;gap:12px">
     <button onclick="closeKelolaToko()" style="width:36px;height:36px;border-radius:50%;background:#f1f5f9;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
     </button>
     <p style="font-size:16px;font-weight:800;color:#0f172a;margin:0;letter-spacing:-.03em">Kelola Toko</p>
   </div>
@@ -22555,7 +22728,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <div id="riwayatPenjualanScreen" style="display:none;position:fixed;inset:0;z-index:10000;background:#f8fafc;overflow-y:auto;-webkit-overflow-scrolling:touch;">
   <div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e2e8f0;padding:16px;display:flex;align-items:center;gap:12px">
     <button onclick="closeRiwayatPenjualan()" style="width:36px;height:36px;border-radius:50%;background:#f1f5f9;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
     </button>
     <p style="font-size:16px;font-weight:800;color:#0f172a;margin:0;letter-spacing:-.03em">Riwayat Penjualan</p>
   </div>
@@ -22572,7 +22745,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <div id="riwayatPenjualanDetailScreen" style="display:none;position:fixed;inset:0;z-index:10001;background:#f8fafc;overflow-y:auto;-webkit-overflow-scrolling:touch;">
   <div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e2e8f0;padding:16px;display:flex;align-items:center;gap:12px">
     <button onclick="closeRiwayatDetailHari()" style="display:flex;align-items:center;gap:6px;background:transparent;border:none;cursor:pointer;padding:0">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
       <span style="font-size:13px;font-weight:700;color:#374151">Kembali</span>
     </button>
   </div>
@@ -22804,7 +22977,7 @@ async function _loadRiwayatPenjualan() {
 <div id="jamOperasionalScreen" style="display:none;position:fixed;inset:0;z-index:10000;background:#f8fafc;overflow-y:auto;-webkit-overflow-scrolling:touch;">
   <div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e2e8f0;padding:16px;display:flex;align-items:center;gap:12px">
     <button onclick="closeJamOperasional()" style="width:36px;height:36px;border-radius:50%;background:#f1f5f9;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
     </button>
     <p style="font-size:16px;font-weight:800;color:#0f172a;margin:0;letter-spacing:-.03em">Jam Operasional</p>
   </div>
@@ -23219,7 +23392,7 @@ window.closeKelolaToko = function() {
 <!-- YALLAFOOD HOME (buyer: browse menu) -->
 <div id="yallaFoodHome" style="display:none;position:fixed;inset:0;z-index:52;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-1 bg-[#f8fafc] px-3 py-1.5" style="flex-shrink:0">
-    <button onclick="closeYallaFoodHome()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 flex-shrink-0"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeYallaFoodHome()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 flex-shrink-0"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1 lc1">YallaFood</h2>
     <button onclick="openFoodOrderTracking()" class="flex flex-col items-center justify-center gap-0.5 rounded-xl hover:bg-gray-100 flex-shrink-0 px-1 py-0.5" title="Pesanan Saya">
       <span class="lucide-icon" id="yfTopbarPesananIcon"></span>
@@ -23280,7 +23453,7 @@ window.closeKelolaToko = function() {
      sendiri di peta, jadi tidak kena batasan izin lokasi PWA iOS. -->
 <div id="yfManualPinModal" style="display:none;position:fixed;inset:0;z-index:62;background:#fff;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="_yfCloseManualPinFallback()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="_yfCloseManualPinFallback()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <div class="flex-1 min-w-0">
       <h2 class="font-bold text-base">Tandai Lokasi Kamu</h2>
       <p class="text-xs text-gray-500">Geser pin ke posisi kamu sebenarnya</p>
@@ -23328,7 +23501,7 @@ window.closeKelolaToko = function() {
 <!-- YALLAFOOD ORDER TRACKING (buyer: pesanan saya) -->
 <div id="yallaFoodOrderTracking" style="display:none;position:fixed;inset:0;z-index:54;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeFoodOrderTracking()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeFoodOrderTracking()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">Pesanan YallaFood Saya</h2>
   </div>
   <div id="yallaFoodTrackingList" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:10px"></div>
@@ -23346,7 +23519,7 @@ window.closeKelolaToko = function() {
 <!-- YALLAFOOD SELLER: KELOLA PESANAN MASUK -->
 <div id="yallaFoodKelolaPesanan" style="display:none;position:fixed;inset:0;z-index:54;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeKelolaPesananYallaFood()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeKelolaPesananYallaFood()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">Kelola Pesanan YallaFood</h2>
   </div>
   <div id="yallaFoodKelolaList" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:10px"></div>
@@ -23355,7 +23528,7 @@ window.closeKelolaToko = function() {
 <!-- YALLAFOOD SELLER: LOKASI TOKO -->
 <div id="yallaFoodLokasiToko" style="display:none;position:fixed;inset:0;z-index:54;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeYallaFoodLokasiToko()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeYallaFoodLokasiToko()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">Lokasi Toko (YallaFood)</h2>
   </div>
   <div class="flex-1 overflow-y-auto px-4 py-4">
@@ -23934,7 +24107,7 @@ window.openFoodDetail = async function(adId) {
   body.innerHTML = `
     <div class="relative w-full bg-black" style="aspect-ratio:1/1;max-height:420px;overflow:hidden">
       <div id="yfDetailSliderTrack" class="flex h-full" style="transition:transform .3s ease;will-change:transform"></div>
-      <button onclick="closeFoodDetail()" class="absolute top-4 left-4 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-sm transition-colors shadow-lg" style="z-index:5"><i class="fa-solid fa-arrow-left text-base"></i></button>
+      <button onclick="closeFoodDetail()" class="absolute top-4 left-4 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-sm transition-colors shadow-lg" style="z-index:5"><i class="fa-solid fa-chevron-left text-base"></i></button>
       <div id="yfDetailSlideCounter" class="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-[11px] font-bold px-3 py-1 rounded-full backdrop-blur-sm" style="z-index:5;display:none"></div>
     </div>
     <div id="yfDetailThumbStrip" class="bg-white flex gap-2 overflow-x-auto px-3 py-2.5" style="scrollbar-width:none;-ms-overflow-style:none;display:none"></div>
@@ -24946,7 +25119,7 @@ function _yfSubscribeSellerRealtime() {
 <!-- KURIR: status / form pendaftaran -->
 <div id="kurirStatusOverlay" style="display:none;position:fixed;inset:0;z-index:55;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeDaftarKurir()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeDaftarKurir()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">Kurir YallaFood</h2>
   </div>
   <div id="kurirStatusBody" class="flex-1 overflow-y-auto px-4 py-4"></div>
@@ -24955,7 +25128,7 @@ function _yfSubscribeSellerRealtime() {
 <!-- KURIR: dashboard (waiting room + pesanan saya antar) -->
 <div id="kurirDashboard" style="display:none;position:fixed;inset:0;z-index:55;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeKurirDashboard()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeKurirDashboard()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1 min-w-0 truncate">Dashboard Kurir</h2>
     <div class="flex items-center gap-1.5" style="flex-shrink:0;margin-right:12px">
       <span id="kurirIncomeIcon" style="display:flex;color:#059669"></span>
@@ -25512,7 +25685,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
 </style>
 <div id="matamTerdekatOverlay" style="display:none;position:fixed;inset:0;z-index:900;background:#fff;flex-direction:column">
   <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #f0f0f0">
-    <button onclick="closeMatamTerdekat()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100" style="flex-shrink:0"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeMatamTerdekat()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100" style="flex-shrink:0"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <div style="width:34px;height:34px;border-radius:12px;background:#10B981;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0"><i class="fa-solid fa-location-dot"></i></div>
     <div style="flex:1;min-width:0">
       <p style="margin:0;font-weight:800;font-size:15px;color:#111827">Mat'am Terdekat</p>
@@ -26032,7 +26205,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
 
 <div id="yfChatModal" style="display:none;position:fixed;inset:0;z-index:56;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeYfChat()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeYfChat()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <div class="flex-1 min-w-0">
       <h2 id="yfChatTitle" class="font-bold text-base lc1">Chat</h2>
       <p id="yfChatSubtitle" class="text-xs text-gray-400"></p>
@@ -26598,7 +26771,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 <!-- YALLAKURIR: status / form pendaftaran (verifikasi identitas) -->
 <div id="yallaKurirStatusOverlay" style="display:none;position:fixed;inset:0;z-index:55;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeDaftarYallaKurir()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeDaftarYallaKurir()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">YallaKurir</h2>
   </div>
   <div id="yallaKurirStatusBody" class="flex-1 overflow-y-auto px-4 py-4"></div>
@@ -26607,7 +26780,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 <!-- YALLAKURIR: dashboard mitra kurir aktif — kartu order 'Kirim Barang' menunggu diambil -->
 <div id="ykCourierDashboard" style="display:none;position:fixed;inset:0;z-index:55;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeYkCourierDashboard()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeYkCourierDashboard()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1 min-w-0 truncate">Dashboard Kurir</h2>
     <div class="flex items-center gap-1.5" style="flex-shrink:0;margin-right:12px">
       <span id="ykIncomeIcon" style="display:flex;color:#059669"></span>
@@ -26626,7 +26799,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 <!-- YALLAKURIR: preview rute pesanan (titik Dari→Ke + garis) untuk kurir -->
 <div id="ykRouteMapOverlay" style="display:none;position:fixed;inset:0;z-index:70;background:#fff;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="_ykCloseRoute()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="_ykCloseRoute()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">Rute Pengantaran</h2>
   </div>
   <div style="position:relative;flex:1;min-height:0">
@@ -26887,7 +27060,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 </style>
 <div id="barangSayaOverlay" style="display:none;position:fixed;inset:0;z-index:65;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeBarangSaya()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeBarangSaya()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">Barang Saya</h2>
     <button onclick="_bsLoadOrders()" title="Muat ulang" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-rotate-right text-gray-500 text-sm"></i></button>
   </div>
@@ -27076,7 +27249,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 <!-- YALLAKURIR: overlay chat pengirim <-> kurir (dipakai kedua sisi) -->
 <div id="ykChatOverlay" style="display:none;position:fixed;inset:0;z-index:68;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closeYkChat()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closeYkChat()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <div class="flex-1 min-w-0">
       <h2 id="ykChatTitle" class="font-bold text-base lc1" style="margin:0">Chat</h2>
       <p id="ykChatSubtitle" class="text-[11px] text-gray-400 lc1" style="margin:0">YallaKurir</p>
@@ -27093,7 +27266,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 <!-- Pemilih titik di peta (Leaflet) untuk Dari & Ke -->
 <div id="kbMapPickerOverlay" style="display:none;position:fixed;inset:0;z-index:64;background:#fff;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="_kbCloseMap()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="_kbCloseMap()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 id="kbMapPickerTitle" class="font-bold text-base flex-1">Pilih Titik di Peta</h2>
   </div>
   <div style="position:relative;flex:1;min-height:0">
@@ -29545,7 +29718,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => { _ykRefres
 <!-- ADMIN: daftar popup promosi -->
 <div id="popupPromoOverlay" style="display:none;position:fixed;inset:0;z-index:850;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
-    <button onclick="closePopupPromoManager()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-arrow-left text-gray-700"></i></button>
+    <button onclick="closePopupPromoManager()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">Popup Promosi</h2>
     <button onclick="openPopupPromoForm(null)" class="bg-primary text-white text-xs font-bold px-3 py-2 rounded-xl flex-shrink-0"><i class="fa-solid fa-plus mr-1"></i>Tambah</button>
   </div>
