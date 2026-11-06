@@ -17913,6 +17913,34 @@ window.ycSendChat = async function() {
 window.activateWebpushrNotif = function() {
   var statusEl = document.getElementById('notifSettingStatus');
 
+  // ── Aplikasi Android: izin notifikasi HP + daftar FCM (bukan Web Push) ──
+  var _PN = window._ymNotifPN ? window._ymNotifPN() : null;
+  if (_PN) {
+    _PN.checkPermissions().then(function(p) {
+      if (p.receive === 'granted') return p;
+      if (p.receive === 'denied') return p;
+      if (statusEl) statusEl.textContent = 'Menunggu izin...';
+      return _PN.requestPermissions();
+    }).then(function(p) {
+      if (p && p.receive === 'granted') {
+        if (window._ymRegisterNativePush) window._ymRegisterNativePush();
+        if (statusEl) statusEl.textContent = 'Notifikasi sudah aktif ✓';
+        showToast('Notifikasi sudah aktif 🔔', 'green');
+      } else if (p && p.receive === 'denied') {
+        if (statusEl) statusEl.textContent = 'Diblokir — izinkan di Pengaturan HP';
+        showToast('Notifikasi diblokir. Buka Pengaturan HP → Aplikasi → YallaMart → Notifikasi.', 'red');
+      } else {
+        if (statusEl) statusEl.textContent = 'Tap untuk aktifkan';
+      }
+    }).catch(function() { showToast('Gagal meminta izin notifikasi', 'red'); });
+    return;
+  }
+  if (typeof Notification === 'undefined') {
+    if (statusEl) statusEl.textContent = 'Tidak didukung di perangkat ini';
+    showToast('Perangkat/browser ini tidak mendukung notifikasi', 'red');
+    return;
+  }
+
   if (Notification.permission === 'granted') {
     if (statusEl) statusEl.textContent = 'Notifikasi sudah aktif \u2713';
     showToast('Notifikasi sudah aktif \uD83D\uDD14', 'green');
@@ -18002,14 +18030,39 @@ window.activateWebpushrNotif = function() {
 };
 
 
-window.openSettings = function() {
-  // Update status notifikasi saat settings dibuka
+// Status izin notifikasi untuk baris "Notifikasi" di Pengaturan.
+// Aplikasi Android (WebView) TIDAK punya objek `Notification` → dulu openSettings() error diam-diam
+// dan Pengaturan tak terbuka. Di aplikasi pakai izin notifikasi HP (Capacitor PushNotifications).
+window._ymNotifPN = function() {
+  try {
+    var C = window.Capacitor;
+    if (C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.PushNotifications) return C.Plugins.PushNotifications;
+  } catch (e) {}
+  return null;
+};
+window._ymRefreshNotifStatus = function() {
   var statusEl = document.getElementById('notifSettingStatus');
-  if (statusEl) {
+  if (!statusEl) return;
+  try {
+    var PN = window._ymNotifPN();
+    if (PN) {
+      PN.checkPermissions().then(function(p) {
+        if (p.receive === 'granted') statusEl.textContent = 'Notifikasi sudah aktif ✓';
+        else if (p.receive === 'denied') statusEl.textContent = 'Diblokir — izinkan di Pengaturan HP';
+        else statusEl.textContent = 'Tap untuk aktifkan';
+      }).catch(function() {});
+      return;
+    }
+    if (typeof Notification === 'undefined') { statusEl.textContent = 'Tidak didukung di perangkat ini'; return; }
     if (Notification.permission === 'granted') statusEl.textContent = 'Notifikasi sudah aktif ✓';
     else if (Notification.permission === 'denied') statusEl.textContent = 'Diblokir — ubah di pengaturan browser';
     else statusEl.textContent = 'Tap untuk aktifkan';
-  }
+  } catch (e) {}
+};
+
+window.openSettings = function() {
+  // Update status notifikasi saat settings dibuka (aman di aplikasi Android & browser)
+  try { window._ymRefreshNotifStatus(); } catch (e) {}
   const u = window._S.user; if(!u) { showToast('Login dulu ya!','red'); return; }
   const ov = document.getElementById('settingsOverlay');
   ov.style.display = 'flex';
