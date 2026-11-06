@@ -8336,6 +8336,7 @@ window.renderNotifFull = function(notifs) {
           </div>
           <p class="text-sm text-gray-500 mt-0.5 leading-relaxed" id="fs-bc-msg-${rawDocId}" style="${(n.message||'').length>120?'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden':'display:block'}">${n.message||''}</p>
           ${(n.message||'').length>120?`<button id="fs-bc-btn-${rawDocId}" onclick="event.stopPropagation();event.preventDefault();toggleFsBcExpand('${rawDocId}')" class="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">Baca selengkapnya <i class="fa-solid fa-chevron-down text-[8px]"></i></button>`:''}
+          ${window._bcImageHtml ? window._bcImageHtml(n) : ''}
           <p class="text-xs text-gray-400 mt-1.5">${timeStr}</p>
         </div>
       </div>`;
@@ -8896,6 +8897,7 @@ window.renderToaPanel = function(notifs) {
         </div>
         <p class="text-sm text-gray-800 mt-0.5 leading-relaxed" id="toa-bc-msg-${rawDocId}" style="word-break:break-word;${isLong?'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden':'display:block'}">${isLong ? msgPreviewHtml : msgFullHtml}</p>
         ${isLong?`<button onclick="event.stopPropagation();event.preventDefault();toggleToaBcExpand('${rawDocId}')" id="toa-bc-btn-${rawDocId}" class="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">Baca selengkapnya <i class="fa-solid fa-chevron-down text-[8px]"></i></button>`:''}
+        ${window._bcImageHtml ? window._bcImageHtml(n) : ''}
         ${timeStr ? `<p class="text-xs text-gray-400 mt-1.5">${timeStr}</p>` : ''}
       </div>
     </div>`;
@@ -8913,6 +8915,29 @@ window.renderToaPanel = function(notifs) {
       el.innerHTML='';el.appendChild(svg);
     });
   }
+};
+
+// ── Gambar pesan siaran di daftar Toa & notifikasi penuh (semua platform, termasuk PWA iPhone) ──
+// Hanya URL https yang dipakai (dari upload R2 admin). Ketuk → lihat layar penuh.
+window._bcImageHtml = function(n) {
+  const url = n && (n.image_url || n.imageUrl);
+  if (!url || !/^https:\/\//i.test(url)) return '';
+  const safe = String(url).replace(/"/g, '%22').replace(/'/g, '%27').replace(/</g, '%3C').replace(/>/g, '%3E');
+  return `<img src="${safe}" alt="" loading="lazy" onclick="event.stopPropagation();event.preventDefault();_bcViewImage('${safe}')" class="w-full rounded-xl mt-2" style="max-height:240px;object-fit:cover;display:block;cursor:zoom-in;background:#f3f4f6" onerror="this.style.display='none'">`;
+};
+window._bcViewImage = function(url) {
+  let ov = document.getElementById('bcImageViewer');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'bcImageViewer';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:999998;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<img id="bcImageViewerImg" alt="" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">'
+      + '<button type="button" aria-label="Tutup" onclick="document.getElementById(\'bcImageViewer\').style.display=\'none\'" style="position:absolute;top:max(14px,env(safe-area-inset-top,14px));right:14px;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.18);color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fa-solid fa-xmark"></i></button>';
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.style.display = 'none'; });
+    document.body.appendChild(ov);
+  }
+  document.getElementById('bcImageViewerImg').src = url;
+  ov.style.display = 'flex';
 };
 
 // Buka detail pesan siaran (full text)
@@ -15219,6 +15244,22 @@ renderUserState();
           class="inp w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none resize-none leading-relaxed"></textarea>
         <p class="text-[10px] text-gray-400 mt-1">Maks. 1000 karakter</p>
       </div>
+      <!-- Gambar siaran (opsional) — tampil di daftar Toa semua pengguna & sebagai
+           gambar besar di notifikasi Android (iPhone: notifikasi teks saja). -->
+      <div>
+        <label class="text-[11px] font-bold text-gray-600 mb-1 block">Gambar <span class="text-gray-400 font-normal">(opsional)</span></label>
+        <label for="broadcastImageInput" id="broadcastImageAdd" class="w-full border-2 border-dashed border-purple-200 rounded-xl py-4 flex flex-col items-center justify-center gap-1 text-purple-400 cursor-pointer hover:border-purple-400 transition-colors" style="background:#faf5ff">
+          <i class="fa-solid fa-image text-xl"></i>
+          <span class="text-[11px] font-semibold">Tambah gambar</span>
+          <span class="text-[10px] text-purple-300">Saran rasio 2:1 (mis. 1024×512) · auto-kompres</span>
+        </label>
+        <div id="broadcastImagePreviewWrap" style="display:none;position:relative">
+          <img id="broadcastImagePreview" src="" alt="" class="w-full rounded-xl" style="max-height:200px;object-fit:cover;display:block">
+          <button type="button" onclick="_bcClearImage()" aria-label="Hapus gambar" style="position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fa-solid fa-xmark text-xs"></i></button>
+        </div>
+        <input id="broadcastImageInput" type="file" accept="image/*" class="hidden" onchange="_bcPickImage(this)"/>
+        <p class="text-[10px] text-gray-400 mt-1">Muncul di daftar Toa semua pengguna & notifikasi Android. Di iPhone, notifikasi layar hanya teks.</p>
+      </div>
       <!-- Preview pinned badge -->
       <div class="bg-purple-50 border border-purple-100 rounded-xl p-3 flex items-start gap-2">
         <i class="fa-solid fa-thumbtack text-purple-400 text-xs mt-0.5"></i>
@@ -15309,6 +15350,16 @@ window.sendBroadcastMassal = async function() {
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengirim...';
 
   try {
+    // Gambar siaran (opsional): upload ke R2 DULU — kalau gagal, siaran dibatalkan
+    // (jangan sampai terkirim tanpa gambar padahal admin memilih gambar).
+    let imageUrl = null;
+    if (window._bcImageFile) {
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengunggah gambar...';
+      const up = await window.uploadToR2(window._bcImageFile, null, 'broadcasts');
+      imageUrl = (up && typeof up === 'object') ? up.secure_url : up;
+      if (!imageUrl || !String(imageUrl).startsWith('http')) throw new Error('Upload gambar gagal');
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengirim...';
+    }
     const _auRes = await window._supaFetch('/rest/v1/users?select=uid');
     const allUsers = _auRes.ok ? await _auRes.json() : [];
     if(!allUsers || !allUsers.length) { showToast('Tidak ada user ditemukan', 'red'); return; }
@@ -15318,7 +15369,8 @@ window.sendBroadcastMassal = async function() {
       title, message: body,
       type: 'official_broadcast', is_sticky: true, is_read: false,
       sender_name: u.name || 'Developer', sender_email: u.email,
-      broadcast_id: broadcastId, created_at: new Date().toISOString()
+      broadcast_id: broadcastId, created_at: new Date().toISOString(),
+      image_url: imageUrl
     }));
     for(let i = 0; i < rows.length; i += 500) {
       await window._supaFetch('/rest/v1/notifications', {
@@ -15333,7 +15385,8 @@ window.sendBroadcastMassal = async function() {
     // Kirim push notification beneran (lock screen/notif tray) lewat Cloudflare Queue,
     // non-blocking — kalau gagal, broadcast in-app di atas tetap dianggap sukses.
     const pushUserIds = allUsers.filter(u2 => u2.uid).map(u2 => u2.uid);
-    window.sendBroadcastPushBatch(pushUserIds, title, body).catch(function(e){ console.warn('[broadcast push enqueue]', e.message); });
+    window.sendBroadcastPushBatch(pushUserIds, title, body, imageUrl).catch(function(e){ console.warn('[broadcast push enqueue]', e.message); });
+    _bcClearImage();
 
   } catch(e) {
     console.error('[Broadcast] Error:', e);
@@ -15344,6 +15397,29 @@ window.sendBroadcastMassal = async function() {
   }
 };
 
+// ── Gambar pesan siaran (opsional) — pilih, pratinjau, hapus ──
+window._bcImageFile = null;
+window._bcPickImage = function(input) {
+  const f = input && input.files && input.files[0];
+  if (!f) return;
+  if (!/^image\//.test(f.type || '')) { showToast('File harus berupa gambar', 'red'); input.value = ''; return; }
+  window._bcImageFile = f;
+  const img = document.getElementById('broadcastImagePreview');
+  try { if (img._objUrl) URL.revokeObjectURL(img._objUrl); } catch (e) {}
+  img._objUrl = URL.createObjectURL(f);
+  img.src = img._objUrl;
+  document.getElementById('broadcastImagePreviewWrap').style.display = 'block';
+  document.getElementById('broadcastImageAdd').style.display = 'none';
+};
+window._bcClearImage = function() {
+  window._bcImageFile = null;
+  const inp = document.getElementById('broadcastImageInput'); if (inp) inp.value = '';
+  const img = document.getElementById('broadcastImagePreview');
+  if (img) { try { if (img._objUrl) URL.revokeObjectURL(img._objUrl); } catch (e) {} img._objUrl = null; img.src = ''; }
+  const w = document.getElementById('broadcastImagePreviewWrap'); if (w) w.style.display = 'none';
+  const a = document.getElementById('broadcastImageAdd'); if (a) a.style.display = 'flex';
+};
+
 // Push siaran dari menu "Kirim Pesan Siaran" — TAHAP A (2026-11-06):
 // satu panggilan ke quick-responder TANPA user_id = ke SEMUA pelanggan Web Push
 // (iPhone/browser) + semua token FCM (aplikasi Android), prioritas tinggi, langganan
@@ -15351,14 +15427,16 @@ window.sendBroadcastMassal = async function() {
 // tidak berubah, tapi tidak dipakai lagi (dulu: dipecah per 25 → Worker /broadcast-enqueue
 // → Cloudflare Queue, yang tak menjangkau FCM & prioritasnya tak terjamin).
 // TAHAP B (rilis Capacitor): Android lewat topik FCM + anti notif ganda (push_subscriptions.platform).
-window.sendBroadcastPushBatch = async function(userIds, title, body) {
+window.sendBroadcastPushBatch = async function(userIds, title, body, image) {
+  const payload = { title: title || '📢 Pesan Siaran YallaMart', body: body, url: '/' };
+  if (image) payload.image = image; // gambar besar di notifikasi Android (FCM & Chrome Android)
   const r = await fetch(`${window._SUPA_URL}/functions/v1/quick-responder`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + (window._S?._accessToken || window._SUPA_ANON)
     },
-    body: JSON.stringify({ title: title || '📢 Pesan Siaran YallaMart', body: body, url: '/' })
+    body: JSON.stringify(payload)
   });
   const j = await r.json().catch(function(){ return {}; });
   if (!r.ok) { console.warn('[broadcast push] gagal:', r.status, j); return j; }
