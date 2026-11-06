@@ -24363,6 +24363,7 @@ async function _yfLoadTracking() {
         rows = rows.filter(o => !hset.has(o.id));
       }
     } catch (e) {}
+    window._yfBuyerOrdersById = {}; rows.forEach(o => { window._yfBuyerOrdersById[o.id] = o; }); // utk panel Lacak Kurir
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood.</p>'; return; }
 
     // Badge unread PER TOMBOL 'Chat Kurir' — bukan agregat global.
@@ -24436,7 +24437,10 @@ async function _yfLoadTracking() {
             </div>
             <p class="text-sm font-semibold truncate" style="color:#111827">${o.courier_name || 'Kurir'}</p>
           </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+          ${(o.status === 'dijemput' || o.status === 'menuju') ? `<button onclick="_yfOpenTrack('${o.id}')" class="flex-shrink-0 text-xs font-bold text-white rounded-xl py-2 px-3" style="background:#10B981;border:none;display:inline-flex;align-items:center;gap:6px"><span class="yf-live-dot"></span><i class="fa-solid fa-map-location-dot"></i>Lacak</button>` : ''}
           <button onclick="openYfChat('${o.id}','buyer_kurir','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')" style="position:relative" class="flex-shrink-0 text-xs font-bold text-gray-700 border border-gray-200 rounded-xl py-2 px-3"><i class="fa-solid fa-comment-dots mr-1"></i>Chat Kurir${_yfBtnBadge(unreadMap[o.id] || 0)}</button>
+          </div>
         </div>
         ` : ''}
         ${o.status === 'selesai' ? `
@@ -25125,6 +25129,8 @@ async function _kurirLoadMyDeliveries() {
         rows = rows.filter(o => !hset.has(o.id));
       }
     } catch (e) {}
+    // Lacak Kurir: siarkan posisi HANYA utk pesanan yang sedang dijemput/diantar (berhenti otomatis kalau tak ada)
+    try { if (window._yfSyncAutoShare) window._yfSyncAutoShare(rows.filter(o => o.status === 'dijemput' || o.status === 'menuju').map(o => o.id)); } catch (e) {}
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan yang kamu antar.</p>'; return; }
 
     // Badge unread PER TOMBOL (Chat Buyer / Chat Seller) — bukan agregat.
@@ -29942,6 +29948,219 @@ document.addEventListener('DOMContentLoaded', () => {
       input.dispatchEvent(ev);                       // jalankan handler lama (onchange) dengan salinan
     });
   }, true);
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     📍 YALLAFOOD — LACAK KURIR (peta live di sisi PEMBELI)
+     • Sisi KURIR: selama dasbor kurir YallaFood terbuka & ada pesanan berstatus
+       'dijemput' / 'menuju', posisi GPS kurir disiarkan lewat Supabase BROADCAST
+       'yf_track_<orderId>' (ephemeral, TANPA tulis DB). Hemat: kirim hanya bila
+       geser > 20 m atau > 6 dtk. Berhenti saat tak ada antaran aktif / dasbor ditutup.
+     • Sisi PEMBELI: tombol "Lacak" (hanya status dijemput/menuju) membuka panel
+       peta MapLibre (helper _ykMap, gaya Mat'am): pin Mat'am + pin alamat pembeli,
+       rute jalan, titik motor kurir live + garis kurir→tujuan, jarak, Chat Kurir.
+     Pola sama persis dengan YallaKurir (_ykSyncAutoShare / panel Kurir Ditemukan).
+     ═══════════════════════════════════════════════════════════════ -->
+<style>
+  @keyframes yfLivePulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.75) } 70% { box-shadow: 0 0 0 6px rgba(255,255,255,0) } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0) } }
+  .yf-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #fff; display: inline-block; animation: yfLivePulse 1.6s infinite; flex-shrink: 0 }
+  #yfTrackPanel { display: none; position: fixed; inset: 0; z-index: 55; /* di atas Pesanan Saya (54), di bawah chat (56) */ background: transparent; align-items: flex-end; justify-content: center }
+  #yfTrackPanel .yf-tp-card { position: relative; z-index: 2; background: #fff; width: 100%; max-width: 480px; border-radius: 24px 24px 0 0; padding: 16px 18px max(22px, env(safe-area-inset-bottom, 22px)); box-shadow: 0 -10px 34px rgba(0,0,0,.18) }
+  #yfTrackPanel .yf-tp-btn { width: 42px; height: 42px; border-radius: 50%; background: #fff; border: none; box-shadow: 0 2px 10px rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; cursor: pointer }
+</style>
+<script>
+(function () {
+  // ── SISI KURIR: siarkan posisi untuk pesanan dijemput/menuju ──
+  window._yfAutoShare = { watchId: null, channels: {}, last: null };
+  window._yfAutoShareStop = function () {
+    const a = window._yfAutoShare;
+    if (a.watchId != null && navigator.geolocation) { try { navigator.geolocation.clearWatch(a.watchId); } catch (e) {} }
+    a.watchId = null;
+    Object.keys(a.channels).forEach(id => { try { window.supabase.removeChannel(a.channels[id].channel); } catch (e) {} });
+    a.channels = {}; a.last = null;
+  };
+  window._yfSyncAutoShare = function (activeOrderIds) {
+    if (!window.supabase || !navigator.geolocation) return;
+    const a = window._yfAutoShare;
+    const want = new Set(activeOrderIds || []);
+    Object.keys(a.channels).forEach(id => {
+      if (!want.has(id)) { try { window.supabase.removeChannel(a.channels[id].channel); } catch (e) {} delete a.channels[id]; }
+    });
+    want.forEach(id => {
+      if (!a.channels[id]) {
+        const ch = window.supabase.channel('yf_track_' + id, { config: { broadcast: { self: false } } });
+        const entry = { channel: ch, subscribed: false };
+        ch.subscribe((status) => {
+          if (status !== 'SUBSCRIBED') return;
+          entry.subscribed = true;
+          if (a.last) { try { ch.send({ type: 'broadcast', event: 'loc', payload: { lat: a.last.lat, lng: a.last.lng, t: Date.now() } }); } catch (e) {} } // posisi terakhir langsung terkirim
+        });
+        a.channels[id] = entry;
+      }
+    });
+    const hasActive = Object.keys(a.channels).length > 0;
+    if (hasActive && a.watchId == null) {
+      a.watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const lat = pos.coords.latitude, lng = pos.coords.longitude, now = Date.now();
+          if (a.last && _yfHaversineKm(a.last.lat, a.last.lng, lat, lng) * 1000 < 20 && (now - a.last.t) < 6000) return; // throttle
+          a.last = { lat, lng, t: now };
+          Object.keys(a.channels).forEach(id => { const c = a.channels[id]; if (c.subscribed) { try { c.channel.send({ type: 'broadcast', event: 'loc', payload: { lat, lng, t: now } }); } catch (e) {} } });
+        },
+        () => { /* izin lokasi ditolak — pembeli tetap lihat rute tanpa titik kurir */ },
+        { enableHighAccuracy: true, maximumAge: 4000, timeout: 20000 }
+      );
+    } else if (!hasActive && a.watchId != null) {
+      window._yfAutoShareStop();
+    }
+  };
+  // Dasbor kurir ditutup → berhenti menyiarkan
+  const _prevCloseKurir = window.closeKurirDashboard;
+  if (typeof _prevCloseKurir === 'function') {
+    window.closeKurirDashboard = function () { try { window._yfAutoShareStop(); } catch (e) {} return _prevCloseKurir.apply(this, arguments); };
+  }
+
+  // ── SISI PEMBELI: panel peta Lacak Kurir ──
+  let _tp = null; // { orderId, map, channel, dot, line, lineOrigin, last, dest, seq }
+  let _tpSeq = 0;
+  function el(id) { return document.getElementById(id); }
+  function ensurePanel() {
+    if (el('yfTrackPanel')) return;
+    const d = document.createElement('div');
+    d.id = 'yfTrackPanel';
+    d.innerHTML =
+      '<div id="yfTrackMap" style="position:absolute;inset:0;z-index:0;background:#e5e7eb"></div>' +
+      '<button id="yfTrackRecenter" class="yf-tp-btn" onclick="_yfTrackRecenter()" title="Fokus ke kurir" style="display:none;position:absolute;top:max(14px,env(safe-area-inset-top,14px));right:14px;z-index:3"><i class="fa-solid fa-location-crosshairs" style="color:#2563EB;font-size:18px"></i></button>' +
+      '<div class="yf-tp-card">' +
+      '  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+      '    <div style="width:38px;height:38px;border-radius:50%;background:#ECFDF5;color:#059669;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-motorcycle"></i></div>' +
+      '    <div style="flex:1;min-width:0">' +
+      '      <p id="yfTrackTitle" style="margin:0;font-weight:800;font-size:15px;color:#111827">Lacak Kurir</p>' +
+      '      <p id="yfTrackSub" style="margin:2px 0 0;font-size:12px;color:#6b7280">Menunggu posisi kurir…</p>' +
+      '    </div>' +
+      '    <button onclick="_yfCloseTrack()" aria-label="Tutup" style="width:34px;height:34px;border-radius:50%;border:none;background:#f3f4f6;color:#4b5563;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer"><i class="fa-solid fa-xmark"></i></button>' +
+      '  </div>' +
+      '  <div style="font-size:11.5px;color:#374151;line-height:1.45;margin-bottom:12px">' +
+      '    <div style="display:flex;gap:7px;align-items:flex-start"><span style="width:10px;height:10px;border-radius:50%;background:#F59E0B;flex-shrink:0;margin-top:3px"></span><span id="yfTrackShop">Mat\'am</span></div>' +
+      '    <div style="display:flex;gap:7px;align-items:flex-start;margin-top:5px"><span style="width:10px;height:10px;border-radius:50%;background:#EF4444;flex-shrink:0;margin-top:3px"></span><span>Alamat kamu</span></div>' +
+      '  </div>' +
+      '  <button id="yfTrackChatBtn" class="w-full text-sm font-bold text-white rounded-2xl py-3" style="background:#10B981;border:none;cursor:pointer"><i class="fa-solid fa-comment-dots mr-1.5"></i>Chat Kurir</button>' +
+      '</div>';
+    document.body.appendChild(d);
+  }
+  function fmtKm(km) { return km < 1 ? Math.round(km * 1000) + ' m' : km.toFixed(1) + ' km'; }
+  function pinSpec(color, label, icon) {
+    return {
+      html: '<div style="display:flex;flex-direction:column;align-items:center">'
+        + '<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:' + color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center">'
+        + '<i class="fa-solid ' + icon + '" style="color:#fff;font-size:11px;transform:rotate(45deg)"></i></div>'
+        + '<span style="margin-top:1px;font-size:9px;font-weight:800;color:#111827;background:rgba(255,255,255,.92);padding:0 5px;border-radius:4px;white-space:nowrap">' + label + '</span>'
+        + '</div>',
+      size: [60, 44], anchor: [30, 26], interactive: false, zIndex: 2
+    };
+  }
+
+  window._yfOpenTrack = async function (orderId) {
+    const o = (window._yfBuyerOrdersById || {})[orderId];
+    if (!o) { showToast('Data pesanan tidak ditemukan', 'red'); return; }
+    if (typeof window._ykMap !== 'function') { showToast('Peta belum siap, coba lagi', 'red'); return; }
+    ensurePanel();
+    _yfCloseTrack(true);
+    const seq = ++_tpSeq;
+    el('yfTrackPanel').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    const going = o.status === 'menuju';
+    el('yfTrackTitle').textContent = going ? 'Kurir Menuju Anda' : 'Kurir Menjemput Pesanan';
+    el('yfTrackSub').textContent = 'Menunggu posisi kurir…';
+    el('yfTrackShop').textContent = (o.seller_name || "Mat'am");
+    el('yfTrackRecenter').style.display = 'none';
+    el('yfTrackChatBtn').onclick = function () { openYfChat(o.id, 'buyer_kurir', String(o.courier_name || 'Kurir').replace(/['"`]/g, '')); };
+
+    // Titik Mat'am (dari shops) & titik pembeli (buyer_lat/lng di pesanan)
+    let shop = null;
+    try { const locs = await _yfFetchShopLocs([o.seller_id]); shop = locs[o.seller_id] || null; } catch (e) {}
+    if (seq !== _tpSeq) return;
+    const sLat = shop && shop.lat != null ? +shop.lat : null, sLng = shop && shop.lng != null ? +shop.lng : null;
+    const bLat = o.buyer_lat != null ? +o.buyer_lat : null, bLng = o.buyer_lng != null ? +o.buyer_lng : null;
+    if (shop && shop.alamat) el('yfTrackShop').textContent = (o.seller_name || "Mat'am") + ' · ' + shop.alamat;
+    // Tujuan kurir saat ini: menuju → pembeli; dijemput → Mat'am
+    const dest = going ? (bLat != null ? { lat: bLat, lng: bLng, label: 'lokasimu' } : null) : (sLat != null ? { lat: sLat, lng: sLng, label: "Mat'am" } : null);
+    const center = bLat != null ? [bLat, bLng] : (sLat != null ? [sLat, sLng] : [30.0444, 31.2357]);
+
+    const map = await _ykMap(el('yfTrackMap'), { center, zoom: 15, controls: 'full', controlsTop: 14 });
+    if (!map) { if (seq === _tpSeq) showToast('Peta gagal dimuat, periksa koneksi lalu coba lagi', 'red'); return; }
+    if (seq !== _tpSeq || el('yfTrackPanel').style.display === 'none') { map.remove(); return; }
+    _tp = { orderId, map, channel: null, dot: null, line: null, lineOrigin: null, last: null, dest };
+    const pts = [];
+    if (sLat != null) { map.addMarker([sLat, sLng], pinSpec('#F59E0B', "Mat'am", 'fa-utensils')); pts.push([sLat, sLng]); }
+    if (bLat != null) { map.addMarker([bLat, bLng], pinSpec('#EF4444', 'Kamu', 'fa-house')); pts.push([bLat, bLng]); }
+    const fitAll = () => { if (pts.length) map.fitBounds(pts.concat(_tp && _tp.last ? [[_tp.last.lat, _tp.last.lng]] : []), { paddingTopLeft: [40, 70], paddingBottomRight: [40, 260], maxZoom: 17 }); };
+    fitAll();
+    // Rute jalan Mat'am → pembeli (hijau)
+    if (sLat != null && bLat != null) {
+      let route = map.addPolyline([[sLat, sLng], [bLat, bLng]], { color: '#10B981', weight: 4, opacity: .5, dashArray: '6,8' });
+      _ykFetchRoadRoute(sLat, sLng, bLat, bLng).then(path => {
+        if (!_tp || _tp.map !== map) return;
+        if (!path) { route.setStyle({ opacity: .85, dashArray: null }); return; }
+        try { route.remove(); } catch (e) {}
+        route = map.addPolyline(path, { color: '#10B981', weight: 5, opacity: .9 });
+      });
+    }
+    setTimeout(() => { if (_tp && _tp.map === map) map.invalidateSize(); }, 400);
+
+    // Posisi kurir realtime
+    const motor = {
+      html: '<div style="width:30px;height:30px;border-radius:50%;background:#10B981;border:2.5px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-motorcycle" style="color:#fff;font-size:14px"></i></div>',
+      size: [30, 30], anchor: [15, 15], interactive: false, zIndex: 4
+    };
+    if (!window.supabase) return;
+    let firstFix = true;
+    _tp.channel = window.supabase.channel('yf_track_' + orderId, { config: { broadcast: { self: false } } })
+      .on('broadcast', { event: 'loc' }, (msg) => {
+        const p = msg && msg.payload;
+        if (!_tp || _tp.map !== map || !p) return;
+        const lat = +p.lat, lng = +p.lng;
+        if (isNaN(lat) || isNaN(lng)) return;
+        _tp.last = { lat, lng };
+        if (!_tp.dot) _tp.dot = map.addMarker([lat, lng], motor); else _tp.dot.setLatLng([lat, lng]);
+        el('yfTrackRecenter').style.display = 'flex';
+        if (dest) {
+          const km = _yfHaversineKm(lat, lng, dest.lat, dest.lng);
+          el('yfTrackSub').textContent = 'Kurir ' + fmtKm(km) + ' dari ' + dest.label;
+          const o2 = _tp.lineOrigin;
+          const moved = o2 ? _yfHaversineKm(o2.lat, o2.lng, lat, lng) * 1000 : Infinity;
+          if (!_tp.line || moved > 250) {
+            _tp.lineOrigin = { lat, lng };
+            _ykFetchRoadRoute(lat, lng, dest.lat, dest.lng).then(path => {
+              if (!_tp || _tp.map !== map) return;
+              if (_tp.line) { try { _tp.line.remove(); } catch (e) {} }
+              _tp.line = map.addPolyline(path || [[lat, lng], [dest.lat, dest.lng]], { color: '#2563EB', weight: 4, opacity: .85, dashArray: path ? null : '6,8' });
+            });
+          }
+        } else {
+          el('yfTrackSub').textContent = 'Posisi kurir diperbarui';
+        }
+        if (firstFix) { firstFix = false; fitAll(); }
+      })
+      .subscribe();
+  };
+
+  window._yfTrackRecenter = function () {
+    if (_tp && _tp.map && _tp.last) _tp.map.setView([_tp.last.lat, _tp.last.lng], Math.max(_tp.map.getZoom(), 16), { animate: true });
+  };
+
+  window._yfCloseTrack = function (keepOpen) {
+    _tpSeq++;
+    if (_tp) {
+      if (_tp.channel) { try { window.supabase.removeChannel(_tp.channel); } catch (e) {} }
+      if (_tp.map) { try { _tp.map.remove(); } catch (e) {} }
+      _tp = null;
+    }
+    if (keepOpen === true) return;
+    const p = el('yfTrackPanel'); if (p) p.style.display = 'none';
+    document.body.style.overflow = 'hidden'; // halaman Pesanan Saya di belakang tetap fullscreen
+  };
 })();
 </script>
 
