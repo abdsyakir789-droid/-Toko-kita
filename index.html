@@ -29883,5 +29883,105 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     NOTIFIKASI FCM — HANYA di aplikasi Android (Capacitor).
+     Web Push (iPhone PWA & browser) tetap memakai jalur lama.
+     • Setelah login: minta izin notif → daftar token FCM → simpan ke
+       fcm_tokens lewat RPC upsert_fcm_token (1 akun bisa banyak perangkat).
+     • Saat logout: token perangkat ini dilepas (RPC delete_fcm_token).
+     • Notif diketuk: url di data notif diteruskan ke _routePushGo
+       (router yang sama dengan Web Push) → buka chat/pesanan terkait.
+     ═══════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  var C = window.Capacitor;
+  var isNative = false;
+  try { isNative = !!(C && C.isNativePlatform && C.isNativePlatform()); } catch (e) {}
+  if (!isNative) return;
+  var PN = C.Plugins && C.Plugins.PushNotifications;
+  if (!PN) return;
+
+  var _token = null, _savedFor = null, _inited = false, _asking = false;
+  function uid() { return window._S && window._S.user && window._S.user.uid; }
+
+  function saveToken() {
+    var u = uid();
+    if (!_token || !u || _savedFor === u + '|' + _token || !window._supaFetch) return;
+    window._supaFetch('/rest/v1/rpc/upsert_fcm_token', {
+      method: 'POST',
+      body: JSON.stringify({ p_token: _token, p_platform: 'android' })
+    }).then(function (r) {
+      if (r.ok) _savedFor = u + '|' + _token;
+      else console.warn('[fcm] simpan token gagal', r.status);
+    }).catch(function (e) { console.warn('[fcm] simpan token gagal', e && e.message); });
+  }
+
+  function openFromNotif(data) {
+    var url = (data && data.url) || '/';
+    try {
+      var params = new URL(url, location.origin).searchParams;
+      if (typeof window._routePushGo === 'function' && (params.get('go') || params.get('chatId'))) { window._routePushGo(params); return; }
+    } catch (e) {}
+    if (url && url !== '/' && url.indexOf('/') === 0) location.href = url;
+  }
+
+  function initListeners() {
+    if (_inited) return; _inited = true;
+    try {
+      PN.createChannel({ id: 'yallamart_default', name: 'Notifikasi YallaMart', description: 'Chat, pesanan, dan info YallaMart', importance: 5, visibility: 1, sound: 'default', vibration: true, lights: true, lightColor: '#10B981' }).catch(function () {});
+    } catch (e) {}
+    PN.addListener('registration', function (t) { _token = t && t.value; saveToken(); });
+    PN.addListener('registrationError', function (e) { console.warn('[fcm] registrasi gagal', e); });
+    PN.addListener('pushNotificationActionPerformed', function (a) {
+      var d = (a && a.notification && a.notification.data) || {};
+      // tunggu app siap (data user & fungsi chat termuat) sebelum membuka tujuan
+      var tries = 0;
+      (function go() { if ((uid() && typeof window._routePushGo === 'function') || tries++ > 40) openFromNotif(d); else setTimeout(go, 250); })();
+    });
+  }
+
+  function registerIfLoggedIn() {
+    if (!uid() || _asking) return;
+    initListeners();
+    if (_token) { saveToken(); return; }
+    _asking = true;
+    PN.checkPermissions().then(function (p) {
+      if (p.receive === 'prompt' || p.receive === 'prompt-with-rationale') return PN.requestPermissions();
+      return p;
+    }).then(function (p) {
+      if (p && p.receive === 'granted') return PN.register();   // → event 'registration' membawa token
+    }).catch(function (e) { console.warn('[fcm] izin/registrasi gagal', e && e.message); })
+      .then(function () { _asking = false; });
+  }
+  window._ymRegisterNativePush = registerIfLoggedIn;
+
+  // Login/logout memanggil renderUserState → ikut cek pendaftaran token
+  var _prevRender = window.renderUserState;
+  if (typeof _prevRender === 'function') {
+    window.renderUserState = function () {
+      var r = _prevRender.apply(this, arguments);
+      setTimeout(registerIfLoggedIn, 1500);
+      return r;
+    };
+  }
+  // Sesi yang sudah login saat app dibuka
+  setTimeout(registerIfLoggedIn, 3000);
+
+  // Logout: lepas token perangkat ini dari akun yang keluar (sebelum sesi dibuang)
+  var _prevLogout = window.doLogout;
+  if (typeof _prevLogout === 'function') {
+    window.doLogout = function () {
+      try {
+        if (_token && uid() && window._supaFetch) {
+          window._supaFetch('/rest/v1/rpc/delete_fcm_token', { method: 'POST', body: JSON.stringify({ p_token: _token }) }).catch(function () {});
+        }
+      } catch (e) {}
+      _savedFor = null;
+      return _prevLogout.apply(this, arguments);
+    };
+  }
+})();
+</script>
 </body>
 </html>
