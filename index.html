@@ -27527,50 +27527,47 @@ function _kbDestroyCourierMap() {
   if (_kbTrackChannel) { try { window.supabase.removeChannel(_kbTrackChannel); } catch (e) {} _kbTrackChannel = null; }
   if (window._kbCourierMap) { try { window._kbCourierMap.remove(); } catch (e) {} window._kbCourierMap = null; }
   window._kbCourierMapOrderId = null;
+  window._kbCourierMapPending = null; // batalkan peta yang masih dimuat (MapLibre async)
   _kbCourierDot = null; _kbCourierLine = null; _kbCourierLineOrigin = null; _kbCourierLast = null;
   const rc = document.getElementById('kbCourierRecenter'); if (rc) rc.style.display = 'none';
 }
 
+// Pin rute Jemput/Tujuan (dipakai peta Kurir Ditemukan & Rute Pengantaran)
+function _ykRoutePinSpec(color, label) {
+  return {
+    html: '<div style="display:flex;flex-direction:column;align-items:center">'
+      + '<div style="width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:' + color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></div>'
+      + '<span style="margin-top:1px;font-size:9px;font-weight:800;color:#111827;background:rgba(255,255,255,.92);padding:0 5px;border-radius:4px">' + label + '</span>'
+      + '</div>',
+    size: [40, 40], anchor: [20, 24], interactive: false, zIndex: 2
+  };
+}
+
 function _kbInitCourierMap(order) {
   if (!order || order.from_lat == null || order.to_lat == null) return;
-  if (window._kbCourierMapOrderId === order.id && window._kbCourierMap) return; // sudah dibangun utk order ini
+  // sudah dibangun / SEDANG dibangun utk order ini → jangan buat peta kedua
+  if (window._kbCourierMapOrderId === order.id && (window._kbCourierMap || window._kbCourierMapPending === order.id)) return;
   _kbDestroyCourierMap();
   window._kbCourierMapOrderId = order.id;
+  window._kbCourierMapPending = order.id;
   const fLat = +order.from_lat, fLng = +order.from_lng, tLat = +order.to_lat, tLng = +order.to_lng;
-  setTimeout(() => {
+  setTimeout(async () => {
     const el = document.getElementById('kbCourierMap');
-    if (!el || window._kbCourierMapOrderId !== order.id) return;
-    const map = L.map(el, { zoomControl: false, attributionControl: false });
+    if (!el || window._kbCourierMapPending !== order.id) return;
+    // Peta MapLibre (gaya Nuqto): bisa diputar & dimiringkan 3D
+    const map = await _ykMap(el, { center: [fLat, fLng], zoom: 15, controls: 'full', controlsTop: 14 });
+    if (!map) { if (window._kbCourierMapPending === order.id) window._kbCourierMapPending = null; return; }
+    if (window._kbCourierMapPending !== order.id || window._kbCourierMapOrderId !== order.id) { map.remove(); return; } // keburu ditutup/ganti order
+    window._kbCourierMapPending = null;
     window._kbCourierMap = map;
     const alive = () => window._kbCourierMap === map;
-    // Basemap: OpenFreeMap vektor (label Latin) → fallback raster CARTO (pola sama peta rute)
-    _kbEnsureMapLibre().then(ok => {
-      if (!alive()) return;
-      if (ok && L.maplibreGL) {
-        try {
-          const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(map);
-          const mm = gl.getMaplibreMap ? gl.getMaplibreMap() : gl._glMap;
-          if (mm) mm.on('load', () => _kbForceLatinLabels(mm));
-          return;
-        } catch (e) {}
-      }
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map); // cadangan (CARTO kini wajib API key)
-    });
-    const mkIcon = (color, label) => L.divIcon({
-      className: 'yk-route-pin',
-      html: '<div style="display:flex;flex-direction:column;align-items:center">'
-        + '<div style="width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:' + color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></div>'
-        + '<span style="margin-top:1px;font-size:9px;font-weight:800;color:#111827;background:rgba(255,255,255,.92);padding:0 5px;border-radius:4px">' + label + '</span>'
-        + '</div>',
-      iconSize: [40, 40], iconAnchor: [20, 24]
-    });
-    L.marker([fLat, fLng], { icon: mkIcon('#10B981', 'Jemput') }).addTo(map);
-    L.marker([tLat, tLng], { icon: mkIcon('#EF4444', 'Tujuan') }).addTo(map);
+    map.addMarker([fLat, fLng], _ykRoutePinSpec('#10B981', 'Jemput'));
+    map.addMarker([tLat, tLng], _ykRoutePinSpec('#EF4444', 'Tujuan'));
     // Padding bawah besar supaya rute/pin tidak ketutupan kartu profil yang menutup separuh bawah.
-    const fitAll = () => { try { map.fitBounds(L.latLngBounds([[fLat, fLng], [tLat, tLng]]), { paddingTopLeft: [40, 60], paddingBottomRight: [40, 300] }); } catch (e) {} };
-    let line = L.polyline([[fLat, fLng], [tLat, tLng]], { color: '#10B981', weight: 4, opacity: .5, dashArray: '6,8' }).addTo(map);
+    const fitAll = () => { try { map.fitBounds([[fLat, fLng], [tLat, tLng]], { paddingTopLeft: [40, 60], paddingBottomRight: [40, 300] }); } catch (e) {} };
+    let line = map.addPolyline([[fLat, fLng], [tLat, tLng]], { color: '#10B981', weight: 4, opacity: .5, dashArray: '6,8' });
     fitAll();
-    _attachBuildingFootprints(map);
+    // Bangunan kini digambar langsung oleh style peta → tak perlu _attachBuildingFootprints.
     _ykLoadPatokanMarkers(map, alive); // pin patokan admin di peta pengirim
     map.invalidateSize();
     setTimeout(() => { if (alive()) map.invalidateSize(); }, 400);
@@ -27578,7 +27575,7 @@ function _kbInitCourierMap(order) {
       if (!alive()) return;
       if (!path) { line.setStyle({ opacity: .85, dashArray: null }); return; }
       try { map.removeLayer(line); } catch (e) {}
-      line = L.polyline(path, { color: '#10B981', weight: 5, opacity: .9 }).addTo(map);
+      line = map.addPolyline(path, { color: '#10B981', weight: 5, opacity: .9 });
       fitAll();
     });
     _kbSubscribeCourierLoc(order.id, map, fLat, fLng); // terima posisi kurir realtime
@@ -27591,11 +27588,10 @@ function _kbInitCourierMap(order) {
 function _kbSubscribeCourierLoc(orderId, map, pickupLat, pickupLng) {
   if (!window.supabase) return;
   if (_kbTrackChannel) { try { window.supabase.removeChannel(_kbTrackChannel); } catch (e) {} _kbTrackChannel = null; }
-  const meIcon = L.divIcon({
-    className: 'yk-live-dot',
+  const meSpec = {
     html: '<div style="width:30px;height:30px;border-radius:50%;background:#10B981;border:2.5px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-motorcycle" style="color:#fff;font-size:14px"></i></div>',
-    iconSize: [30, 30], iconAnchor: [15, 15]
-  });
+    size: [30, 30], anchor: [15, 15], interactive: false, zIndex: 4
+  };
   _kbTrackChannel = window.supabase.channel('yk_track_' + orderId, { config: { broadcast: { self: false } } })
     .on('broadcast', { event: 'loc' }, (msg) => {
       const payload = msg && msg.payload;
@@ -27603,7 +27599,7 @@ function _kbSubscribeCourierLoc(orderId, map, pickupLat, pickupLng) {
       const lat = +payload.lat, lng = +payload.lng;
       if (isNaN(lat) || isNaN(lng)) return;
       _kbCourierLast = { lat, lng };
-      if (!_kbCourierDot) _kbCourierDot = L.marker([lat, lng], { icon: meIcon, interactive: false, keyboard: false }).addTo(map);
+      if (!_kbCourierDot) _kbCourierDot = map.addMarker([lat, lng], meSpec);
       else _kbCourierDot.setLatLng([lat, lng]);
       const rc = document.getElementById('kbCourierRecenter'); if (rc) rc.style.display = 'flex';
       const km = _yfHaversineKm(lat, lng, pickupLat, pickupLng);
@@ -27617,7 +27613,7 @@ function _kbSubscribeCourierLoc(orderId, map, pickupLat, pickupLng) {
           if (window._kbCourierMap !== map) return;
           if (_kbCourierLine) { try { map.removeLayer(_kbCourierLine); } catch (e) {} }
           const pts = pathC || [[lat, lng], [pickupLat, pickupLng]];
-          _kbCourierLine = L.polyline(pts, { color: '#2563EB', weight: 4, opacity: .85, dashArray: pathC ? null : '6,8' }).addTo(map);
+          _kbCourierLine = map.addPolyline(pts, { color: '#2563EB', weight: 4, opacity: .85, dashArray: pathC ? null : '6,8' });
         });
       }
     })
@@ -27625,7 +27621,7 @@ function _kbSubscribeCourierLoc(orderId, map, pickupLat, pickupLng) {
 }
 window._kbRecenterCourier = function() {
   const m = window._kbCourierMap, p = _kbCourierLast;
-  if (m && p) m.setView([p.lat, p.lng], Math.max(m.getZoom(), 16));
+  if (m && p) m.setView([p.lat, p.lng], Math.max(m.getZoom(), 16), { animate: true });
 };
 
 // ── CHAT YALLAKURIR (pengirim <-> kurir) — satu percakapan per order, dipakai kedua sisi ──
@@ -29214,11 +29210,10 @@ const _YK_LIVE_REROUTE_M = 250;
 function _ykStartLiveDot(map, pickupLat, pickupLng) {
   _ykStopLiveDot();
   if (!navigator.geolocation) return;
-  const meIcon = L.divIcon({
-    className: 'yk-live-dot',
+  const meSpec = {
     html: '<div style="width:16px;height:16px;border-radius:50%;background:#2563EB;border:3px solid #fff;box-shadow:0 0 0 4px rgba(37,99,235,.25),0 1px 4px rgba(0,0,0,.35)"></div>',
-    iconSize: [16, 16], iconAnchor: [8, 8]
-  });
+    size: [16, 16], anchor: [8, 8], interactive: false, zIndex: 4
+  };
   let firstFix = true;
   window._ykLiveWatchId = navigator.geolocation.watchPosition(
     (pos) => {
@@ -29227,7 +29222,7 @@ function _ykStartLiveDot(map, pickupLat, pickupLng) {
       window._ykLiveLast = { lat, lng };
       // 1) Marker biru — buat sekali, selanjutnya cuma digeser (tanpa jaringan)
       if (!window._ykLiveMarker) {
-        window._ykLiveMarker = L.marker([lat, lng], { icon: meIcon, interactive: false, keyboard: false }).addTo(map);
+        window._ykLiveMarker = map.addMarker([lat, lng], meSpec);
       } else {
         window._ykLiveMarker.setLatLng([lat, lng]);
       }
@@ -29246,13 +29241,13 @@ function _ykStartLiveDot(map, pickupLat, pickupLng) {
           if (window._ykRouteMap !== map) return;
           if (window._ykLiveRouteLine) { try { map.removeLayer(window._ykLiveRouteLine); } catch (e) {} }
           const pts = path || [[lat, lng], [pickupLat, pickupLng]];
-          window._ykLiveRouteLine = L.polyline(pts, { color: '#2563EB', weight: 4, opacity: .85, dashArray: path ? null : '6,8' }).addTo(map);
+          window._ykLiveRouteLine = map.addPolyline(pts, { color: '#2563EB', weight: 4, opacity: .85, dashArray: path ? null : '6,8' });
         });
       }
       // 4) Sekali: rapatkan tampilan agar kurir + titik jemput sama-sama terlihat
       if (firstFix) {
         firstFix = false;
-        try { map.fitBounds(L.latLngBounds([[lat, lng], [pickupLat, pickupLng]]), { padding: [60, 60], maxZoom: 17 }); } catch (e) {}
+        try { map.fitBounds([[lat, lng], [pickupLat, pickupLng]], { padding: [60, 60], maxZoom: 17 }); } catch (e) {}
       }
     },
     () => { /* izin ditolak / GPS gagal — peta rute A→B tetap jalan tanpa titik kurir */ },
@@ -29271,8 +29266,9 @@ function _ykStopLiveDot() {
 }
 window._ykRecenterLive = function() {
   const m = window._ykRouteMap, p = window._ykLiveLast;
-  if (m && p) m.setView([p.lat, p.lng], Math.max(m.getZoom(), 16));
+  if (m && p) m.setView([p.lat, p.lng], Math.max(m.getZoom(), 16), { animate: true });
 };
+let _ykRouteOpenSeq = 0;
 window._ykShowRoute = function(orderId) {
   const o = (window._ykWaitingById || {})[orderId] || (window._ykMineById || {})[orderId];
   if (!o) { showToast('Data pesanan tidak ditemukan', 'red'); return; }
@@ -29286,38 +29282,22 @@ window._ykShowRoute = function(orderId) {
   _ykStopLiveDot();
   { const r = document.getElementById('ykRouteMeRow'); if (r) r.style.display = 'none'; }
   { const b = document.getElementById('ykRouteRecenter'); if (b) b.style.display = 'none'; }
-  setTimeout(() => {
+  const mySeq = ++_ykRouteOpenSeq;
+  if (window._ykRouteMap) { try { window._ykRouteMap.remove(); } catch (e) {} window._ykRouteMap = null; }
+  setTimeout(async () => {
     const el = document.getElementById('ykRouteMap');
-    if (window._ykRouteMap) { try { window._ykRouteMap.remove(); } catch (e) {} window._ykRouteMap = null; }
-    const map = L.map(el);
+    // Peta MapLibre (gaya Nuqto): bisa diputar & dimiringkan 3D
+    const map = await _ykMap(el, { center: [fLat, fLng], zoom: 15, controls: 'full', controlsTop: 12 });
+    const ov = document.getElementById('ykRouteMapOverlay');
+    if (!map) { if (mySeq === _ykRouteOpenSeq) showToast('Peta gagal dimuat, periksa koneksi lalu coba lagi', 'red'); return; }
+    if (mySeq !== _ykRouteOpenSeq || !ov || ov.style.display === 'none') { map.remove(); return; } // keburu ditutup/buka order lain
     window._ykRouteMap = map;
-    // Basemap: OpenFreeMap vektor (label Latin) → fallback raster CARTO — pola sama map picker.
-    _kbEnsureMapLibre().then(ok => {
-      if (window._ykRouteMap !== map) return;
-      if (ok && L.maplibreGL) {
-        try {
-          const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(map);
-          const mm = gl.getMaplibreMap ? gl.getMaplibreMap() : gl._glMap;
-          if (mm) mm.on('load', () => _kbForceLatinLabels(mm));
-          return;
-        } catch (e) {}
-      }
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map); // cadangan (CARTO kini wajib API key)
-    });
-    const mkIcon = (color, label) => L.divIcon({
-      className: 'yk-route-pin',
-      html: '<div style="display:flex;flex-direction:column;align-items:center">'
-        + '<div style="width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:' + color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></div>'
-        + '<span style="margin-top:1px;font-size:9px;font-weight:800;color:#111827;background:rgba(255,255,255,.92);padding:0 5px;border-radius:4px">' + label + '</span>'
-        + '</div>',
-      iconSize: [40, 40], iconAnchor: [20, 24]
-    });
-    L.marker([fLat, fLng], { icon: mkIcon('#10B981', 'Dari') }).addTo(map);
-    L.marker([tLat, tLng], { icon: mkIcon('#EF4444', 'Ke') }).addTo(map);
+    map.addMarker([fLat, fLng], _ykRoutePinSpec('#10B981', 'Dari'));
+    map.addMarker([tLat, tLng], _ykRoutePinSpec('#EF4444', 'Ke'));
     // Garis lurus putus-putus dulu (tampil instan) → diganti rute JALAN dari ORS bila berhasil.
-    let line = L.polyline([[fLat, fLng], [tLat, tLng]], { color: '#10B981', weight: 4, opacity: .5, dashArray: '6,8' }).addTo(map);
-    map.fitBounds(line.getBounds(), { padding: [60, 60], maxZoom: 17 });
-    _attachBuildingFootprints(map); // jejak bangunan asli (OSM) — biar area kosong di peta terlihat natural
+    let line = map.addPolyline([[fLat, fLng], [tLat, tLng]], { color: '#10B981', weight: 4, opacity: .5, dashArray: '6,8' });
+    map.fitBounds(line.getBounds(), { padding: [60, 60], maxZoom: 17, animate: false });
+    // Bangunan kini digambar langsung oleh style peta → tak perlu _attachBuildingFootprints.
     _ykLoadPatokanMarkers(map); // pin patokan admin di rute — hanya tampil saat zoom dekat
     map.invalidateSize();
     setTimeout(() => { if (window._ykRouteMap === map) map.invalidateSize(); }, 400);
@@ -29325,37 +29305,35 @@ window._ykShowRoute = function(orderId) {
       if (window._ykRouteMap !== map) return; // overlay keburu ditutup
       if (!path) { line.setStyle({ opacity: .85, dashArray: null }); return; } // ORS gagal → garis lurus solid
       try { map.removeLayer(line); } catch (e) {}
-      line = L.polyline(path, { color: '#10B981', weight: 5, opacity: .9 }).addTo(map);
+      line = map.addPolyline(path, { color: '#10B981', weight: 5, opacity: .9 });
       map.fitBounds(line.getBounds(), { padding: [60, 60], maxZoom: 17 });
     });
     _ykStartLiveDot(map, fLat, fLng); // titik kurir hidup + rute kurir→jemput (hemat bandwidth)
   }, 60);
 };
 
-// Render patokan aktif sebagai pin non-interaktif di peta rute pengantaran (sisi kurir).
-// Visibilitas per-pin bertingkat: lihat _patokanVisibleAtZoom (dipakai bersama dengan
-// map picker Kirim Barang) — zoom 16 tampilkan yang longgar, zoom 20 tampilkan semua.
+// Render patokan aktif sebagai pin non-interaktif di peta rute pengantaran (sisi kurir)
+// & peta Kurir Ditemukan (sisi pengirim). Visibilitas per-pin bertingkat: lihat
+// _patokanVisibleAtZoom — zoom 16 tampilkan yang longgar, zoom 18+ tampilkan semua.
 async function _ykLoadPatokanMarkers(map, aliveFn) {
   const alive = (typeof aliveFn === 'function') ? aliveFn : (() => window._ykRouteMap === map);
   try {
     const r = await window._supaFetch('/rest/v1/patokan?status=eq.active&select=name,category,lat,lng&limit=500');
     const rows = r.ok ? await r.json() : [];
     if (!alive()) return; // overlay keburu ditutup / map lain sudah dibuat
-    const layer = L.layerGroup().addTo(map);
     const entries = [];
     rows.forEach(p => {
       if (p.lat == null || p.lng == null) return;
       const cat = _patokanCat(p.category);
-      const icon = L.divIcon({
-        className: 'yk-patokan-pin',
+      const m = map.addMarker([p.lat, p.lng], {
         html: '<div style="display:flex;flex-direction:column;align-items:center">'
           + '<div style="width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:' + cat.color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center">'
           + '<i class="fa-solid ' + cat.icon + '" style="color:#fff;font-size:10px;transform:rotate(45deg)"></i></div>'
           + '<span style="margin-top:2px;font-size:8.5px;font-weight:800;color:' + cat.color + ';text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 1px 2px rgba(0,0,0,.2);text-align:center;white-space:normal;word-break:break-word;max-width:88px;line-height:1.15">' + _sadEscHtml(p.name) + '</span>'
           + '</div>',
-        iconSize: [88, 40], iconAnchor: [44, 22]
+        size: [88, 40], anchor: [44, 22], interactive: false, zIndex: 1
       });
-      const m = L.marker([p.lat, p.lng], { icon, draggable: false, keyboard: false, interactive: false });
+      m.remove(); // tampil/sembunyi diatur applyZoom
       entries.push({ lat: p.lat, lng: p.lng, marker: m });
     });
     if (!alive()) return;
@@ -29363,9 +29341,9 @@ async function _ykLoadPatokanMarkers(map, aliveFn) {
       if (!alive()) return;
       const visible = _patokanVisibleAtZoom(map, entries, map.getZoom());
       entries.forEach((e, i) => {
-        const has = layer.hasLayer(e.marker);
-        if (visible[i] && !has) layer.addLayer(e.marker);
-        else if (!visible[i] && has) layer.removeLayer(e.marker);
+        const has = e.marker._on;
+        if (visible[i] && !has) e.marker.addTo();
+        else if (!visible[i] && has) e.marker.remove();
       });
     };
     map.on('zoomend', applyZoom);
