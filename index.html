@@ -7783,31 +7783,27 @@ window.sendBroadcast = async function() {
   } catch(e) { showToast('Gagal broadcast: '+(e.message||e), 'red'); }
 };
 
-// Ambil semua user_id yang punya push subscription, pecah jadi kelompok 25,
-// kirim tiap kelompok ke Worker buat di-enqueue ke yallamart-broadcast-queue.
+// Push siaran (notif di layar saat app ditutup) — TAHAP A (2026-11-06):
+// dikirim lewat edge function quick-responder TANPA user_id = ke SEMUA pelanggan,
+// jalur yang sama dengan notif chat: Web Push (iPhone/browser) + FCM (aplikasi Android),
+// prioritas tinggi (tembus mode tidur HP), langganan/token mati dibersihkan otomatis.
+// Dulu: RPC get_broadcast_user_ids (Web Push saja) → Worker /broadcast-enqueue (Cloudflare
+// Queue) — pengguna FCM tak terjangkau & prioritas tak terjamin.
+// TAHAP B (saat rilis Capacitor): Android lewat topik FCM + lewati Web Push 'android'
+// milik akun yang punya token FCM (kolom push_subscriptions.platform) → anti notif ganda.
 window.sendBroadcastPush = async function(msg) {
-  const r = await window._supaFetch('/rest/v1/rpc/get_broadcast_user_ids', { method: 'POST', body: JSON.stringify({}) });
-  if(!r.ok) { console.warn('[broadcast push] gagal ambil user_ids'); return; }
-  const rows = await r.json().catch(function(){ return []; });
-  const userIds = (rows||[]).map(function(row){ return row.user_id; }).filter(Boolean);
-  if(!userIds.length) return;
-
-  const CHUNK = 25;
-  const chunks = [];
-  for(let i = 0; i < userIds.length; i += CHUNK) chunks.push(userIds.slice(i, i + CHUNK));
-
-  await Promise.allSettled(chunks.map(function(chunk){
-    return fetch(`${window._R2_URL}/broadcast-enqueue`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': R2_AUTH_TOKEN },
-      body: JSON.stringify({
-        user_ids: chunk,
-        title: '📢 Pesan Siaran YallaMart',
-        body: msg,
-        url: '/'
-      })
-    });
-  }));
+  const r = await fetch(`${window._SUPA_URL}/functions/v1/quick-responder`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + (window._S?._accessToken || window._SUPA_ANON)
+    },
+    body: JSON.stringify({ title: '📢 Pesan Siaran YallaMart', body: msg, url: '/' })
+  });
+  const j = await r.json().catch(function(){ return {}; });
+  if (!r.ok) { console.warn('[broadcast push] gagal:', r.status, j); return j; }
+  console.log('[broadcast push] terkirim:', j);
+  return j;
 };
 
 // Mark a single notif as read (Supabase)
@@ -15348,29 +15344,26 @@ window.sendBroadcastMassal = async function() {
   }
 };
 
-// Pecah daftar user_id jadi kelompok 25, kirim tiap kelompok ke Worker
-// buat di-enqueue ke yallamart-broadcast-queue (fan-out push notification).
+// Push siaran dari menu "Kirim Pesan Siaran" — TAHAP A (2026-11-06):
+// satu panggilan ke quick-responder TANPA user_id = ke SEMUA pelanggan Web Push
+// (iPhone/browser) + semua token FCM (aplikasi Android), prioritas tinggi, langganan
+// mati dibersihkan otomatis. Parameter userIds dipertahankan supaya pemanggil lama
+// tidak berubah, tapi tidak dipakai lagi (dulu: dipecah per 25 → Worker /broadcast-enqueue
+// → Cloudflare Queue, yang tak menjangkau FCM & prioritasnya tak terjamin).
+// TAHAP B (rilis Capacitor): Android lewat topik FCM + anti notif ganda (push_subscriptions.platform).
 window.sendBroadcastPushBatch = async function(userIds, title, body) {
-  if(!userIds || !userIds.length) return;
-  // Catatan: R2_AUTH_TOKEN dideklarasikan di dalam <script type="module"> sehingga
-  // tidak terjangkau dari script biasa ini — token ditulis ulang di sini saja.
-  const _authToken = 'yallamart2024secret';
-  const CHUNK = 25;
-  const chunks = [];
-  for(let i = 0; i < userIds.length; i += CHUNK) chunks.push(userIds.slice(i, i + CHUNK));
-
-  await Promise.allSettled(chunks.map(function(chunk){
-    return fetch(`${window._R2_URL}/broadcast-enqueue`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': _authToken },
-      body: JSON.stringify({
-        user_ids: chunk,
-        title: title || '📢 Pesan Siaran YallaMart',
-        body: body,
-        url: '/'
-      })
-    });
-  }));
+  const r = await fetch(`${window._SUPA_URL}/functions/v1/quick-responder`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + (window._S?._accessToken || window._SUPA_ANON)
+    },
+    body: JSON.stringify({ title: title || '📢 Pesan Siaran YallaMart', body: body, url: '/' })
+  });
+  const j = await r.json().catch(function(){ return {}; });
+  if (!r.ok) { console.warn('[broadcast push] gagal:', r.status, j); return j; }
+  console.log('[broadcast push] terkirim:', j);
+  return j;
 };
 </script>
 
@@ -24383,6 +24376,9 @@ async function _yfLoadTracking() {
         }
       }
     } catch (e) { console.warn('[YallaFood Tracking] gagal hitung badge chat kurir:', e.message); }
+    // Angka yang SAMA dipakai juga oleh badge Chat Kurir di panel Lacak (satu sumber, dua tampilan)
+    window._yfBuyerUnreadByOrder = unreadMap;
+    if (typeof window._yfTrackRefreshBadge === 'function') window._yfTrackRefreshBadge();
 
     // Foto profil kurir — batch query 1x ke tabel users (bukan loop per-row).
     const courierPhotoMap = {};
@@ -26033,6 +26029,12 @@ window.closeYfChat = function() {
   // bukan menunggu event realtime berikutnya.
   const dash = document.getElementById('kurirDashboard');
   if (dash && dash.style.display === 'flex') _kurirLoadMyDeliveries();
+  // Sama untuk sisi PEMBELI: badge 'Chat Kurir' di kartu (& di panel Lacak) langsung hilang setelah dibaca
+  const trk = document.getElementById('yallaFoodOrderTracking');
+  if (trk && trk.style.display === 'flex' && typeof _yfLoadTracking === 'function') _yfLoadTracking();
+  // Panel Lacak masih terbuka di belakang chat → halaman tetap fullscreen (jangan bisa di-scroll)
+  const tp = document.getElementById('yfTrackPanel');
+  if (tp && tp.style.display === 'flex') document.body.style.overflow = 'hidden';
 };
 
 async function _yfChatLoadMessages() {
@@ -30045,7 +30047,7 @@ document.addEventListener('DOMContentLoaded', () => {
       '    <div style="display:flex;gap:7px;align-items:flex-start"><span style="width:10px;height:10px;border-radius:50%;background:#F59E0B;flex-shrink:0;margin-top:3px"></span><span id="yfTrackShop">Mat\'am</span></div>' +
       '    <div style="display:flex;gap:7px;align-items:flex-start;margin-top:5px"><span style="width:10px;height:10px;border-radius:50%;background:#EF4444;flex-shrink:0;margin-top:3px"></span><span>Alamat kamu</span></div>' +
       '  </div>' +
-      '  <button id="yfTrackChatBtn" class="w-full text-sm font-bold text-white rounded-2xl py-3" style="background:#10B981;border:none;cursor:pointer"><i class="fa-solid fa-comment-dots mr-1.5"></i>Chat Kurir</button>' +
+      '  <button id="yfTrackChatBtn" class="w-full text-sm font-bold text-white rounded-2xl py-3" style="position:relative;background:#10B981;border:none;cursor:pointer"><i class="fa-solid fa-comment-dots mr-1.5"></i>Chat Kurir<span id="yfTrackChatBadge" style="display:none;position:absolute;top:-7px;right:10px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;min-width:20px;height:20px;border-radius:999px;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fff;box-shadow:0 2px 6px rgba(239,68,68,.4)"></span></button>' +
       '</div>';
     document.body.appendChild(d);
   }
@@ -30075,7 +30077,12 @@ document.addEventListener('DOMContentLoaded', () => {
     el('yfTrackSub').textContent = 'Menunggu posisi kurir…';
     el('yfTrackShop').textContent = (o.seller_name || "Mat'am");
     el('yfTrackRecenter').style.display = 'none';
-    el('yfTrackChatBtn').onclick = function () { openYfChat(o.id, 'buyer_kurir', String(o.courier_name || 'Kurir').replace(/['"`]/g, '')); };
+    el('yfTrackChatBtn').onclick = function () {
+      setBadge(0); // membuka chat = pesan dianggap dibaca (lastRead diset oleh chat)
+      openYfChat(o.id, 'buyer_kurir', String(o.courier_name || 'Kurir').replace(/['"`]/g, ''));
+    };
+    _tpOrderId = orderId;
+    window._yfTrackRefreshBadge();
 
     // Titik Mat'am (dari shops) & titik pembeli (buyer_lat/lng di pesanan)
     let shop = null;
@@ -30146,6 +30153,20 @@ document.addEventListener('DOMContentLoaded', () => {
       .subscribe();
   };
 
+  // Badge pesan belum dibaca di tombol Chat Kurir panel — angka diambil dari hitungan
+  // _yfLoadTracking (window._yfBuyerUnreadByOrder), jadi selalu sama dengan badge di kartu.
+  let _tpOrderId = null;
+  function setBadge(n) {
+    const b = el('yfTrackChatBadge'); if (!b) return;
+    b.textContent = n > 9 ? '9+' : String(n || 0);
+    b.style.display = n > 0 ? 'flex' : 'none';
+  }
+  window._yfTrackRefreshBadge = function () {
+    const p = el('yfTrackPanel');
+    if (!p || p.style.display === 'none' || !_tpOrderId) return;
+    setBadge(((window._yfBuyerUnreadByOrder || {})[_tpOrderId]) || 0);
+  };
+
   window._yfTrackRecenter = function () {
     if (_tp && _tp.map && _tp.last) _tp.map.setView([_tp.last.lat, _tp.last.lng], Math.max(_tp.map.getZoom(), 16), { animate: true });
   };
@@ -30158,6 +30179,7 @@ document.addEventListener('DOMContentLoaded', () => {
       _tp = null;
     }
     if (keepOpen === true) return;
+    _tpOrderId = null;
     const p = el('yfTrackPanel'); if (p) p.style.display = 'none';
     document.body.style.overflow = 'hidden'; // halaman Pesanan Saya di belakang tetap fullscreen
   };
