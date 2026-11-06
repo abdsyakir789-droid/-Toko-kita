@@ -4948,8 +4948,8 @@ h3.text-sm.font-bold.text-gray-800 {
           <!-- Online status + typing indicator -->
           <div id="chatStatusRow" class="flex items-center gap-1.5 h-4">
             <span id="chatOnlineText" class="text-[10px] text-green-500 font-semibold" style="display:none">● Online</span>
-            <span id="chatOfflineText" class="text-[10px] text-gray-400 font-medium flex items-center gap-1" style="display:none">
-              <i id="chatOfflineIcon" class="fa-solid fa-store text-[8px]"></i> <span id="chatOfflineLabel">Ketuk untuk lihat etalase</span>
+            <span id="chatOfflineText" class="font-semibold flex items-center gap-1" style="display:none;font-size:12px;color:#374151">
+              <i id="chatOfflineIcon" class="fa-solid fa-store text-[10px]"></i> <span id="chatOfflineLabel">Ketuk untuk lihat etalase</span>
             </span>
             <span id="chatTypingText" class="text-[10px] text-primary font-semibold italic" style="display:none">sedang mengetik...</span>
           </div>
@@ -11432,7 +11432,7 @@ function _refreshOnlineStatus() {
   if(_lbl && !online) {
     const _seenTxt = window._fmtLastSeen ? window._fmtLastSeen(window._S._otherLastSeen) : '';
     _lbl.textContent = _seenTxt || 'Ketuk untuk lihat etalase';
-    if(_ico) _ico.className = _seenTxt ? 'fa-regular fa-clock text-[8px]' : 'fa-solid fa-store text-[8px]';
+    if(_ico) _ico.className = _seenTxt ? 'fa-regular fa-clock text-[10px]' : 'fa-solid fa-store text-[10px]';
   }
 }
 
