@@ -10598,7 +10598,7 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
               <div style="padding:8px 12px">
                 ${(orderData.items||[]).map(it => `
                 <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f9fafb">
-                  <img src="${it.img||''}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#f3f4f6"/>
+                  <img src="${it.img||''}" style="width:60px;height:60px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#f3f4f6"/>
                   <div style="flex:1;min-width:0">
                     ${(window._orderItemVariant && window._orderItemVariant(it)) ? `<p style="font-size:11px;font-weight:800;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600;color:#6b7280">Varian:</span> ${window._escHtml(window._orderItemVariant(it))}</p>` : `<p style="font-size:11px;font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it.name||''}</p>`}
                     <p style="font-size:10px;font-weight:900;color:#10B981;margin-top:1px">${it.priceStr||''} <span style="color:#9ca3af;font-weight:500">x${it.qty}</span></p>
