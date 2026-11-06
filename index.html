@@ -3514,6 +3514,14 @@ try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capaci
         <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Daftar User</p>
       </div>
 
+      <!-- 7. Iklan Siaran — notifikasi push terjadwal (Admin Only) -->
+      <div onclick="openIklanSiaran()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 flex-1 transition-all hover:shadow-md hover:-translate-y-0.5 text-center cursor-pointer group">
+        <div class="w-10 h-10 rounded-xl bg-amber-50 group-hover:bg-amber-100 flex items-center justify-center flex-shrink-0 transition-colors">
+          <i class="fa-solid fa-bullhorn text-amber-500"></i>
+        </div>
+        <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Iklan Siaran</p>
+      </div>
+
     </div>
   </div>
 
@@ -19782,7 +19790,8 @@ window._routePushGo = function(params) {
     ykdash:   'openYkCourierDashboard',    // notif "cari kurir" → dashboard kurir YallaKurir
     yfkurir:  'openKurirDashboard',        // notif pesanan YallaFood → dashboard kurir YallaFood
     yfseller: 'openKelolaPesananYallaFood', // notif pesanan YallaFood → kelola pesanan (seller)
-    yforders: 'openFoodOrderTracking'       // notif status YallaFood → "Pesanan Saya" (buyer)
+    yforders: 'openFoodOrderTracking',      // notif status YallaFood → "Pesanan Saya" (buyer)
+    yfhome:   'openYallaFoodHome'           // Iklan Siaran terjadwal → beranda YallaFood
   };
   const fnName = fnMap[go];
   if (!fnName) return;
@@ -25683,6 +25692,10 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
   #matamTerdekatOverlay .mt-zoom-div{height:1px;margin:0 8px;background:#e5e7eb}
   #matamTerdekatOverlay .mt-locate-btn{position:absolute;left:12px;top:158px;z-index:450;width:46px;height:46px;border-radius:14px;background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 14px rgba(28,27,23,.14);display:flex;align-items:center;justify-content:center;color:#10B981;font-size:17px;cursor:pointer;padding:0}
   #matamTerdekatOverlay .mt-locate-btn:active{transform:scale(.92)}
+  #matamTerdekatOverlay .mt-follow-btn{position:absolute;left:12px;top:214px;z-index:450;width:46px;height:46px;border-radius:14px;background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 14px rgba(28,27,23,.14);display:flex;align-items:center;justify-content:center;color:#6b7280;cursor:pointer;padding:0;transition:transform .15s ease}
+  #matamTerdekatOverlay .mt-follow-btn:active{transform:scale(.92)}
+  #matamTerdekatOverlay .mt-follow-btn.on{color:#fff;background:#1E6FEB;border-color:transparent;box-shadow:0 4px 16px rgba(30,111,235,.5);animation:mtFollowPulse 1.6s ease-in-out infinite}
+  @keyframes mtFollowPulse{0%,100%{box-shadow:0 0 0 0 rgba(30,111,235,.5)}50%{box-shadow:0 0 0 8px rgba(30,111,235,0)}}
   @keyframes mtspin{to{transform:rotate(360deg)}}
 </style>
 <div id="matamTerdekatOverlay" style="display:none;position:fixed;inset:0;z-index:900;background:#fff;flex-direction:column">
@@ -25710,6 +25723,9 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
       </button>
     </div>
     <button type="button" class="mt-locate-btn" onclick="_mtLocate()" aria-label="Kembali ke lokasi saya" title="Kembali ke lokasi saya"><i class="fa-solid fa-location-crosshairs"></i></button>
+    <button type="button" id="mtFollowBtn" class="mt-follow-btn" onclick="_mtToggleFollow()" aria-label="Ikuti posisi saya" aria-pressed="false" title="Ikuti posisi saya">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+    </button>
     <div id="mtMapLoading" style="position:absolute;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#eef2f6;pointer-events:none">
       <div style="width:34px;height:34px;border:3px solid #d1d5db;border-top-color:#10B981;border-radius:50%;animation:mtspin .8s linear infinite"></div>
       <p style="margin:0;font-size:12px;color:#6b7280;font-weight:600">Memuat peta...</p>
@@ -25740,6 +25756,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
   let _mtManual = false; // true kalau lokasi di-set manual (GPS gagal)
   let _mtLastNear = [];  // mat'am ≤1km terakhir (dipakai utk fit)
   let _mtFitted = false;       // sudah auto-fit sekali?
+  let _mtFollow = false;       // mode "ikuti posisi": kamera peta mengikuti titik user saat berjalan
   let _mtUserMoved = false;    // user sudah geser/zoom peta sendiri?
   let _mtBasemapReady = false; // basemap sudah termuat?
   let _mtProg = false;         // penanda perubahan view oleh program (bukan user)
@@ -25765,6 +25782,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     ov.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     _mtManual = false; _mtFitted = false; _mtUserMoved = false; _mtBasemapReady = false;
+    _mtSetFollow(false, true);
     _mtShops = null; _mtFetchedOnce = false; _mtFetching = false; _mtFetchCenter = null; _mtLastTrackPt = null;
     document.getElementById('mtSubtitle').textContent = 'Memuat lokasi...';
     document.getElementById('mtList').innerHTML = '';
@@ -25777,6 +25795,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     ov.style.display = 'none';
     document.body.style.overflow = '';
     _mtStopWatch(); // matikan GPS live supaya tidak boros baterai
+    _mtSetFollow(false, true);
     _mtDestroyMap();
   }
 
@@ -25890,7 +25909,7 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     map.on('style.load', () => { if (_mtMap === map && _mtRouteCoords) _mtPaintRoute(false); }); // rute ikut pindah saat ganti style
     // Kalau user geser/zoom peta sendiri, jangan auto-fit lagi (biar tidak menyentak).
     // originalEvent hanya ada kalau gerakan berasal dari jari/mouse, bukan dari program.
-    map.on('dragstart', (e) => { if (e && e.originalEvent) _mtUserMoved = true; });
+    map.on('dragstart', (e) => { if (e && e.originalEvent) { _mtUserMoved = true; if (_mtFollow) { _mtSetFollow(false, true); try { showToast('Berhenti mengikuti posisi'); } catch (er) {} } } });
     map.on('zoomstart', (e) => { if (e && e.originalEvent && !_mtProg) _mtUserMoved = true; });
     // WebGL context bisa hilang saat app di-background lama → izinkan browser memulihkan.
     try {
@@ -25989,13 +26008,42 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     if (!first && _mtLastTrackPt && _mtHaversineM(_mtLastTrackPt.lat, _mtLastTrackPt.lng, lat, lng) < 8) return;
     _mtLastTrackPt = { lat: lat, lng: lng };
     _mtManual = false;
-    if (first) { _mtSetUser(lat, lng); return; } // fix pertama: set + ambil data + boleh auto-fit sekali
+    if (first) { _mtSetUser(lat, lng); if (_mtFollow) _mtFollowCam(false); return; } // fix pertama: set + ambil data + boleh auto-fit sekali
     // update berikutnya: geser titik + perbarui jarak/garis, TANPA memindah/zoom peta (biar tidak menyentak)
     _mtUser = { lat: Number(lat), lng: Number(lng) };
     if (_mtFetchCenter && _mtHaversineM(_mtUser.lat, _mtUser.lng, _mtFetchCenter.lat, _mtFetchCenter.lng) > 800) { _mtShops = null; _mtFetchShops(); }
     else if (!_mtFetchedOnce && !_mtFetching) { _mtFetchRetry = 0; _mtShops = null; _mtFetchShops(); } // fetch pertama gagal → coba lagi saat GPS update, tanpa tutup-buka
     else { _mtDraw(); }
+    if (_mtFollow) _mtFollowCam(true);
   }
+
+  // ── Mode ikuti posisi ──
+  function _mtFollowCam(animate) {
+    if (!_mtMap || !_mtUser) return;
+    _mtProgView(() => {
+      try {
+        const opt = { center: [_mtUser.lng, _mtUser.lat], zoom: Math.max(_mtMap.getZoom(), 16) };
+        animate ? _mtMap.easeTo(Object.assign(opt, { duration: 800 })) : _mtMap.jumpTo(opt);
+      } catch (e) {}
+    });
+  }
+  function _mtSetFollow(on, silent) {
+    _mtFollow = !!on;
+    const b = document.getElementById('mtFollowBtn');
+    if (b) { b.classList.toggle('on', _mtFollow); b.setAttribute('aria-pressed', _mtFollow ? 'true' : 'false'); }
+    if (!_mtFollow) return;
+    _mtFitted = true;        // jangan ada auto-fit yang menarik kamera ke tempat lain
+    _mtStartWatch();         // pastikan GPS live aktif
+    if (_mtUser) _mtFollowCam(true);
+    if (!silent) { try { showToast(_mtUser ? 'Mengikuti posisimu…' : 'Menunggu lokasimu…'); } catch (e) {} }
+  }
+  window._mtToggleFollow = function () {
+    if (_mtFollow) { _mtSetFollow(false, true); try { showToast('Berhenti mengikuti posisi'); } catch (e) {} }
+    else {
+      if (_mtManual) { try { showToast('Aktifkan GPS dulu untuk mengikuti posisi'); } catch (e) {} return; }
+      _mtSetFollow(true);
+    }
+  };
 
   function _mtFallbackManual(msg) {
     _mtManual = true;
@@ -27298,7 +27346,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
     </div>
     <button onclick="_kbMapUseGps()" title="Lokasi saya" style="position:absolute;right:14px;bottom:14px;z-index:500;width:44px;height:44px;border-radius:50%;background:#fff;border:none;box-shadow:0 2px 10px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fa-solid fa-crosshairs text-primary"></i></button>
   </div>
-  <div class="bg-white border-t border-gray-100 px-4 py-3" style="flex-shrink:0">
+  <div id="kbMapPickerFooter" class="bg-white border-t border-gray-100 px-4 py-3" style="flex-shrink:0">
     <p class="text-[11px] text-gray-500 text-center mb-2">Geser pin atau ketuk peta untuk menentukan titik.</p>
     <button onclick="_kbConfirmMap()" class="w-full bg-primary text-white font-bold rounded-2xl py-3.5 text-sm"><i class="fa-solid fa-check mr-1"></i>Gunakan Titik Ini</button>
     <button onclick="_patokanOpenAdd()" class="w-full mt-2 text-primary bg-pl font-bold rounded-2xl py-2.5 text-xs"><i class="fa-solid fa-map-pin mr-1"></i>Jadikan titik ini sebagai Patokan</button>
@@ -27317,15 +27365,15 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
 <div id="patokanAddOverlay" style="display:none;position:fixed;inset:0;z-index:66;background:rgba(17,24,39,.5);align-items:flex-end;justify-content:center">
   <div style="background:#fff;width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:18px 18px 24px;max-height:88vh;overflow-y:auto">
     <div class="flex items-center justify-between mb-2">
-      <h3 class="font-bold text-base">Tambah Patokan</h3>
+      <h3 id="patokanSheetTitle" class="font-bold text-base">Tambah Patokan</h3>
       <button onclick="_patokanCloseAdd()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-xmark text-gray-500"></i></button>
     </div>
-    <p class="text-xs text-gray-500 mb-3">Simpan lokasi ini sebagai patokan biar gampang dicari lain kali. Patokan bisa dicari semua pengguna YallaMart.</p>
+    <p id="patokanSheetDesc" class="text-xs text-gray-500 mb-3">Simpan lokasi ini sebagai patokan biar gampang dicari lain kali. Patokan bisa dicari semua pengguna YallaMart.</p>
     <label class="text-xs font-bold text-gray-700 mb-1.5 block">Nama Patokan</label>
     <input id="patokanNameInput" type="text" placeholder="Contoh: Masjid Indonesia, Asrama Darrosah" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mb-3 outline-none"/>
     <label class="text-xs font-bold text-gray-700 mb-2 block">Kategori</label>
     <div id="patokanCatGrid" class="grid grid-cols-4 gap-1.5 mb-4"></div>
-    <button onclick="_patokanSubmitAdd()" id="patokanSaveBtn" class="w-full bg-primary text-white font-bold rounded-2xl py-3 text-sm"><i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Patokan</button>
+    <button onclick="_patokanSaveClick()" id="patokanSaveBtn" class="w-full bg-primary text-white font-bold rounded-2xl py-3 text-sm"><i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Patokan</button>
   </div>
 </div>
 
@@ -28562,7 +28610,7 @@ window._kbOpenMap = function(target) {
     if (mySeq !== _kbMapOpenSeq || !ov || ov.style.display === 'none') { map.remove(); return; } // keburu ditutup/dibuka ulang
     const marker = map.addMarker([clat, clng], Object.assign({ draggable: true, zIndex: 3 }, _kbFlagIcon(target === 'from' ? 'start' : 'finish')));
     // Taruh/geser pin sendiri = bukan patokan lagi → kolom nanti pakai koordinat.
-    map.on('click', (e) => { marker.setLatLng(e.latlng); st._selPatokan = null; const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none'; _kbRefreshRouteOverlay(); });
+    map.on('click', (e) => { if (st._patMove) { st._patMove.marker.setLatLng(e.latlng); return; } marker.setLatLng(e.latlng); st._selPatokan = null; const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none'; _kbRefreshRouteOverlay(); });
     marker.on('dragend', () => { st._selPatokan = null; _kbRefreshRouteOverlay(); });
     st._map = map; st._marker = marker; st._routeLine = null;
     // Titik LAIN yang sudah dikonfirmasi sebelumnya (Dari kalau lagi pilih Ke, atau sebaliknya)
@@ -28682,7 +28730,7 @@ async function _kbLoadPatokanMarkers(map) {
   if (st._patokanLayer) { try { st._patokanLayer.remove(); } catch (e) {} st._patokanLayer = null; }
   if (st._patokanZoomHandler) { try { map.off('zoomend', st._patokanZoomHandler); } catch (e) {} st._patokanZoomHandler = null; }
   try {
-    const r = await window._supaFetch('/rest/v1/patokan?status=eq.active&select=name,category,lat,lng&limit=500');
+    const r = await window._supaFetch('/rest/v1/patokan?status=eq.active&select=id,name,category,lat,lng&limit=500');
     const rows = r.ok ? await r.json() : [];
     if (!st._map || st._map !== map) return; // overlay keburu ditutup
     const entries = [];
@@ -28691,13 +28739,18 @@ async function _kbLoadPatokanMarkers(map) {
       const m = map.addMarker([p.lat, p.lng], Object.assign({ draggable: false, zIndex: 1 }, _kbPatokanSpec(p)));
       m.remove(); // tampil/sembunyi diatur applyZoom
       m.on('click', () => {
+        if (st._patMove) return; // sedang mode geser patokan
+        if (_patokanIsAdmin()) { _patokanAdminMenu(p, () => _kbUsePatokan(p)); return; } // admin: menu kelola
+        _kbUsePatokan(p);
+      });
+      const _kbUsePatokan = (p) => {
         if (st._marker) st._marker.setLatLng([p.lat, p.lng]);
         st._selPatokan = { name: p.name, lat: p.lat, lng: p.lng }; // titik ini = patokan → pakai namanya
         map.setView([p.lat, p.lng], Math.max(map.getZoom(), 16), { animate: true });
         const inp = document.getElementById('kbMapSearchInput'); if (inp) inp.value = p.name;
         const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none';
         _kbRefreshRouteOverlay();
-      });
+      };
       entries.push({ lat: p.lat, lng: p.lng, marker: m });
     });
     st._patokanLayer = { remove: () => entries.forEach(e => e.marker.remove()) };
@@ -28718,6 +28771,7 @@ async function _kbLoadPatokanMarkers(map) {
 
 window._kbCloseMap = function() {
   const st = window._kbState;
+  try { _patokanMoveEnd(); } catch (e) {}
   _kbMapOpenSeq++; // batalkan peta yang masih dimuat
   if (st._map) { try { st._map.remove(); } catch (e) {} st._map = null; st._marker = null; }
   document.getElementById('kbMapPickerOverlay').style.display = 'none';
@@ -28764,7 +28818,8 @@ window._patokanAddState = { lat: null, lng: null, cat: 'umum' };
 // + batalkan request lama tiap kali modal dibuka ATAU ditutup, apapun kondisinya.
 function _patokanResetSaveBtn() {
   const btn = document.getElementById('patokanSaveBtn');
-  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Patokan'; }
+  const edit = window._patokanAddState && window._patokanAddState.mode === 'edit';
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>' + (edit ? 'Simpan Perubahan' : 'Simpan Patokan'); }
 }
 window._patokanAbortCtrl = null;
 function _patokanAbortPending() {
@@ -28780,7 +28835,8 @@ window._patokanOpenAdd = function() {
   const st = window._kbState;
   if (!st._marker) { showToast('Tentukan titik dulu di peta', 'red'); return; }
   const pos = st._marker.getLatLng();
-  window._patokanAddState = { lat: pos.lat, lng: pos.lng, cat: 'umum' };
+  window._patokanAddState = { lat: pos.lat, lng: pos.lng, cat: 'umum', mode: 'add' };
+  _patokanSheetMode('add');
   _patokanAbortPending();
   _patokanResetSaveBtn();
   const grid = document.getElementById('patokanCatGrid');
@@ -28836,6 +28892,7 @@ window._patokanSubmitAdd = async function() {
     showToast('Patokan tersimpan!', 'green');
     window._patokanAbortCtrl = null;
     _patokanCloseAdd();
+    try { if (window._kbState && window._kbState._map) _kbLoadPatokanMarkers(window._kbState._map); } catch (e) {}
   } catch (e) {
     clearTimeout(timer);
     window._patokanAbortCtrl = null;
@@ -28846,6 +28903,183 @@ window._patokanSubmitAdd = async function() {
     if (wasManual) return;
     showToast(e && e.name === 'AbortError' ? 'Jaringan lambat, coba lagi ya' : ('Gagal menyimpan: ' + (e.message || 'error')), 'red');
     reset();
+  }
+};
+
+// ── KELOLA PATOKAN (KHUSUS ADMIN) ──
+// Ketuk pin patokan di peta Kirim Barang → menu: Pakai titik / Edit nama & kategori /
+// Geser posisi / Sembunyikan. Database sudah membatasi UPDATE patokan hanya untuk
+// email admin (RLS), tombol ini hanya tampilan. Semua tulis pakai return=representation
+// + cek baris (anti gagal senyap). "Sembunyikan" = status 'hidden' (bisa dipulihkan),
+// bukan hapus permanen.
+function _patokanIsAdmin() {
+  const u = window._S && window._S.user;
+  return !!u && (u.email || '').toLowerCase() === 'abdsyakir160@gmail.com';
+}
+function _patokanSheetMode(mode) {
+  const t = document.getElementById('patokanSheetTitle');
+  const d = document.getElementById('patokanSheetDesc');
+  if (mode === 'edit') {
+    if (t) t.textContent = 'Edit Patokan';
+    if (d) d.textContent = 'Ubah nama atau kategori patokan ini. Perubahan langsung terlihat oleh semua pengguna.';
+  } else {
+    if (t) t.textContent = 'Tambah Patokan';
+    if (d) d.textContent = 'Simpan lokasi ini sebagai patokan biar gampang dicari lain kali. Patokan bisa dicari semua pengguna YallaMart.';
+  }
+}
+window._patokanSaveClick = function() {
+  if (window._patokanAddState && window._patokanAddState.mode === 'edit') return _patokanSubmitEdit();
+  return window._patokanSubmitAdd();
+};
+// PATCH patokan by id; kembalikan baris hasil (lempar error kalau 0 baris/ditolak)
+async function _patokanPatch(id, body) {
+  if (!window._S?._accessToken) throw new Error('Sesi login habis, masuk ulang dulu');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await window._supaFetch('/rest/v1/patokan?id=eq.' + encodeURIComponent(id), {
+      method: 'PATCH', prefer: 'return=representation', signal: ctrl.signal, body: JSON.stringify(body)
+    });
+    const txt = await res.text().catch(() => '');
+    let rows = []; try { rows = txt ? JSON.parse(txt) : []; } catch (e) {}
+    if (!res.ok) throw new Error((rows && rows.message) ? rows.message : ('HTTP ' + res.status));
+    if (!Array.isArray(rows) || !rows.length) throw new Error('tidak tersimpan (akses ditolak)');
+    return rows[0];
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('Jaringan lambat, coba lagi');
+    throw e;
+  } finally { clearTimeout(timer); }
+}
+function _patokanReloadPins() {
+  try { const st = window._kbState; if (st && st._map) _kbLoadPatokanMarkers(st._map); } catch (e) {}
+}
+
+window._patokanAdminMenu = function(p, useFn) {
+  let ov = document.getElementById('patokanAdminSheet');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'patokanAdminSheet';
+    ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:66;background:rgba(17,24,39,.5);align-items:flex-end;justify-content:center';
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.style.display = 'none'; });
+    document.body.appendChild(ov);
+  }
+  const cat = _patokanCat(p.category);
+  const row = (icon, color, label, sub, act) => '<button type="button" data-act="' + act + '" style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 4px;background:none;border:none;border-bottom:1px solid #f3f4f6;cursor:pointer;text-align:left">'
+    + '<span style="width:36px;height:36px;border-radius:12px;background:' + color + '1A;color:' + color + ';display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid ' + icon + '"></i></span>'
+    + '<span style="flex:1;min-width:0"><span style="display:block;font-size:13.5px;font-weight:800;color:' + (act === 'hide' ? '#DC2626' : '#111827') + '">' + label + '</span><span style="display:block;font-size:11px;color:#6b7280;margin-top:1px">' + sub + '</span></span></button>';
+  ov.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:16px 18px calc(18px + env(safe-area-inset-bottom,0px))">'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'
+    + '<span style="width:34px;height:34px;border-radius:50%;background:' + cat.color + ';color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid ' + cat.icon + '" style="font-size:13px"></i></span>'
+    + '<div style="flex:1;min-width:0"><p style="margin:0;font-size:15px;font-weight:900;color:#111827;word-break:break-word">' + _sadEscHtml(p.name) + '</p><p style="margin:0;font-size:11px;color:#6b7280">' + _sadEscHtml(cat.label) + ' · <span style="color:#7C3AED;font-weight:700">Kelola (admin)</span></p></div>'
+    + '<button type="button" data-act="close" aria-label="Tutup" style="width:32px;height:32px;border-radius:50%;border:none;background:#f3f4f6;cursor:pointer"><i class="fa-solid fa-xmark" style="color:#6b7280"></i></button></div>'
+    + row('fa-location-dot', '#10B981', 'Pakai titik ini', 'Jadikan patokan ini titik pilihan', 'use')
+    + row('fa-pen', '#3B82F6', 'Edit nama & kategori', 'Ubah teks atau jenis patokan', 'edit')
+    + row('fa-up-down-left-right', '#F59E0B', 'Geser posisi', 'Pindahkan pin ke titik yang benar', 'move')
+    + row('fa-eye-slash', '#DC2626', 'Sembunyikan patokan', 'Hilang dari peta & pencarian (bisa dipulihkan)', 'hide')
+    + '</div>';
+  ov.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+    const act = b.getAttribute('data-act');
+    ov.style.display = 'none';
+    if (act === 'use') useFn();
+    else if (act === 'edit') _patokanOpenEdit(p);
+    else if (act === 'move') _patokanMoveStart(p);
+    else if (act === 'hide') _patokanHide(p);
+  }));
+  ov.style.display = 'flex';
+};
+
+// Edit nama & kategori — memakai form "Tambah Patokan" dalam mode edit
+window._patokanOpenEdit = function(p) {
+  window._patokanAddState = { mode: 'edit', id: p.id, lat: p.lat, lng: p.lng, cat: p.category || 'umum' };
+  _patokanSheetMode('edit');
+  _patokanAbortPending();
+  _patokanResetSaveBtn();
+  const cur = _patokanCat(p.category).key;
+  window._patokanAddState.cat = cur;
+  document.getElementById('patokanCatGrid').innerHTML = window._PATOKAN_CATS.map(c => `
+    <button type="button" data-cat="${c.key}" onclick="_patokanSelectCat(this)" class="pat-chip${c.key === cur ? ' pat-chip-active' : ''}">
+      <i class="fa-solid ${c.icon}"></i><span>${c.label}</span>
+    </button>`).join('');
+  document.getElementById('patokanNameInput').value = p.name || '';
+  document.getElementById('patokanAddOverlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+};
+async function _patokanSubmitEdit() {
+  const st = window._patokanAddState;
+  const name = document.getElementById('patokanNameInput').value.trim();
+  if (!name) { showToast('Nama patokan wajib diisi', 'red'); return; }
+  const btn = document.getElementById('patokanSaveBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Menyimpan...'; }
+  try {
+    await _patokanPatch(st.id, { name, category: st.cat });
+    showToast('Patokan diperbarui!', 'green');
+    _patokanCloseAdd();
+    _patokanReloadPins();
+  } catch (e) {
+    showToast('Gagal menyimpan: ' + (e.message || 'error'), 'red');
+    _patokanResetSaveBtn();
+  }
+}
+
+// Geser posisi: pin oranye bisa ditarik / ketuk peta untuk memindah, lalu Simpan / Batal
+window._patokanMoveStart = function(p) {
+  const st = window._kbState;
+  const map = st && st._map;
+  if (!map) return;
+  _patokanMoveEnd();
+  const cat = _patokanCat(p.category);
+  const mk = map.addMarker([p.lat, p.lng], {
+    draggable: true, zIndex: 6, size: [40, 50], anchor: [20, 46],
+    html: '<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))">'
+      + '<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#F59E0B;border:3px solid #fff;display:flex;align-items:center;justify-content:center">'
+      + '<i class="fa-solid ' + cat.icon + '" style="color:#fff;font-size:14px;transform:rotate(45deg)"></i></div></div>'
+  });
+  const bar = document.createElement('div');
+  bar.id = 'patokanMoveBar';
+  bar.style.cssText = 'position:absolute;left:12px;right:12px;bottom:14px;z-index:520;background:#fff;border-radius:16px;box-shadow:0 6px 22px rgba(0,0,0,.22);padding:12px';
+  bar.innerHTML = '<p style="margin:0 0 2px;font-size:13px;font-weight:900;color:#111827">Geser "' + _sadEscHtml(p.name) + '"</p>'
+    + '<p style="margin:0 0 10px;font-size:11px;color:#6b7280">Tarik pin oranye atau ketuk peta di posisi yang benar.</p>'
+    + '<div style="display:flex;gap:8px"><button type="button" id="patokanMoveCancel" style="flex:1;padding:10px 0;border-radius:12px;border:1.5px solid #e5e7eb;background:#fff;font-weight:800;font-size:13px;color:#374151;cursor:pointer">Batal</button>'
+    + '<button type="button" id="patokanMoveSave" style="flex:1.4;padding:10px 0;border-radius:12px;border:none;background:#F59E0B;font-weight:800;font-size:13px;color:#fff;cursor:pointer"><i class="fa-solid fa-check" style="margin-right:5px"></i>Simpan posisi</button></div>';
+  const host = document.getElementById('kbMapPickerMap').parentElement;
+  host.appendChild(bar);
+  const foot = document.getElementById('kbMapPickerFooter'); if (foot) foot.style.display = 'none';
+  host.querySelectorAll('button[title="Lokasi saya"]').forEach(b => { b.dataset.patHide = '1'; b.style.display = 'none'; });
+  st._patMove = { p, marker: mk };
+  try { map.setView([p.lat, p.lng], Math.max(map.getZoom(), 18), { animate: true }); } catch (e) {}
+  document.getElementById('patokanMoveCancel').onclick = () => _patokanMoveEnd();
+  document.getElementById('patokanMoveSave').onclick = async () => {
+    const b = document.getElementById('patokanMoveSave');
+    const ll = mk.getLatLng();
+    if (b) { b.disabled = true; b.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...'; }
+    try {
+      await _patokanPatch(p.id, { lat: ll.lat, lng: ll.lng });
+      showToast('Posisi patokan diperbarui!', 'green');
+      _patokanMoveEnd();
+      _patokanReloadPins();
+    } catch (e) {
+      showToast('Gagal menyimpan: ' + (e.message || 'error'), 'red');
+      if (b) { b.disabled = false; b.innerHTML = '<i class="fa-solid fa-check" style="margin-right:5px"></i>Simpan posisi'; }
+    }
+  };
+};
+function _patokanMoveEnd() {
+  const st = window._kbState;
+  if (st && st._patMove) { try { st._patMove.marker.remove(); } catch (e) {} st._patMove = null; }
+  const bar = document.getElementById('patokanMoveBar'); if (bar) bar.remove();
+  const foot = document.getElementById('kbMapPickerFooter'); if (foot) foot.style.display = '';
+  document.querySelectorAll('[data-pat-hide="1"]').forEach(b => { b.style.display = 'flex'; delete b.dataset.patHide; });
+}
+
+// Sembunyikan (status hidden) — dengan konfirmasi
+window._patokanHide = async function(p) {
+  if (!confirm('Sembunyikan patokan "' + (p.name || '') + '"?\n\nPatokan akan hilang dari peta dan pencarian semua pengguna. Data tidak dihapus permanen.')) return;
+  try {
+    await _patokanPatch(p.id, { status: 'hidden' });
+    showToast('Patokan disembunyikan', 'green');
+    _patokanReloadPins();
+  } catch (e) {
+    showToast('Gagal: ' + (e.message || 'error'), 'red');
   }
 };
 
@@ -29722,6 +29956,334 @@ function _ykSubscribeRealtime() {
   };
 })();
 document.addEventListener('DOMContentLoaded', () => setTimeout(() => { _ykRefreshMenuLabel(); }, 1500));
+</script>
+
+<!-- ============================================================
+     📣 IKLAN SIARAN — notifikasi push TERJADWAL (admin only).
+     Entry point: kartu "Iklan Siaran" (ikon toa) di Menu Developer.
+     Tabel: scheduled_notifs (RLS admin-email). Server: pg_cron tiap menit →
+     edge function scheduled-notifs → quick-responder (Web Push + FCM).
+     Jenis: setiap hari jam tetap / sekali / relatif waktu sholat Kairo.
+     ============================================================ -->
+<style>
+  #iklanSiaranForm .is-seg{display:flex;gap:6px}
+  #iklanSiaranForm .is-seg button{flex:1;border:2px solid #e5e7eb;background:#fff;border-radius:12px;padding:8px 4px;font-size:11px;font-weight:800;color:#374151;cursor:pointer}
+  #iklanSiaranForm .is-seg button.on{border-color:#F59E0B;background:#FFFBEB;color:#B45309}
+  #iklanSiaranForm .is-day{width:38px;height:34px;border-radius:10px;border:2px solid #e5e7eb;background:#fff;font-size:11px;font-weight:800;color:#6b7280;cursor:pointer}
+  #iklanSiaranForm .is-day.on{border-color:#F59E0B;background:#FFFBEB;color:#B45309}
+  #iklanSiaranForm label.is-lbl{font-size:11px;font-weight:700;color:#4b5563;margin-bottom:4px;display:block}
+  #iklanSiaranForm .is-inp{width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;font-size:13px;outline:none;background:#fff}
+  .is-switch{position:relative;width:42px;height:24px;border-radius:12px;background:#d1d5db;border:none;cursor:pointer;flex-shrink:0;transition:background .2s}
+  .is-switch::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s}
+  .is-switch.on{background:#10B981}
+  .is-switch.on::after{left:21px}
+</style>
+
+<div id="iklanSiaranOverlay" style="display:none;position:fixed;inset:0;z-index:850;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closeIklanSiaran()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Iklan Siaran</h2>
+    <button onclick="openIklanSiaranForm(null)" class="bg-primary text-white text-xs font-bold px-3 py-2 rounded-xl flex-shrink-0"><i class="fa-solid fa-plus mr-1"></i>Tambah</button>
+  </div>
+  <div class="px-3 pt-3" style="flex-shrink:0">
+    <div class="rounded-2xl px-3 py-2.5 text-[11px] leading-relaxed" style="background:#FFFBEB;border:1px solid #FDE68A;color:#92400E">
+      <i class="fa-solid fa-bullhorn mr-1"></i>Notifikasi terjadwal ke <b>semua pengguna</b> (Android, iPhone, browser). Dikirim otomatis oleh server walau HP admin mati.
+      <span id="isTodayTimes" style="display:block;margin-top:3px;color:#78350F"></span>
+    </div>
+  </div>
+  <div id="iklanSiaranList" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:10px"></div>
+</div>
+
+<div id="iklanSiaranFormModal" style="display:none;position:fixed;inset:0;z-index:860;background:rgba(0,0,0,.5);align-items:flex-end;justify-content:center" onclick="if(event.target===this) closeIklanSiaranForm()">
+  <div id="iklanSiaranForm" style="background:#fff;width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom,0px));max-height:92vh;overflow-y:auto">
+    <div class="flex items-center justify-between mb-3">
+      <h3 id="isFormTitle" class="font-bold text-base">Tambah Iklan Siaran</h3>
+      <button onclick="closeIklanSiaranForm()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-xmark text-gray-500"></i></button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label class="is-lbl">Judul notifikasi *</label><input id="isTitle" class="is-inp" maxlength="80" placeholder="Contoh: 🌙 15 menit lagi buka puasa!"/></div>
+      <div><label class="is-lbl">Isi notifikasi *</label><textarea id="isBody" class="is-inp" rows="3" maxlength="300" style="resize:none" placeholder="Contoh: Halo kak, yuk lihat menu buka puasa di YallaMart"></textarea></div>
+      <div>
+        <label class="is-lbl">Gambar (opsional, tampil di notifikasi Android)</label>
+        <label for="isImageInput" id="isImageAdd" class="w-full border-2 border-dashed border-amber-200 rounded-xl py-3 flex flex-col items-center justify-center gap-1 text-amber-500 cursor-pointer" style="background:#fffbeb"><i class="fa-solid fa-image"></i><span class="text-[11px] font-semibold">Tambah gambar</span></label>
+        <div id="isImageWrap" style="display:none;position:relative"><img id="isImagePreview" alt="" class="w-full rounded-xl" style="max-height:160px;object-fit:cover;display:block"><button type="button" onclick="_isClearImage()" style="position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;cursor:pointer"><i class="fa-solid fa-xmark text-xs"></i></button></div>
+        <input id="isImageInput" type="file" accept="image/*" class="hidden" onchange="_isPickImage(this)"/>
+      </div>
+      <div>
+        <label class="is-lbl">Saat notifikasi diketuk, buka</label>
+        <select id="isTarget" class="is-inp"><option value="toa">Panel Toa</option><option value="yallafood">YallaFood</option><option value="home">Beranda YallaMart</option></select>
+      </div>
+      <div>
+        <label class="is-lbl">Kapan dikirim</label>
+        <div class="is-seg" id="isTypeSeg">
+          <button type="button" data-v="prayer" onclick="_isSetType('prayer')">Waktu sholat</button>
+          <button type="button" data-v="daily" onclick="_isSetType('daily')">Jam tetap</button>
+          <button type="button" data-v="once" onclick="_isSetType('once')">Sekali saja</button>
+        </div>
+      </div>
+      <div id="isBoxPrayer" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input id="isOffset" type="number" min="0" max="180" value="15" class="is-inp" style="width:70px"/>
+        <span class="text-xs text-gray-600 font-semibold">menit</span>
+        <select id="isOffsetDir" class="is-inp" style="width:auto;flex:1;min-width:90px"><option value="-1">sebelum</option><option value="1">sesudah</option></select>
+        <select id="isPrayer" class="is-inp" style="width:auto;flex:1;min-width:100px"><option value="subuh">Subuh</option><option value="dzuhur">Dzuhur</option><option value="ashar">Ashar</option><option value="maghrib" selected>Maghrib</option><option value="isya">Isya</option><option value="terbit">Terbit</option></select>
+        <p class="text-[10px] text-gray-400" style="width:100%;margin:2px 0 0">Waktu sholat Kairo dihitung otomatis setiap hari. Isi 0 menit = tepat waktu sholat.</p>
+      </div>
+      <div id="isBoxDaily" style="display:none"><label class="is-lbl">Jam (waktu Kairo)</label><input id="isTime" type="time" class="is-inp" value="19:00"/></div>
+      <div id="isBoxOnce" style="display:none;gap:6px">
+        <label class="is-lbl">Tanggal & jam (waktu Kairo)</label>
+        <div style="display:flex;gap:6px"><input id="isOnceDate" type="date" class="is-inp"/><input id="isOnceTime" type="time" class="is-inp" style="width:120px"/></div>
+      </div>
+      <div id="isBoxDays">
+        <label class="is-lbl">Hari (kosongkan semua = setiap hari)</label>
+        <div id="isDays" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+      </div>
+      <div id="isBoxPeriod">
+        <label class="is-lbl">Periode (opsional, mis. selama Ramadhan)</label>
+        <div style="display:flex;gap:6px;align-items:center"><input id="isStart" type="date" class="is-inp"/><span class="text-xs text-gray-400">s/d</span><input id="isEnd" type="date" class="is-inp"/></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#f9fafb;border-radius:12px;padding:10px 12px">
+        <span class="text-xs font-bold text-gray-700">Aktif</span>
+        <button type="button" id="isActive" class="is-switch on" onclick="this.classList.toggle('on')" aria-label="Aktif"></button>
+      </div>
+      <button id="isSaveBtn" onclick="_isSave()" class="w-full text-white font-bold rounded-2xl py-3 text-sm" style="background:#F59E0B"><i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Jadwal</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const ADMIN = 'abdsyakir160@gmail.com';
+  const DAYS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  const PRAYER_LBL = { subuh: 'Subuh', terbit: 'Terbit', dzuhur: 'Dzuhur', ashar: 'Ashar', maghrib: 'Maghrib', isya: 'Isya' };
+  const TARGET_LBL = { toa: 'Panel Toa', yallafood: 'YallaFood', home: 'Beranda' };
+  let _rows = [], _editId = null, _type = 'prayer', _imgFile = null, _imgUrl = null;
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const isAdmin = () => ((window._S && window._S.user && window._S.user.email) || '').toLowerCase() === ADMIN;
+
+  // ── Zona waktu Kairo (admin bisa buka dari HP/laptop zona lain) ──
+  function cairoOffsetMin(y, m, d) {
+    const t = new Date(Date.UTC(y, m - 1, d, 12));
+    const p = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Cairo', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(t);
+    const g = k => Number(p.find(x => x.type === k).value);
+    return Math.round((Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute')) - t.getTime()) / 60000);
+  }
+  function cairoToIso(dateStr, timeStr) {
+    const [y, m, d] = dateStr.split('-').map(Number); const [hh, mi] = timeStr.split(':').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, hh, mi) - cairoOffsetMin(y, m, d) * 60000).toISOString();
+  }
+  function isoToCairo(iso) {
+    const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(iso));
+    const g = k => p.find(x => x.type === k).value;
+    return { date: g('year') + '-' + g('month') + '-' + g('day'), time: g('hour') + ':' + g('minute') };
+  }
+  const fmtDate = (s) => { try { const [y, m, d] = s.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); } catch (e) { return s; } };
+
+  function describe(r) {
+    let s = '';
+    if (r.schedule_type === 'prayer') {
+      const o = Number(r.offset_min) || 0, p = PRAYER_LBL[r.prayer] || r.prayer;
+      s = o === 0 ? 'Tepat waktu ' + p : (Math.abs(o) + ' menit ' + (o < 0 ? 'sebelum ' : 'sesudah ') + p);
+    } else if (r.schedule_type === 'daily') {
+      s = 'Jam ' + String(r.time_of_day || '').slice(0, 5);
+    } else if (r.schedule_type === 'once' && r.run_at) {
+      const c = isoToCairo(r.run_at); s = 'Sekali · ' + fmtDate(c.date) + ' ' + c.time;
+    }
+    if (r.schedule_type !== 'once') {
+      const dw = Array.isArray(r.days_of_week) && r.days_of_week.length ? r.days_of_week.slice().sort().map(i => DAYS[i]).join(', ') : 'Setiap hari';
+      s = dw + ' · ' + s;
+      if (r.start_date || r.end_date) s += ' · ' + (r.start_date ? fmtDate(r.start_date) : '…') + ' – ' + (r.end_date ? fmtDate(r.end_date) : '…');
+    }
+    return s + ' (waktu Kairo)';
+  }
+
+  async function api(path, opt) {
+    const res = await window._supaFetch(path, opt || {});
+    const txt = await res.text().catch(() => '');
+    let j = null; try { j = txt ? JSON.parse(txt) : null; } catch (e) {}
+    if (!res.ok) throw new Error((j && j.message) || ('HTTP ' + res.status));
+    return j;
+  }
+
+  async function loadTodayTimes() {
+    const el = document.getElementById('isTodayTimes'); if (!el) return;
+    try {
+      const r = await fetch(window._SUPA_URL + '/functions/v1/scheduled-notifs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (window._S && window._S._accessToken || ''), apikey: window._SUPA_ANON },
+        body: JSON.stringify({ preview: true })
+      });
+      const j = await r.json();
+      if (j && j.times) el.innerHTML = 'Hari ini di Kairo: Subuh ' + j.times.subuh + ' · Maghrib <b>' + j.times.maghrib + '</b> · Isya ' + j.times.isya;
+    } catch (e) { el.textContent = ''; }
+  }
+
+  async function loadList() {
+    const box = document.getElementById('iklanSiaranList');
+    box.innerHTML = '<p class="text-center text-xs text-gray-400 py-8"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Memuat…</p>';
+    try {
+      _rows = await api('/rest/v1/scheduled_notifs?select=*&order=created_at.desc') || [];
+    } catch (e) {
+      box.innerHTML = '<p class="text-center text-xs text-red-500 py-8">Gagal memuat: ' + esc(e.message) + '</p>'; return;
+    }
+    if (!_rows.length) { box.innerHTML = '<div class="text-center py-12"><i class="fa-solid fa-bullhorn text-3xl text-amber-300"></i><p class="text-sm text-gray-500 mt-3">Belum ada iklan siaran.</p><p class="text-xs text-gray-400 mt-1">Ketuk <b>Tambah</b> untuk membuat jadwal pertama.</p></div>'; return; }
+    box.innerHTML = _rows.map(r => `
+      <div class="bg-white rounded-2xl border border-gray-100 p-3" style="box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          ${r.image_url ? `<img src="${esc(r.image_url)}" style="width:52px;height:52px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#f3f4f6">` : `<div style="width:52px;height:52px;border-radius:10px;background:#FFFBEB;color:#F59E0B;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-bullhorn"></i></div>`}
+          <div style="flex:1;min-width:0">
+            <p class="text-sm font-bold text-gray-900" style="word-break:break-word">${esc(r.title)}</p>
+            <p class="text-xs text-gray-500" style="margin-top:1px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(r.body)}</p>
+          </div>
+          <button type="button" class="is-switch${r.is_active ? ' on' : ''}" onclick="_isToggle('${r.id}', this)" aria-label="Aktif"></button>
+        </div>
+        <p class="text-[11px] font-semibold" style="margin-top:8px;color:#B45309"><i class="fa-regular fa-clock mr-1"></i>${esc(describe(r))}</p>
+        <p class="text-[10px] text-gray-400" style="margin-top:2px">Buka: ${esc(TARGET_LBL[r.target] || r.target)}${r.last_result ? ' · Terakhir: ' + esc(r.last_result) : ' · Belum pernah terkirim'}</p>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button onclick="openIklanSiaranForm('${r.id}')" class="flex-1 text-xs font-bold rounded-xl py-2" style="background:#EFF6FF;color:#2563EB"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
+          <button onclick="_isDelete('${r.id}')" class="flex-1 text-xs font-bold rounded-xl py-2" style="background:#FEF2F2;color:#DC2626"><i class="fa-solid fa-trash-can mr-1"></i>Hapus</button>
+        </div>
+      </div>`).join('');
+  }
+
+  window.openIklanSiaran = function () {
+    if (!isAdmin()) { showToast('Akses ditolak!', 'red'); return; }
+    document.getElementById('iklanSiaranOverlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    loadList(); loadTodayTimes();
+  };
+  window.closeIklanSiaran = function () {
+    document.getElementById('iklanSiaranOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+  };
+
+  window._isSetType = function (t) {
+    _type = t;
+    document.querySelectorAll('#isTypeSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === t));
+    document.getElementById('isBoxPrayer').style.display = t === 'prayer' ? 'flex' : 'none';
+    document.getElementById('isBoxDaily').style.display = t === 'daily' ? 'block' : 'none';
+    document.getElementById('isBoxOnce').style.display = t === 'once' ? 'block' : 'none';
+    document.getElementById('isBoxDays').style.display = t === 'once' ? 'none' : 'block';
+    document.getElementById('isBoxPeriod').style.display = t === 'once' ? 'none' : 'block';
+  };
+  window._isPickImage = function (input) {
+    const f = input && input.files && input.files[0]; if (!f) return;
+    if (!/^image\//.test(f.type || '')) { showToast('File harus berupa gambar', 'red'); input.value = ''; return; }
+    _imgFile = f; _imgUrl = null;
+    const img = document.getElementById('isImagePreview');
+    try { if (img._u) URL.revokeObjectURL(img._u); } catch (e) {}
+    img._u = URL.createObjectURL(f); img.src = img._u;
+    document.getElementById('isImageWrap').style.display = 'block'; document.getElementById('isImageAdd').style.display = 'none';
+  };
+  window._isClearImage = function () {
+    _imgFile = null; _imgUrl = null;
+    const inp = document.getElementById('isImageInput'); if (inp) inp.value = '';
+    document.getElementById('isImagePreview').src = '';
+    document.getElementById('isImageWrap').style.display = 'none'; document.getElementById('isImageAdd').style.display = 'flex';
+  };
+
+  window.openIklanSiaranForm = function (id) {
+    const r = id ? _rows.find(x => x.id === id) : null;
+    _editId = r ? r.id : null; _imgFile = null; _imgUrl = r ? (r.image_url || null) : null;
+    document.getElementById('isFormTitle').textContent = r ? 'Edit Iklan Siaran' : 'Tambah Iklan Siaran';
+    document.getElementById('isTitle').value = r ? r.title : '';
+    document.getElementById('isBody').value = r ? r.body : '';
+    document.getElementById('isTarget').value = r ? r.target : 'toa';
+    const off = r ? Number(r.offset_min) || 0 : -15;
+    document.getElementById('isOffset').value = Math.abs(off);
+    document.getElementById('isOffsetDir').value = off > 0 ? '1' : '-1';
+    document.getElementById('isPrayer').value = r && r.prayer ? r.prayer : 'maghrib';
+    document.getElementById('isTime').value = r && r.time_of_day ? String(r.time_of_day).slice(0, 5) : '19:00';
+    const once = r && r.run_at ? isoToCairo(r.run_at) : { date: '', time: '' };
+    document.getElementById('isOnceDate').value = once.date; document.getElementById('isOnceTime').value = once.time;
+    document.getElementById('isStart').value = r && r.start_date ? r.start_date : '';
+    document.getElementById('isEnd').value = r && r.end_date ? r.end_date : '';
+    const sel = new Set(r && Array.isArray(r.days_of_week) ? r.days_of_week : []);
+    document.getElementById('isDays').innerHTML = DAYS.map((d, i) => `<button type="button" class="is-day${sel.has(i) ? ' on' : ''}" data-i="${i}" onclick="this.classList.toggle('on')">${d}</button>`).join('');
+    document.getElementById('isActive').classList.toggle('on', r ? !!r.is_active : true);
+    if (_imgUrl) { document.getElementById('isImagePreview').src = _imgUrl; document.getElementById('isImageWrap').style.display = 'block'; document.getElementById('isImageAdd').style.display = 'none'; }
+    else _isClearImage();
+    _isSetType(r ? r.schedule_type : 'prayer');
+    const b = document.getElementById('isSaveBtn'); b.disabled = false; b.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Jadwal';
+    document.getElementById('iklanSiaranFormModal').style.display = 'flex';
+  };
+  window.closeIklanSiaranForm = function () { document.getElementById('iklanSiaranFormModal').style.display = 'none'; };
+
+  window._isSave = async function () {
+    if (!isAdmin()) { showToast('Akses ditolak!', 'red'); return; }
+    if (!window._S._accessToken) { showToast('Sesi login habis, masuk ulang dulu', 'red'); return; }
+    const title = document.getElementById('isTitle').value.trim();
+    const body = document.getElementById('isBody').value.trim();
+    if (!title) { showToast('Judul wajib diisi', 'red'); return; }
+    if (!body) { showToast('Isi notifikasi wajib diisi', 'red'); return; }
+    const row = {
+      title, body, target: document.getElementById('isTarget').value, schedule_type: _type,
+      time_of_day: null, run_at: null, prayer: null, offset_min: 0, days_of_week: null, start_date: null, end_date: null,
+      is_active: document.getElementById('isActive').classList.contains('on'), updated_at: new Date().toISOString()
+    };
+    if (_type === 'prayer') {
+      const m = Math.round(Number(document.getElementById('isOffset').value) || 0);
+      if (m < 0 || m > 180) { showToast('Menit harus 0–180', 'red'); return; }
+      row.prayer = document.getElementById('isPrayer').value;
+      row.offset_min = m * Number(document.getElementById('isOffsetDir').value);
+    } else if (_type === 'daily') {
+      const t = document.getElementById('isTime').value; if (!t) { showToast('Isi jamnya dulu', 'red'); return; }
+      row.time_of_day = t + ':00';
+    } else {
+      const d = document.getElementById('isOnceDate').value, t = document.getElementById('isOnceTime').value;
+      if (!d || !t) { showToast('Isi tanggal & jam', 'red'); return; }
+      row.run_at = cairoToIso(d, t);
+      if (new Date(row.run_at).getTime() < Date.now() - 60000) { showToast('Waktu itu sudah lewat', 'red'); return; }
+    }
+    if (_type !== 'once') {
+      const days = [...document.querySelectorAll('#isDays .is-day.on')].map(b => Number(b.dataset.i));
+      row.days_of_week = days.length && days.length < 7 ? days : null;
+      row.start_date = document.getElementById('isStart').value || null;
+      row.end_date = document.getElementById('isEnd').value || null;
+      if (row.start_date && row.end_date && row.end_date < row.start_date) { showToast('Tanggal selesai sebelum tanggal mulai', 'red'); return; }
+    }
+    // Jadwal diubah → boleh terkirim lagi pada slot berikutnya
+    row.last_sent_key = null;
+    const btn = document.getElementById('isSaveBtn'); btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Menyimpan…';
+    try {
+      if (_imgFile) {
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Mengunggah gambar…';
+        const up = await window.uploadToR2(_imgFile, null, 'broadcasts');
+        const u = (up && typeof up === 'object') ? up.secure_url : up;
+        if (!u || !String(u).startsWith('http')) throw new Error('Upload gambar gagal');
+        _imgUrl = u;
+      }
+      row.image_url = _imgUrl || null;
+      const rows = _editId
+        ? await api('/rest/v1/scheduled_notifs?id=eq.' + encodeURIComponent(_editId), { method: 'PATCH', prefer: 'return=representation', body: JSON.stringify(row) })
+        : await api('/rest/v1/scheduled_notifs', { method: 'POST', prefer: 'return=representation', body: JSON.stringify(row) });
+      if (!Array.isArray(rows) || !rows.length) throw new Error('tidak tersimpan (akses ditolak)');
+      showToast('Jadwal tersimpan!', 'green');
+      closeIklanSiaranForm(); loadList();
+    } catch (e) {
+      showToast('Gagal menyimpan: ' + (e.message || 'error'), 'red');
+      btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Jadwal';
+    }
+  };
+
+  window._isToggle = async function (id, el) {
+    const on = !el.classList.contains('on');
+    el.classList.toggle('on', on);
+    try {
+      const rows = await api('/rest/v1/scheduled_notifs?id=eq.' + encodeURIComponent(id), { method: 'PATCH', prefer: 'return=representation', body: JSON.stringify({ is_active: on, updated_at: new Date().toISOString() }) });
+      if (!Array.isArray(rows) || !rows.length) throw new Error('akses ditolak');
+      const r = _rows.find(x => x.id === id); if (r) r.is_active = on;
+      showToast(on ? 'Jadwal diaktifkan' : 'Jadwal dimatikan', 'green');
+    } catch (e) { el.classList.toggle('on', !on); showToast('Gagal: ' + e.message, 'red'); }
+  };
+  window._isDelete = async function (id) {
+    const r = _rows.find(x => x.id === id);
+    if (!confirm('Hapus jadwal "' + (r ? r.title : '') + '"?')) return;
+    try {
+      const rows = await api('/rest/v1/scheduled_notifs?id=eq.' + encodeURIComponent(id), { method: 'DELETE', prefer: 'return=representation' });
+      if (!Array.isArray(rows) || !rows.length) throw new Error('akses ditolak');
+      showToast('Jadwal dihapus', 'green'); loadList();
+    } catch (e) { showToast('Gagal: ' + e.message, 'red'); }
+  };
+})();
 </script>
 
 <!-- ============================================================
