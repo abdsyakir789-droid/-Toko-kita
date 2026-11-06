@@ -53,6 +53,19 @@
 </script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<script>
+/* Aplikasi Android (Capacitor): JANGAN viewport-fit=cover. Dengan begitu SystemBars bawaan
+   Capacitor menaruh halaman DI BAWAH status bar & DI ATAS bar navigasi (edge-to-edge Android 15+
+   aman tanpa API lama). iPhone PWA & browser tetap memakai viewport-fit=cover seperti biasa. */
+(function () {
+  try {
+    var C = window.Capacitor;
+    if (!(C && C.isNativePlatform && C.isNativePlatform())) return;
+    var m = document.querySelector('meta[name="viewport"]');
+    if (m) m.setAttribute('content', m.getAttribute('content').replace(/,\s*viewport-fit=cover/, ''));
+  } catch (e) {}
+})();
+</script>
 <title>Yalla Mart — Premium Marketplace</title>
 <link rel="manifest" href="/manifest.json"/>
 <meta name="theme-color" content="#10B981"/>
@@ -2486,10 +2499,36 @@ h3.text-sm.font-bold.text-gray-800 {
 
 </div>
 
-<!-- Aplikasi Android (Capacitor): splash native hijau polos langsung ditutup DI SINI,
-     tepat setelah splash website ada di halaman → yang terlihat splash website ini. -->
+<!-- Aplikasi Android (Capacitor): splash native = hijau + logo YANG SAMA di tengah layar.
+     Di aplikasi, logo splash website dibuat DIAM tepat di tengah (tanpa animasi muncul) supaya
+     pergantian native → website tak terasa; tulisan & spinner tetap muncul perlahan di bawahnya.
+     Splash native baru ditutup setelah gambar logo website selesai dimuat (maks 1,5 detik).
+     Browser & PWA tidak terpengaruh (kelas .ym-native hanya dipasang di aplikasi). -->
+<style>
+  #splashScreen.ym-native #splashLogo{animation:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0}
+  #splashScreen.ym-native #splashLogo img{display:block}
+  #splashScreen.ym-native #splashBrand{position:absolute;left:0;right:0;top:calc(50% + 44px + 20px);margin-top:0}
+</style>
 <script>
-try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) window.Capacitor.Plugins.SplashScreen.hide({ fadeOutDuration: 0 }); } catch (e) {}
+(function () {
+  try {
+    var C = window.Capacitor;
+    if (!(C && C.isNativePlatform && C.isNativePlatform())) return;
+    var sp = document.getElementById('splashScreen');
+    if (sp) sp.classList.add('ym-native');
+    var P = C.Plugins || {};
+    if (!P.SplashScreen) return;
+    var done = false;
+    var hide = function () { if (done) return; done = true; try { P.SplashScreen.hide({ fadeOutDuration: 0 }); } catch (e) {} };
+    var afterPaint = function () { requestAnimationFrame(function () { requestAnimationFrame(hide); }); };
+    var img = sp && sp.querySelector('#splashLogo img');
+    if (img && !img.complete) {
+      img.addEventListener('load', afterPaint);
+      img.addEventListener('error', hide);
+      setTimeout(hide, 1500);
+    } else afterPaint();
+  } catch (e) {}
+})();
 </script>
 
 <script>
@@ -8784,13 +8823,16 @@ window.deleteBroadcastMessage = async function(docId, encodedTitle) {
       return nRawId === docId;
     });
     broadcastId = localNotif?.broadcast_id || localNotif?.broadcastId || null;
+    // Foto siaran (R2) — dihapus juga setelah pesannya terhapus, supaya tidak jadi foto yatim
+    let _bcImgUrl = localNotif?.image_url || localNotif?.imageUrl || null;
 
     // Kalau tidak ada di lokal, fetch dari DB
-    if(!broadcastId) {
-      const _fRes = await window._supaFetch('/rest/v1/notifications?id=eq.' + docId + '&select=broadcast_id&limit=1');
+    if(!broadcastId || !_bcImgUrl) {
+      const _fRes = await window._supaFetch('/rest/v1/notifications?id=eq.' + docId + '&select=broadcast_id,image_url&limit=1');
       if(_fRes.ok) {
         const _fRows = await _fRes.json();
-        broadcastId = _fRows[0]?.broadcast_id || null;
+        broadcastId = broadcastId || _fRows[0]?.broadcast_id || null;
+        _bcImgUrl = _bcImgUrl || _fRows[0]?.image_url || null;
       }
     }
 
@@ -8834,6 +8876,17 @@ window.deleteBroadcastMessage = async function(docId, encodedTitle) {
         return !n.isRead && !n.read;
       }).length;
       updateNotifBadge(unread);
+    }
+
+    // Hapus foto di R2 hanya kalau tidak dipakai pesan siaran LAIN (aman dari salah hapus)
+    if(_bcImgUrl && window.deleteFromR2) {
+      try {
+        const _uRes = await window._supaFetch('/rest/v1/notifications?image_url=eq.' + encodeURIComponent(_bcImgUrl) + '&select=id&limit=1');
+        const _uRows = _uRes.ok ? await _uRes.json() : [{}];
+        const _sRes = await window._supaFetch('/rest/v1/scheduled_notifs?image_url=eq.' + encodeURIComponent(_bcImgUrl) + '&select=id&limit=1');
+        const _sRows = _sRes.ok ? await _sRes.json() : [];
+        if(Array.isArray(_uRows) && !_uRows.length && !(_sRows && _sRows.length)) window.deleteFromR2(_bcImgUrl);
+      } catch(_e) {}
     }
 
     showToast('✅ Pesan siaran berhasil dihapus dari ' + totalDel + ' pengguna!', 'green');
@@ -30243,22 +30296,28 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => { _ykRefres
     // Jadwal diubah → boleh terkirim lagi pada slot berikutnya
     row.last_sent_key = null;
     const btn = document.getElementById('isSaveBtn'); btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Menyimpan…';
+    const _prevImg = _editId ? ((_rows.find(x => x.id === _editId) || {}).image_url || null) : null;
+    let _newUpload = null;
     try {
       if (_imgFile) {
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Mengunggah gambar…';
         const up = await window.uploadToR2(_imgFile, null, 'broadcasts');
         const u = (up && typeof up === 'object') ? up.secure_url : up;
         if (!u || !String(u).startsWith('http')) throw new Error('Upload gambar gagal');
-        _imgUrl = u;
+        _imgUrl = u; _newUpload = u;
       }
       row.image_url = _imgUrl || null;
       const rows = _editId
         ? await api('/rest/v1/scheduled_notifs?id=eq.' + encodeURIComponent(_editId), { method: 'PATCH', prefer: 'return=representation', body: JSON.stringify(row) })
         : await api('/rest/v1/scheduled_notifs', { method: 'POST', prefer: 'return=representation', body: JSON.stringify(row) });
       if (!Array.isArray(rows) || !rows.length) throw new Error('tidak tersimpan (akses ditolak)');
+      // Foto lama diganti/dihapus → hapus dari R2 (tidak jadi foto yatim)
+      if (_prevImg && _prevImg !== row.image_url && window.deleteFromR2) window.deleteFromR2(_prevImg);
       showToast('Jadwal tersimpan!', 'green');
       closeIklanSiaranForm(); loadList();
     } catch (e) {
+      // Gagal simpan padahal foto baru sudah terunggah → buang foto barunya
+      if (_newUpload && window.deleteFromR2) { window.deleteFromR2(_newUpload); _imgUrl = _prevImg; }
       showToast('Gagal menyimpan: ' + (e.message || 'error'), 'red');
       btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>Simpan Jadwal';
     }
@@ -30280,6 +30339,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(() => { _ykRefres
     try {
       const rows = await api('/rest/v1/scheduled_notifs?id=eq.' + encodeURIComponent(id), { method: 'DELETE', prefer: 'return=representation' });
       if (!Array.isArray(rows) || !rows.length) throw new Error('akses ditolak');
+      if (r && r.image_url && window.deleteFromR2) window.deleteFromR2(r.image_url); // foto ikut terhapus dari R2
       showToast('Jadwal dihapus', 'green'); loadList();
     } catch (e) { showToast('Gagal: ' + e.message, 'red'); }
   };
@@ -31061,9 +31121,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Website punya splash sendiri (#splashScreen, hijau #10B981) yang sudah
   // tampil saat skrip ini jalan → splash native langsung disingkirkan supaya
   // yang terlihat adalah splash buatan website, bukan ditutupi splash Capacitor.
-  try { if (P.SplashScreen) P.SplashScreen.hide({ fadeOutDuration: 0 }); } catch (e) {}
+  // (Kalau splash website ADA, penutupan diatur skrip tepat setelah #splashScreen — menunggu
+  //  logo website termuat supaya tak ada kedipan. Di sini hanya utk kasus splash website tak ada,
+  //  mis. refresh dalam sesi yang sama.)
+  try { if (P.SplashScreen && !document.getElementById('splashScreen')) P.SplashScreen.hide({ fadeOutDuration: 0 }); } catch (e) {}
 
   // ── 2. Status bar hijau, ikon putih ──
+  // Sejak edge-to-edge (Play Console): warna bar dari tema Android (hijau) + ikon putih lewat
+  // SystemBars bawaan Capacitor. Plugin StatusBar lama (API usang) sudah dicopot dari aplikasi;
+  // blok P.StatusBar di bawah tetap ada untuk APK lama yang masih memasangnya.
+  try { if (P.SystemBars && P.SystemBars.setStyle) P.SystemBars.setStyle({ style: 'DARK' }).catch(function () {}); } catch (e) {}
   try {
     if (P.StatusBar) {
       P.StatusBar.setOverlaysWebView({ overlay: false }).catch(function () {});
