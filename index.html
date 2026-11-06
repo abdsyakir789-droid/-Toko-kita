@@ -27774,6 +27774,284 @@ function _kbForceLatinLabels(mm) {
   } catch (e) {}
 }
 
+// ════════════════════════════════════════════════════════════════════
+// 🗺️ PETA YALLAKURIR — MapLibre GL NATIVE (gaya peta Nuqto / Mat'am Terdekat)
+// Dipakai bersama oleh: peta Pilih Lokasi (Kirim Barang), panel Kurir Ditemukan,
+// dan peta Rute Pengantaran (dasbor kurir).
+//   • Style vektor kustom di atas OpenFreeMap (tanpa API key), label Latin,
+//     bangunan langsung dari data peta (tak perlu query Overpass lagi).
+//   • Bisa diputar (2 jari) & dimiringkan 3D (tombol / geser 2 jari ke atas).
+//   • _ykMap() mengembalikan "pembungkus" yang menerima perintah gaya Leaflet
+//     (setView, getCenter, getZoom, fitBounds, project, on/off, removeLayer...)
+//     supaya kode lain yang memanggil peta tidak perlu diubah.
+//   • ZOOM: angka zoom yang dipakai kode = skala LEAFLET (MapLibre = Leaflet − 1),
+//     dikonversi otomatis di dalam pembungkus → ambang zoom lama tetap sama.
+// ════════════════════════════════════════════════════════════════════
+const _YK_LAT = ['coalesce', ['get', 'name:id'], ['get', 'name:latin'], ['get', 'name:en'], ['get', 'name']];
+window._YK_MAP_STYLE = {
+  version: 8,
+  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  sources: { om: { type: 'vector', url: 'https://tiles.openfreemap.org/planet', attribution: '&copy; OpenFreeMap &copy; OpenStreetMap' } },
+  layers: [
+    { id: 'bg', type: 'background', paint: { 'background-color': '#f4f3ef' } },
+    { id: 'landuse-resid', type: 'fill', source: 'om', 'source-layer': 'landuse', filter: ['in', 'class', 'residential', 'suburb', 'neighbourhood'], paint: { 'fill-color': '#eae7df' } },
+    { id: 'landuse-other', type: 'fill', source: 'om', 'source-layer': 'landuse', filter: ['in', 'class', 'commercial', 'industrial', 'retail', 'university', 'hospital', 'school'], paint: { 'fill-color': '#efe9df', 'fill-opacity': 0.7 } },
+    { id: 'landcover', type: 'fill', source: 'om', 'source-layer': 'landcover', filter: ['in', 'class', 'grass', 'wood', 'forest', 'meadow', 'park', 'garden', 'recreation_ground', 'scrub', 'heath'], paint: { 'fill-color': '#b3e09b', 'fill-opacity': 0.85 } },
+    { id: 'park', type: 'fill', source: 'om', 'source-layer': 'park', filter: ['!=', 'class', 'protected_area'], paint: { 'fill-color': '#a6dd8f', 'fill-opacity': 0.9 } },
+    { id: 'landuse-green', type: 'fill', source: 'om', 'source-layer': 'landuse', filter: ['in', 'class', 'park', 'recreation_ground', 'grass', 'garden', 'meadow', 'pitch', 'playground', 'golf_course', 'cemetery'], paint: { 'fill-color': '#b3e09b', 'fill-opacity': 0.8 } },
+    { id: 'water', type: 'fill', source: 'om', 'source-layer': 'water', paint: { 'fill-color': '#a9d3f2' } },
+    { id: 'building', type: 'fill', source: 'om', 'source-layer': 'building', minzoom: 12, paint: { 'fill-color': '#e6e0d2', 'fill-outline-color': '#ccc5b4' } },
+    { id: 'road-casing', type: 'line', source: 'om', 'source-layer': 'transportation', filter: ['in', 'class', 'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'street'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#d8d4ca', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.6, 16, 11] } },
+    { id: 'road-minor', type: 'line', source: 'om', 'source-layer': 'transportation', filter: ['in', 'class', 'minor', 'street', 'service', 'tertiary'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.8, 16, 6] } },
+    { id: 'road-arterial', type: 'line', source: 'om', 'source-layer': 'transportation', filter: ['in', 'class', 'secondary', 'primary'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.4, 16, 8] } },
+    { id: 'road-highway-casing', type: 'line', source: 'om', 'source-layer': 'transportation', filter: ['in', 'class', 'motorway', 'trunk'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#f2b95a', 'line-width': ['interpolate', ['linear'], ['zoom'], 9, 2.4, 16, 12] } },
+    { id: 'road-highway', type: 'line', source: 'om', 'source-layer': 'transportation', filter: ['in', 'class', 'motorway', 'trunk'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#fbd274', 'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1.4, 16, 9] } },
+    { id: 'boundary', type: 'line', source: 'om', 'source-layer': 'boundary', filter: ['<=', 'admin_level', 4], paint: { 'line-color': '#c9c4b8', 'line-dasharray': [3, 2], 'line-width': 1 } },
+    { id: 'place-city', type: 'symbol', source: 'om', 'source-layer': 'place', filter: ['in', 'class', 'city', 'town'], layout: { 'text-field': _YK_LAT, 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 8, 13, 14, 22], 'text-pitch-alignment': 'viewport', 'text-rotation-alignment': 'viewport' }, paint: { 'text-color': '#3c4043', 'text-halo-color': '#f4f3ef', 'text-halo-width': 1.6 } },
+    { id: 'road-name', type: 'symbol', source: 'om', 'source-layer': 'transportation_name', minzoom: 13, layout: { 'text-field': _YK_LAT, 'text-font': ['Noto Sans Regular'], 'symbol-placement': 'line', 'text-size': 13, 'text-pitch-alignment': 'viewport' }, paint: { 'text-color': '#1c1c1c', 'text-halo-color': '#ffffff', 'text-halo-width': 1.8 } },
+    { id: 'place-other', type: 'symbol', source: 'om', 'source-layer': 'place', filter: ['in', 'class', 'suburb', 'neighbourhood', 'quarter', 'village'], layout: { 'text-field': _YK_LAT, 'text-font': ['Noto Sans Regular'], 'text-size': 12, 'text-pitch-alignment': 'viewport', 'text-rotation-alignment': 'viewport' }, paint: { 'text-color': '#70757a', 'text-halo-color': '#f4f3ef', 'text-halo-width': 1.4 } }
+  ]
+};
+// Cadangan kalau OpenFreeMap gangguan: raster OSM standar (tanpa key)
+window._YK_MAP_STYLE_OSM = {
+  version: 8,
+  sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 19, attribution: '&copy; OpenStreetMap' } },
+  layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+};
+
+// Muat MapLibre GL (sekali saja; dipakai juga oleh Mat'am Terdekat)
+let _ykMLPromise = null;
+function _ykEnsureML() {
+  if (window.maplibregl) return Promise.resolve(true);
+  if (_ykMLPromise) return _ykMLPromise;
+  _ykMLPromise = new Promise((resolve) => {
+    if (!document.querySelector('link[href*="maplibre-gl@4.7.1/dist/maplibre-gl.css"]')) {
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'; document.head.appendChild(css);
+    }
+    const s = document.createElement('script'); s.src = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+    s.onload = () => resolve(!!window.maplibregl);
+    s.onerror = () => { _ykMLPromise = null; resolve(false); };
+    document.head.appendChild(s);
+  });
+  return _ykMLPromise;
+}
+
+// CSS tombol peta (zoom + miring 3D) — sama dengan Mat'am Terdekat
+(function () {
+  const css = document.createElement('style');
+  css.textContent =
+    '.yk-map-ctrl{position:absolute;z-index:450;display:flex;flex-direction:column;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 4px 14px rgba(28,27,23,.14);overflow:hidden;color:#10B981}' +
+    '.yk-map-ctrl button{width:42px;height:42px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;padding:0;color:inherit}' +
+    '.yk-map-ctrl button:active{background:rgba(0,0,0,.06)}' +
+    '.yk-map-ctrl .yk-div{height:1px;margin:0 8px;background:#e5e7eb}' +
+    '.yk-mk{cursor:pointer}.yk-mk.yk-noint{pointer-events:none}' +
+    '.maplibregl-ctrl-attrib.maplibregl-compact{font-size:10px}';
+  document.head.appendChild(css);
+})();
+
+// Ubah [lat,lng] / {lat,lng} → {lat,lng}
+function _ykLL(p) {
+  if (!p) return null;
+  if (Array.isArray(p)) return { lat: +p[0], lng: +p[1] };
+  if (typeof p.lat === 'number') return { lat: +p.lat, lng: +(p.lng != null ? p.lng : p.lon) };
+  return null;
+}
+// Padding gaya Leaflet → MapLibre {top,bottom,left,right}
+function _ykPad(o) {
+  o = o || {};
+  if (o.paddingTopLeft || o.paddingBottomRight) {
+    const tl = o.paddingTopLeft || [0, 0], br = o.paddingBottomRight || [0, 0];
+    return { left: tl[0], top: tl[1], right: br[0], bottom: br[1] };
+  }
+  const p = o.padding;
+  if (Array.isArray(p)) return { left: p[0], right: p[0], top: p[1], bottom: p[1] };
+  if (typeof p === 'number') return { left: p, right: p, top: p, bottom: p };
+  return { left: 40, right: 40, top: 40, bottom: 40 };
+}
+
+let _ykLineSeq = 0;
+
+// Buat peta YallaKurir. opts: { center:[lat,lng], zoom (skala Leaflet), controls: 'full'|'tilt'|'none',
+//   controlsTop (px), onReady(fn) }. Mengembalikan Promise<pembungkus | null>.
+async function _ykMap(el, opts) {
+  opts = opts || {};
+  const ok = await _ykEnsureML();
+  if (!ok || !window.maplibregl || !el || !el.isConnected) return null;
+  const c = _ykLL(opts.center) || { lat: 30.0444, lng: 31.2357 };
+  const mm = new maplibregl.Map({
+    container: el, style: window._YK_MAP_STYLE, center: [c.lng, c.lat], zoom: Math.max(0, (opts.zoom != null ? opts.zoom : 15) - 1),
+    pitch: 0, bearing: 0, attributionControl: false, dragRotate: true, pitchWithRotate: true, maxPitch: 85
+  });
+  mm.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+
+  const W = { mm, _lines: [], _handlers: {}, _removed: false, _ready: false, _readyQ: [] };
+  const fire = (ev, arg) => (W._handlers[ev] || []).slice().forEach(fn => { try { fn(arg); } catch (e) { console.warn('[ykmap]', ev, e); } });
+  const ready = (fn) => { if (W._ready) fn(); else W._readyQ.push(fn); };
+
+  // Cadangan raster kalau style vektor gagal sebelum tampil
+  let swapped = false;
+  mm.on('error', () => { if (swapped || W._ready || W._removed) return; swapped = true; try { mm.setStyle(window._YK_MAP_STYLE_OSM); } catch (e) {} });
+  mm.on('load', () => { W._ready = true; const q = W._readyQ.splice(0); q.forEach(fn => { try { fn(); } catch (e) {} }); });
+  mm.on('style.load', () => { W._lines.forEach(ln => ln._paint()); }); // garis ikut pindah saat ganti style
+  // WebGL bisa hilang saat app lama di background → izinkan dipulihkan
+  try {
+    const cv = mm.getCanvas();
+    cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); }, false);
+    cv.addEventListener('webglcontextrestored', () => { try { mm.resize(); } catch (e) {} }, false);
+  } catch (e) {}
+
+  // Event gaya Leaflet
+  mm.on('click', (e) => fire('click', { latlng: { lat: e.lngLat.lat, lng: e.lngLat.lng } }));
+  mm.on('moveend', () => fire('moveend'));
+  mm.on('zoomend', () => fire('zoomend'));
+  mm.on('dragstart', (e) => { if (e && e.originalEvent) fire('dragstart'); });
+
+  // ── API gaya Leaflet ──
+  W.on = (ev, fn) => { (W._handlers[ev] = W._handlers[ev] || []).push(fn); return W; };
+  W.off = (ev, fn) => { if (W._handlers[ev]) W._handlers[ev] = W._handlers[ev].filter(f => f !== fn); return W; };
+  W.getZoom = () => mm.getZoom() + 1;
+  W.getCenter = () => { const k = mm.getCenter(); return { lat: k.lat, lng: k.lng }; };
+  W.getBounds = () => {
+    const b = mm.getBounds();
+    return { getSouth: () => b.getSouth(), getWest: () => b.getWest(), getNorth: () => b.getNorth(), getEast: () => b.getEast() };
+  };
+  W.setView = (ll, zoom, o) => {
+    const p = _ykLL(ll); if (!p) return W;
+    const z = (zoom != null ? zoom : W.getZoom()) - 1;
+    const anim = o && o.animate;
+    if (anim) mm.easeTo({ center: [p.lng, p.lat], zoom: z, duration: 500 }); else mm.jumpTo({ center: [p.lng, p.lat], zoom: z });
+    return W;
+  };
+  W.panTo = (ll) => { const p = _ykLL(ll); if (p) mm.easeTo({ center: [p.lng, p.lat], duration: 400 }); return W; };
+  W.fitBounds = (pts, o) => {
+    o = o || {};
+    let list = pts && pts._ykPts ? pts._ykPts : pts;
+    if (list && typeof list.getLatLngs === 'function') list = list.getLatLngs();
+    list = (list || []).map(_ykLL).filter(Boolean);
+    if (!list.length) return W;
+    let s = 90, n = -90, w = 180, e2 = -180;
+    list.forEach(p => { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lng); e2 = Math.max(e2, p.lng); });
+    const fo = { padding: _ykPad(o), duration: o.animate === false ? 0 : 500 };
+    if (o.maxZoom != null) fo.maxZoom = o.maxZoom - 1;
+    try {
+      if (s === n && w === e2) mm.jumpTo({ center: [w, s], zoom: (o.maxZoom != null ? o.maxZoom : 17) - 1 });
+      else mm.fitBounds([[w, s], [e2, n]], fo);
+    } catch (err) {}
+    return W;
+  };
+  // Proyeksi piksel Web Mercator pada zoom skala Leaflet (dipakai _patokanVisibleAtZoom)
+  W.project = (ll, zoom) => {
+    const p = _ykLL(ll); const scale = 256 * Math.pow(2, zoom);
+    const x = (p.lng + 180) / 360 * scale;
+    const sin = Math.sin(p.lat * Math.PI / 180);
+    const y = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * scale;
+    return { x, y, distanceTo: (q) => Math.hypot(q.x - x, q.y - y) };
+  };
+  W.invalidateSize = () => { try { mm.resize(); } catch (e) {} return W; };
+  W.removeLayer = (layer) => { try { if (layer && layer.remove) layer.remove(); } catch (e) {} return W; };
+  W.remove = () => {
+    if (W._removed) return; W._removed = true;
+    fire('unload');
+    try { if (W._ctrlBox && W._ctrlBox.parentNode) W._ctrlBox.parentNode.removeChild(W._ctrlBox); } catch (e) {} // tombol zoom/3D ikut dibuang
+    try { mm.remove(); } catch (e) {}
+  };
+
+  // ── Penanda (marker) — html bebas, anchor [x,y] dalam piksel dari pojok kiri-atas (seperti Leaflet iconAnchor) ──
+  // spec: { html, size:[w,h], anchor:[x,y], draggable, interactive(default true), zIndex }
+  W.addMarker = (ll, spec) => {
+    spec = spec || {};
+    const p = _ykLL(ll);
+    const el = document.createElement('div');
+    el.className = 'yk-mk' + (spec.interactive === false ? ' yk-noint' : '');
+    const size = spec.size || [24, 24], anc = spec.anchor || [size[0] / 2, size[1] / 2];
+    el.style.width = size[0] + 'px'; el.style.height = size[1] + 'px';
+    if (spec.zIndex != null) el.style.zIndex = spec.zIndex;
+    el.innerHTML = spec.html || '';
+    const mk = new maplibregl.Marker({ element: el, anchor: 'top-left', offset: [-anc[0], -anc[1]], draggable: !!spec.draggable, pitchAlignment: 'viewport', rotationAlignment: 'viewport' })
+      .setLngLat([p.lng, p.lat]);
+    const M = { _mk: mk, _el: el, _on: false, _h: {} };
+    M.addTo = () => { if (!M._on && !W._removed) { mk.addTo(mm); M._on = true; } return M; };
+    M.remove = () => { if (M._on) { try { mk.remove(); } catch (e) {} M._on = false; } return M; };
+    M.setLatLng = (q) => { const r = _ykLL(q); if (r) mk.setLngLat([r.lng, r.lat]); return M; };
+    M.getLatLng = () => { const k = mk.getLngLat(); return { lat: k.lat, lng: k.lng }; };
+    M.on = (ev, fn) => {
+      if (ev === 'click') {
+        // stopPropagation: klik penanda JANGAN ikut dianggap klik peta
+        el.addEventListener('click', (e) => { e.stopPropagation(); fn({ latlng: M.getLatLng() }); });
+      } else if (ev === 'dragend' || ev === 'drag' || ev === 'dragstart') {
+        mk.on(ev, () => fn({ target: M }));
+      }
+      return M;
+    };
+    if (spec.interactive !== false) el.addEventListener('click', (e) => e.stopPropagation());
+    return M.addTo();
+  };
+
+  // ── Garis (polyline) — coords [[lat,lng],...], style {color, weight, opacity, dashArray:'6,8'|null} ──
+  W.addPolyline = (coords, style) => {
+    const id = 'yk-line-' + (++_ykLineSeq);
+    const L1 = { id, _pts: (coords || []).map(_ykLL).filter(Boolean), _st: Object.assign({ color: '#10B981', weight: 4, opacity: 0.9, dashArray: null }, style || {}), _gone: false };
+    const paint = () => {
+      if (L1._gone || W._removed) return;
+      const data = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: L1._pts.map(p => [p.lng, p.lat]) } };
+      const dash = L1._st.dashArray ? String(L1._st.dashArray).split(',').map(n => Math.max(0.1, (+n) / (L1._st.weight || 4))) : null;
+      try {
+        if (mm.getSource(id)) mm.getSource(id).setData(data);
+        else {
+          mm.addSource(id, { type: 'geojson', data });
+          mm.addLayer({ id, type: 'line', source: id, layout: { 'line-cap': dash ? 'butt' : 'round', 'line-join': 'round' }, paint: { 'line-color': L1._st.color, 'line-width': L1._st.weight, 'line-opacity': L1._st.opacity } });
+        }
+        mm.setPaintProperty(id, 'line-color', L1._st.color);
+        mm.setPaintProperty(id, 'line-width', L1._st.weight);
+        mm.setPaintProperty(id, 'line-opacity', L1._st.opacity);
+        mm.setPaintProperty(id, 'line-dasharray', dash || [1, 0]);
+      } catch (e) {}
+    };
+    L1._paint = () => { if (mm.isStyleLoaded()) paint(); else mm.once('idle', paint); };
+    L1.setStyle = (s) => { Object.assign(L1._st, s || {}); L1._paint(); return L1; };
+    L1.setLatLngs = (c) => { L1._pts = (c || []).map(_ykLL).filter(Boolean); L1._paint(); return L1; };
+    L1.getLatLngs = () => L1._pts.slice();
+    L1.getBounds = () => ({ _ykPts: L1._pts.slice() });
+    L1.remove = () => {
+      if (L1._gone) return; L1._gone = true;
+      W._lines = W._lines.filter(x => x !== L1);
+      try { if (mm.getLayer(id)) mm.removeLayer(id); if (mm.getSource(id)) mm.removeSource(id); } catch (e) {}
+    };
+    W._lines.push(L1);
+    ready(L1._paint);
+    return L1;
+  };
+
+  // ── Tombol zoom & miring 3D (gaya Mat'am) ──
+  if (opts.controls && opts.controls !== 'none') {
+    const box = document.createElement('div');
+    box.className = 'yk-map-ctrl';
+    box.style.left = '12px'; box.style.top = (opts.controlsTop != null ? opts.controlsTop : 12) + 'px';
+    const svgPlus = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    const svgMinus = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    const svgTilt = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>';
+    const btn = (svg, label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', label); b.innerHTML = svg; b.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); return b; };
+    const div = () => { const d = document.createElement('div'); d.className = 'yk-div'; return d; };
+    if (opts.controls === 'full') {
+      box.appendChild(btn(svgPlus, 'Perbesar', () => mm.zoomIn()));
+      box.appendChild(div());
+      box.appendChild(btn(svgMinus, 'Perkecil', () => mm.zoomOut()));
+      box.appendChild(div());
+    }
+    box.appendChild(btn(svgTilt, 'Miringkan (3D)', () => {
+      if (mm.getPitch() < 5) mm.easeTo({ pitch: 65, duration: 500 }); else mm.easeTo({ pitch: 0, bearing: 0, duration: 500 });
+    }));
+    // Buang sisa tombol dari peta lama di wadah yang sama (jaga-jaga), lalu pasang yang baru
+    el.querySelectorAll(':scope > .yk-map-ctrl').forEach(n => n.remove());
+    el.appendChild(box);
+    W._ctrlBox = box;
+  }
+
+  requestAnimationFrame(() => { if (!W._removed) { try { mm.resize(); } catch (e) {} } });
+  return W;
+}
+window._ykMap = _ykMap;
+
 // Reverse-geocode koordinat → nama/alamat (Nominatim OSM, bahasa Indonesia).
 // Dipakai supaya kolom Dari/Ke menampilkan NAMA alamat, bukan angka koordinat.
 async function _kbReverseGeocode(lat, lng) {
@@ -27916,19 +28194,19 @@ window._kbSelectSearchResult = function(i) {
 // Ikon "tongkat bendera" untuk titik Dari (bendera putih polos) & Ke (bendera kotak-kotak) —
 // dipasang di peta pemilihan lokasi supaya kedua titik rute terlihat jelas sekaligus, mirip
 // penanda start/finish rute pada umumnya. Anchor di dasar tongkat (bukan tengah ikon).
+// (MapLibre: mengembalikan spec penanda untuk map.addMarker, bukan L.divIcon)
 function _kbFlagIcon(kind) {
   const finish = kind === 'finish';
   const iconClass = finish ? 'fa-flag-checkered' : 'fa-flag';
   const color = finish ? '#111827' : '#ffffff';
   const outline = finish ? '' : 'text-shadow:-1px -1px 0 #374151,1px -1px 0 #374151,-1px 1px 0 #374151,1px 1px 0 #374151;';
-  return L.divIcon({
-    className: 'kb-flag-pin',
+  return {
     html: '<div style="display:flex;flex-direction:column;align-items:center">'
       + '<i class="fa-solid ' + iconClass + '" style="font-size:20px;color:' + color + ';' + outline + 'filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))"></i>'
       + '<div style="width:2px;height:15px;background:#374151;margin-top:-2px"></div>'
       + '</div>',
-    iconSize: [26, 38], iconAnchor: [5, 36]
-  });
+    size: [26, 38], anchor: [5, 36]
+  };
 }
 
 // Gambar ulang garis rute (Dari → Ke) di peta picker: titik yang SUDAH dikonfirmasi (tersimpan
@@ -27950,19 +28228,20 @@ async function _kbRefreshRouteOverlay() {
   if (fLat == null || fLng == null || tLat == null || tLng == null) return; // salah satu titik belum ada
   if (Math.abs(fLat - tLat) < 1e-7 && Math.abs(fLng - tLng) < 1e-7) return; // titik masih sama — belum ada rute berarti
   const mySeq = ++_kbRouteSeq;
-  st._routeLine = L.polyline([[fLat, fLng], [tLat, tLng]], { color: '#10B981', weight: 4, opacity: .5, dashArray: '6,8' }).addTo(map);
+  st._routeLine = map.addPolyline([[fLat, fLng], [tLat, tLng]], { color: '#10B981', weight: 4, opacity: .5, dashArray: '6,8' });
   try {
     const path = await _ykFetchRoadRoute(fLat, fLng, tLat, tLng);
     if (mySeq !== _kbRouteSeq || st._map !== map) return; // picker keburu ditutup/ganti sebelum ORS selesai
     if (path) {
       try { map.removeLayer(st._routeLine); } catch (e) {}
-      st._routeLine = L.polyline(path, { color: '#10B981', weight: 5, opacity: .9 }).addTo(map);
+      st._routeLine = map.addPolyline(path, { color: '#10B981', weight: 5, opacity: .9 });
     } else {
       st._routeLine.setStyle({ opacity: .85, dashArray: null }); // ORS gagal → garis lurus solid
     }
   } catch (e) {}
 }
 
+let _kbMapOpenSeq = 0;
 window._kbOpenMap = function(target) {
   const st = window._kbState;
   st.mapTarget = target;
@@ -27978,24 +28257,16 @@ window._kbOpenMap = function(target) {
   if (target === 'from' && st.fromLat != null) { clat = st.fromLat; clng = st.fromLng; }
   else if (target === 'to' && st.toLat != null) { clat = st.toLat; clng = st.toLng; }
   else if (st.fromLat != null) { clat = st.fromLat; clng = st.fromLng; }
-  setTimeout(() => {
+  const mySeq = ++_kbMapOpenSeq;
+  if (st._map) { try { st._map.remove(); } catch (e) {} st._map = null; st._marker = null; }
+  setTimeout(async () => {
     const mapEl = document.getElementById('kbMapPickerMap');
-    if (st._map) { try { st._map.remove(); } catch (e) {} st._map = null; st._marker = null; }
-    const map = L.map(mapEl).setView([clat, clng], 15);
-    // Basemap: OpenFreeMap vektor (label Latin/Indonesia) → kalau gagal, raster CARTO
-    _kbEnsureMapLibre().then(ok => {
-      if (!st._map) return; // overlay sudah ditutup sebelum library siap
-      if (ok && L.maplibreGL) {
-        try {
-          const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty' }).addTo(map);
-          const mm = gl.getMaplibreMap ? gl.getMaplibreMap() : gl._glMap;
-          if (mm) { mm.on('load', () => _kbForceLatinLabels(mm)); }
-          return;
-        } catch (e) { /* jatuh ke raster */ }
-      }
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map); // cadangan (CARTO kini wajib API key)
-    });
-    const marker = L.marker([clat, clng], { draggable: true, icon: _kbFlagIcon(target === 'from' ? 'start' : 'finish') }).addTo(map);
+    // Peta MapLibre (gaya Nuqto): bisa diputar & dimiringkan 3D. Tombol zoom/3D di bawah kolom cari.
+    const map = await _ykMap(mapEl, { center: [clat, clng], zoom: 15, controls: 'full', controlsTop: 70 });
+    const ov = document.getElementById('kbMapPickerOverlay');
+    if (!map) { if (mySeq === _kbMapOpenSeq) showToast('Peta gagal dimuat, periksa koneksi lalu coba lagi', 'red'); return; }
+    if (mySeq !== _kbMapOpenSeq || !ov || ov.style.display === 'none') { map.remove(); return; } // keburu ditutup/dibuka ulang
+    const marker = map.addMarker([clat, clng], Object.assign({ draggable: true, zIndex: 3 }, _kbFlagIcon(target === 'from' ? 'start' : 'finish')));
     // Taruh/geser pin sendiri = bukan patokan lagi → kolom nanti pakai koordinat.
     map.on('click', (e) => { marker.setLatLng(e.latlng); st._selPatokan = null; const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none'; _kbRefreshRouteOverlay(); });
     marker.on('dragend', () => { st._selPatokan = null; _kbRefreshRouteOverlay(); });
@@ -28006,13 +28277,13 @@ window._kbOpenMap = function(target) {
     const otherLat = otherIsFrom ? st.fromLat : st.toLat;
     const otherLng = otherIsFrom ? st.fromLng : st.toLng;
     if (otherLat != null && otherLng != null) {
-      L.marker([otherLat, otherLng], { icon: _kbFlagIcon(otherIsFrom ? 'start' : 'finish'), interactive: false }).addTo(map);
+      map.addMarker([otherLat, otherLng], Object.assign({ interactive: false, zIndex: 2 }, _kbFlagIcon(otherIsFrom ? 'start' : 'finish')));
     }
-    _attachBuildingFootprints(map); // jejak bangunan asli (OSM) — biar area kosong di peta terlihat natural
+    // Bangunan kini digambar langsung oleh style peta (data OSM yang sama) → tak perlu _attachBuildingFootprints.
     _kbLoadPatokanMarkers(map); // tampilkan patokan sebagai pin tetap di peta
     _kbRefreshRouteOverlay(); // gambar rute kalau kedua titik (lama + baru) sudah ada
     map.invalidateSize();
-    setTimeout(() => { if (st._map) st._map.invalidateSize(); }, 400);
+    setTimeout(() => { if (st._map === map) map.invalidateSize(); }, 400);
   }, 60);
 };
 
@@ -28100,47 +28371,49 @@ function _attachBuildingFootprints(map) {
 // Tap pin → set marker seleksi ke titik patokan itu. Titik patokan permanen —
 // tidak bisa digeser user; hanya admin yang bisa ubah datanya (RLS admin-only).
 // Visibilitas per-pin bertingkat lihat _patokanVisibleAtZoom di atas. Toggle via listener 'zoomend'.
+// (MapLibre: penanda ditambah/dilepas langsung, pengganti L.layerGroup)
+function _kbPatokanSpec(p) {
+  const cat = _patokanCat(p.category);
+  return {
+    html: '<div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto">'
+      + '<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:' + cat.color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center">'
+      + '<i class="fa-solid ' + cat.icon + '" style="color:#fff;font-size:12px;transform:rotate(45deg)"></i></div>'
+      + '<span style="margin-top:2px;font-size:9.5px;font-weight:800;color:' + cat.color + ';text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 1px 2px rgba(0,0,0,.2);text-align:center;white-space:normal;word-break:break-word;max-width:96px;line-height:1.15">' + _sadEscHtml(p.name) + '</span>'
+      + '</div>',
+    size: [96, 44], anchor: [48, 26]
+  };
+}
 async function _kbLoadPatokanMarkers(map) {
   const st = window._kbState;
-  if (st._patokanLayer) { try { map.removeLayer(st._patokanLayer); } catch (e) {} st._patokanLayer = null; }
+  if (st._patokanLayer) { try { st._patokanLayer.remove(); } catch (e) {} st._patokanLayer = null; }
   if (st._patokanZoomHandler) { try { map.off('zoomend', st._patokanZoomHandler); } catch (e) {} st._patokanZoomHandler = null; }
   try {
     const r = await window._supaFetch('/rest/v1/patokan?status=eq.active&select=name,category,lat,lng&limit=500');
     const rows = r.ok ? await r.json() : [];
     if (!st._map || st._map !== map) return; // overlay keburu ditutup
-    const layer = L.layerGroup().addTo(map);
     const entries = [];
     rows.forEach(p => {
       if (p.lat == null || p.lng == null) return;
-      const cat = _patokanCat(p.category);
-      const icon = L.divIcon({
-        className: 'kb-patokan-pin',
-        html: '<div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto">'
-          + '<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:' + cat.color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center">'
-          + '<i class="fa-solid ' + cat.icon + '" style="color:#fff;font-size:12px;transform:rotate(45deg)"></i></div>'
-          + '<span style="margin-top:2px;font-size:9.5px;font-weight:800;color:' + cat.color + ';text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 1px 2px rgba(0,0,0,.2);text-align:center;white-space:normal;word-break:break-word;max-width:96px;line-height:1.15">' + _sadEscHtml(p.name) + '</span>'
-          + '</div>',
-        iconSize: [96, 44], iconAnchor: [48, 26]
-      });
-      const m = L.marker([p.lat, p.lng], { icon, draggable: false, keyboard: false });
+      const m = map.addMarker([p.lat, p.lng], Object.assign({ draggable: false, zIndex: 1 }, _kbPatokanSpec(p)));
+      m.remove(); // tampil/sembunyi diatur applyZoom
       m.on('click', () => {
         if (st._marker) st._marker.setLatLng([p.lat, p.lng]);
         st._selPatokan = { name: p.name, lat: p.lat, lng: p.lng }; // titik ini = patokan → pakai namanya
-        map.setView([p.lat, p.lng], Math.max(map.getZoom(), 16));
+        map.setView([p.lat, p.lng], Math.max(map.getZoom(), 16), { animate: true });
         const inp = document.getElementById('kbMapSearchInput'); if (inp) inp.value = p.name;
         const sr = document.getElementById('kbMapSearchResults'); if (sr) sr.style.display = 'none';
         _kbRefreshRouteOverlay();
       });
       entries.push({ lat: p.lat, lng: p.lng, marker: m });
     });
-    st._patokanLayer = layer;
+    st._patokanLayer = { remove: () => entries.forEach(e => e.marker.remove()) };
     const applyZoom = () => {
       if (!st._patokanLayer || !st._map || st._map !== map) return;
       const visible = _patokanVisibleAtZoom(map, entries, map.getZoom());
       entries.forEach((e, i) => {
-        const has = layer.hasLayer(e.marker);
-        if (visible[i] && !has) layer.addLayer(e.marker);
-        else if (!visible[i] && has) layer.removeLayer(e.marker);
+        const has = e.marker._on;
+        if (visible[i] && !has) e.marker.addTo();
+        else if (!visible[i] && has) e.marker.remove();
       });
     };
     st._patokanZoomHandler = applyZoom;
@@ -28151,6 +28424,7 @@ async function _kbLoadPatokanMarkers(map) {
 
 window._kbCloseMap = function() {
   const st = window._kbState;
+  _kbMapOpenSeq++; // batalkan peta yang masih dimuat
   if (st._map) { try { st._map.remove(); } catch (e) {} st._map = null; st._marker = null; }
   document.getElementById('kbMapPickerOverlay').style.display = 'none';
 };
