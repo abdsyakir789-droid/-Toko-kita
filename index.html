@@ -15075,6 +15075,98 @@ window.showToast=(msg,type)=>{
   setTimeout(()=>{t.classList.add('to');setTimeout(()=>t.remove(),280);},2800);
 };
 
+// ── Popup error ramah ─────────────────────────────────────────
+// Pesan error TEKNIS (mis. "Brevo error: {...}", "Failed to fetch", kode HTTP) tidak lagi
+// ditampilkan mentah di toast merah, tapi diganti popup rapi dgn bahasa yang mudah dipahami.
+// Toast arahan biasa ("Login dulu", "PIN salah", dst.) TETAP toast seperti sebelumnya.
+// Pesan asli tetap dicatat di console, dan admin bisa membuka "Detail teknis".
+(function(){
+  var ADMIN = ['abdsyakir160@gmail.com','abdsyakir164@gmail.com'];
+  var TECH = /error|failed to fetch|networkerror|load failed|network request failed|fetch|timeout|timed out|abort|[{}]|https?:\/\/|\bstatus\b|\b[45]\d\d\b|PGRST|violates|permission denied|row-level|jwt|duplicate key|null value|undefined|cannot read|is not a function|unexpected token|json|econn|err_|brevo|supabase|\br2\b|cloudflare|internal|exception|too many|rate.?limit|forbidden|unauthori[sz]ed|bad gateway|service unavailable/i;
+  var KINDS = {
+    net:     { icon:'fa-wifi',               bg:'#FEF3C7', fg:'#D97706', title:'Koneksi internet bermasalah', text:'Periksa koneksi internet kamu, lalu coba lagi.' },
+    offline: { icon:'fa-wifi',               bg:'#FEF3C7', fg:'#D97706', title:'Tidak ada koneksi internet', text:'Sambungkan kembali internet kamu. YallaMart akan berfungsi normal begitu koneksi kembali.' },
+    busy:    { icon:'fa-server',             bg:'#DBEAFE', fg:'#2563EB', title:'Sistem sedang sibuk', text:'Server kami sedang mengalami gangguan sementara. Silakan coba lagi dalam beberapa saat.' },
+    limit:   { icon:'fa-hourglass-half',     bg:'#EDE9FE', fg:'#7C3AED', title:'Terlalu banyak percobaan', text:'Tunggu beberapa saat sebelum mencoba lagi.' },
+    session: { icon:'fa-user-lock',          bg:'#E0E7FF', fg:'#4F46E5', title:'Sesi kamu sudah berakhir', text:'Silakan keluar lalu masuk kembali untuk melanjutkan.' },
+    denied:  { icon:'fa-lock',               bg:'#FEE2E2', fg:'#DC2626', title:'Akses tidak diizinkan', text:'Kamu tidak punya izin untuk melakukan tindakan ini. Jika menurutmu ini keliru, hubungi admin YallaMart.' },
+    dup:     { icon:'fa-clone',              bg:'#F3F4F6', fg:'#4B5563', title:'Data sudah ada', text:'Data yang sama sudah tersimpan sebelumnya.' },
+    other:   { icon:'fa-circle-exclamation', bg:'#FEE2E2', fg:'#DC2626', title:'Terjadi kendala', text:'Permintaan kamu belum berhasil diproses. Silakan coba lagi beberapa saat lagi.' }
+  };
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function classify(msg){
+    var m = String(msg||'');
+    var offline = (typeof navigator!=='undefined' && navigator.onLine===false);
+    if (!offline && !TECH.test(m)) return null;                       // toast arahan biasa → biarkan
+    if (offline || /failed to fetch|networkerror|load failed|network request failed|err_internet|err_network|err_connection|err_name|timeout|timed out|abort/i.test(m)) return 'net';
+    if (/\b429\b|too many|rate.?limit/i.test(m)) return 'limit';
+    if (/jwt|expired|\b401\b|not authenticated|unauthori[sz]ed|invalid.*token/i.test(m)) return 'session';
+    if (/permission denied|row-level|\b403\b|forbidden/i.test(m)) return 'denied';
+    if (/duplicate key|already exists|23505/i.test(m)) return 'dup';
+    if (/\b5\d\d\b|brevo|internal|service unavailable|bad gateway|server|unrecognised ip/i.test(m)) return 'busy';
+    return 'other';
+  }
+  function isAdmin(){ try { var e=(window._S&&window._S.user&&window._S.user.email||'').toLowerCase(); return ADMIN.indexOf(e)>=0; } catch(e){ return false; } }
+  function close(){
+    var o=document.getElementById('ymErrPopup'); if(!o) return;
+    o.style.opacity='0'; var card=o.firstElementChild; if(card) card.style.transform='scale(.94)';
+    setTimeout(function(){ if(o.parentNode) o.remove(); },200);
+  }
+  function show(kind, context, raw){
+    var k = KINDS[kind] || KINDS.other;
+    var old=document.getElementById('ymErrPopup'); if(old) old.remove();
+    var o=document.createElement('div');
+    o.id='ymErrPopup'; o.setAttribute('data-kind',kind);
+    o.style.cssText='position:fixed;inset:0;z-index:2147483001;background:rgba(17,24,39,.45);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;transition:opacity .2s';
+    var ctx = context ? '<p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#9CA3AF;letter-spacing:.02em">'+esc(context)+'</p>' : '';
+    var det = (raw && isAdmin()) ? '<details style="margin:14px 0 0;text-align:left"><summary style="font-size:11.5px;color:#9CA3AF;cursor:pointer">Detail teknis (admin)</summary><pre style="margin:6px 0 0;padding:8px;background:#F9FAFB;border-radius:8px;font-size:10.5px;color:#6B7280;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow:auto">'+esc(raw)+'</pre></details>' : '';
+    o.innerHTML='<div style="background:#fff;border-radius:20px;max-width:340px;width:100%;padding:26px 22px 20px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.25);transform:scale(.94);transition:transform .22s cubic-bezier(.2,.9,.3,1.2)">'
+      + '<div style="width:64px;height:64px;border-radius:50%;background:'+k.bg+';display:flex;align-items:center;justify-content:center;margin:0 auto 14px"><i class="fa-solid '+k.icon+'" style="font-size:26px;color:'+k.fg+'"></i></div>'
+      + ctx
+      + '<h3 style="margin:0 0 8px;font-size:17px;font-weight:800;color:#111827">'+k.title+'</h3>'
+      + '<p style="margin:0;font-size:13.5px;line-height:1.55;color:#4B5563">'+k.text+'</p>'
+      + det
+      + '<button type="button" id="ymErrPopupOk" style="margin-top:18px;width:100%;border:none;border-radius:12px;padding:12px;background:#10B981;color:#fff;font-size:14px;font-weight:700;cursor:pointer">Mengerti</button>'
+      + '</div>';
+    o.addEventListener('click', function(e){ if(e.target===o || e.target.id==='ymErrPopupOk') close(); });
+    document.body.appendChild(o);
+    setTimeout(function(){ o.style.opacity='1'; o.firstElementChild.style.transform='scale(1)'; },10);
+  }
+  window._ymErrorPopup = show;
+  window._ymErrorClassify = classify;
+
+  var rawToast = window.showToast;
+  window.showToast = function(msg, type){
+    if (type === 'red') {
+      var kind = classify(msg);
+      if (kind) {
+        try { console.warn('[YallaMart] error asli:', msg); } catch(e){}
+        var s = String(msg||''), i = s.indexOf(':');
+        var context = (i > 0 && i <= 40) ? s.slice(0, i).replace(/^[^\wA-Za-z]+/, '').trim() : '';
+        if (TECH.test(context)) context = '';
+        show(kind, context, s);
+        return;
+      }
+    }
+    return rawToast(msg, type);
+  };
+
+  // Internet putus / tersambung lagi
+  var offTimer = null;
+  window.addEventListener('offline', function(){
+    clearTimeout(offTimer);
+    offTimer = setTimeout(function(){ if (navigator.onLine === false) show('offline', '', ''); }, 1500);
+  });
+  window.addEventListener('online', function(){
+    clearTimeout(offTimer);
+    var o = document.getElementById('ymErrPopup');
+    if (o && (o.getAttribute('data-kind') === 'offline' || o.getAttribute('data-kind') === 'net')) {
+      close();
+      rawToast('Koneksi internet tersambung kembali', 'green');
+    }
+  });
+})();
+
 // ── Modal error reusable: dipakai saat API moderasi foto balikin status flagged ──
 // Dipanggil dari: Gagal Upload Iklan & Gagal Kirim Foto di Chat.
 window.showExplicitContentModal=function(){
