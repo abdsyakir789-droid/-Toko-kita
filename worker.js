@@ -11,7 +11,9 @@
 // ════════════════════════════════════════════════════════════════════
 
 const SUPA_URL = 'https://jgnjgfuypcelwjztebsy.supabase.co';
-const SUPA_ANON = 'eyJhbGci••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••'; // kunci publik (sama dgn yang ada di index.html)
+// Kunci publik Supabase diambil otomatis dari index.html (window._SUPA_ANON produksi),
+// jadi file ini tidak perlu menyimpan kunci sendiri.
+let SUPA_ANON = '';
 const SITE_NAME = 'YallaMart';
 const DEFAULT_IMG = 'https://res.cloudinary.com/dsy4hjc7a/image/upload/w_512,h_512,c_fill,f_png/v1777071286/file_00000000061071f4a2bf027d7ff5df98_gaknb3.png';
 const DEFAULT_DESC = 'Marketplace, pesan makanan, & kirim barang untuk mahasiswa Indonesia di Kairo.';
@@ -32,21 +34,30 @@ export default {
     try { page = await env.ASSETS.fetch(pageReq); } catch (e) { return env.ASSETS.fetch(request); }
     if (!page.ok || !(page.headers.get('content-type') || '').includes('text/html')) return page;
 
+    let html;
+    try { html = await page.text(); } catch (e) { return env.ASSETS.fetch(pageReq); }
+    const plain = () => new Response(html, { status: page.status, headers: page.headers });
+    if (!SUPA_ANON) {
+      const m = html.match(/window\._SUPA_ANON\s*=\s*'([^']+)'/);
+      if (m) SUPA_ANON = m[1];
+    }
+    if (!SUPA_ANON) return plain();
+
     let meta = null;
     try { meta = await withTimeout(buildMeta(url), TIMEOUT_MS); } catch (e) { meta = null; }
-    if (!meta) return page;
+    if (!meta) return plain();
 
     try {
       const tags = renderTags(meta, url);
       const res = new HTMLRewriter()
         .on('head', { element(el) { el.prepend(tags, { html: true }); } })
         .on('title', { element(el) { el.setInnerContent(meta.title); } })
-        .transform(page);
+        .transform(plain());
       const out = new Response(res.body, res);
       out.headers.set('cache-control', 'public, max-age=0, must-revalidate');
       return out;
     } catch (e) {
-      return page;
+      return plain();
     }
   }
 };
