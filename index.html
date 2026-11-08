@@ -3615,6 +3615,10 @@ h3.text-sm.font-bold.text-gray-800 {
       <button onclick="showPage('home')" class="back-btn-glass">
         <i class="fa-solid fa-chevron-left text-sm"></i>
       </button>
+      <!-- Menu toko (⋯): Bagikan toko -->
+      <button type="button" id="etalaseMoreBtn" onclick="_etToggleMenu(event)" class="back-btn-glass" style="left:auto;right:16px" aria-label="Menu toko">
+        <i class="fa-solid fa-ellipsis text-sm"></i>
+      </button>
 
       <!-- Profile row: Avatar + Name + Buttons — all inside cover -->
       <div class="store-profile-overlay">
@@ -9040,6 +9044,8 @@ window._bcOpenLink = function(href) {
     const p = u.searchParams;
     const pid = p.get('p');
     if (pid && typeof window.openDetail === 'function') { setTimeout(function(){ window.openDetail(pid); }, 150); return; }
+    const toko = p.get('toko');
+    if (toko && window._etOpenFromLink) { setTimeout(function(){ window._etOpenFromLink(toko); }, 150); return; }
     if ((p.get('go') || p.get('chatId')) && typeof window._routePushGo === 'function') { window._routePushGo(p); return; }
     return; // link beranda → cukup kembali ke aplikasi
   }
@@ -11729,6 +11735,47 @@ window.openChatRoomFromList = async function(chatDocId, adId, otherId, otherName
   if(chatDocId && window.markChatRead) markChatRead(chatDocId);
   await openChatRoom(adId, otherId, otherName, otherPhoto, adTitle, adImg, Number(adPrice));
 };
+// ── Menu ⋯ etalase + Bagikan toko (link: /?toko=<uid>) ──
+// Menu dipasang di <body> (bukan di dalam sampul yang overflow:hidden) supaya tidak terpotong.
+window._etCloseMenu = function(){ var m=document.getElementById('etalaseMoreMenu'); if(m) m.remove(); document.removeEventListener('click', window._etCloseMenu, true); };
+window._etToggleMenu = function(ev){
+  if (ev) ev.stopPropagation();
+  if (document.getElementById('etalaseMoreMenu')) { window._etCloseMenu(); return; }
+  var btn = document.getElementById('etalaseMoreBtn'); if (!btn) return;
+  var r = btn.getBoundingClientRect();
+  var m = document.createElement('div');
+  m.id = 'etalaseMoreMenu';
+  m.style.cssText = 'position:fixed;z-index:9000;top:'+(r.bottom+8)+'px;right:'+Math.max(8, window.innerWidth-r.right)+'px;min-width:170px;background:rgba(17,24,39,.96);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);padding:6px 0;overflow:hidden';
+  m.innerHTML = '<button type="button" onclick="window._etCloseMenu();window._etShareStore()" style="display:flex;align-items:center;gap:12px;width:100%;padding:11px 16px;background:none;border:none;color:#fff;font-size:14px;font-weight:600;text-align:left;cursor:pointer"><i class="fa-solid fa-share" style="width:18px;text-align:center"></i>Bagikan toko</button>';
+  document.body.appendChild(m);
+  setTimeout(function(){ document.addEventListener('click', window._etCloseMenu, true); }, 0);
+};
+window._etStoreLink = function(uid){ return location.origin + '/?toko=' + encodeURIComponent(uid); };
+window._etShareStore = function(){
+  var uid = window._etalaseSellerUid;
+  if (!uid || uid === 'static') { showToast('Link toko belum tersedia','red'); return; }
+  var name = ((document.getElementById('etalaseName')||{}).textContent || '').trim() || 'Toko';
+  var url = window._etStoreLink(uid);
+  try { if (window.trackEvent) trackEvent('share_store', { seller_uid: uid, method: navigator.share ? 'native' : 'copy_link' }); } catch(e){}
+  if (navigator.share) {
+    navigator.share({ title: name + ' di YallaMart', text: 'Kunjungi toko ' + name + ' di YallaMart:', url: url }).catch(function(){});
+    return;
+  }
+  var done = function(){ showToast('Link toko disalin!','green'); };
+  try {
+    navigator.clipboard.writeText(url).then(done).catch(function(){ window.prompt('Salin link toko:', url); });
+  } catch(e) { window.prompt('Salin link toko:', url); }
+};
+// Buka etalase dari link ?toko= — tunggu data aplikasi siap dulu
+window._etOpenFromLink = function(uid){
+  if (!uid) return;
+  (function wait(n){
+    var ready = typeof window.viewSellerStore === 'function' && window._S && Array.isArray(window._S.fbAds);
+    if (ready && (window._S.fbAds.length || n >= 16)) { try { window.viewSellerStore(uid); } catch(e){} }
+    else if (n < 40) setTimeout(function(){ wait(n+1); }, 500);
+  })(0);
+};
+
 window.viewSellerStore = async function(sellerUid) {
   if(!sellerUid || sellerUid === 'static') {
     showToast('Etalase tidak tersedia untuk penjual ini','red');
@@ -15025,6 +15072,8 @@ window.billboardClick = async function(idx) {
 
   // Cek apakah link eksternal
   if(adId.startsWith('http://') || adId.startsWith('https://')) {
+    // Link YallaMart sendiri (mis. link toko ?toko=) → buka di dalam aplikasi
+    if (adId.indexOf('toko=') >= 0 && window._bcOpenLink) { window._bcOpenLink(adId); return; }
     window.open(adId, '_blank');
     return;
   }
@@ -19906,6 +19955,13 @@ window.requirePin = function(callback) {
 <script>
 // Baca parameter URL saat app dibuka
 (function handleDeepLink() {
+  // Link toko: /?toko=<uid> → buka etalase toko tsb
+  (function(){
+    const toko = new URLSearchParams(window.location.search).get('toko');
+    if (!toko) return;
+    try { history.replaceState(null, '', window.location.pathname); } catch(e) {}
+    setTimeout(() => { if (window._etOpenFromLink) window._etOpenFromLink(toko); }, 1000);
+  })();
   function tryOpenAd(attempt) {
     const params = new URLSearchParams(window.location.search);
     const pid = params.get('p');
@@ -30808,6 +30864,10 @@ window._deletePopupPromo = async function(id) {
 window._showPopupPromoAction = function(url) {
   if (!url) return;
   if (/^https?:\/\//i.test(url)) {
+    // Link YallaMart sendiri (link toko ?toko=, produk ?p=) → buka di dalam aplikasi, bukan tab baru
+    var _int = false;
+    try { _int = !!(window._bcIsInternal && window._bcIsInternal(new URL(url))); } catch (e) {}
+    if (_int && window._bcOpenLink) { window._bcOpenLink(url); return; }
     window.open(url, '_blank');
   } else if (window.openDetail) {
     window.openDetail(url);
@@ -31439,6 +31499,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (url === _dlLast && Date.now() - _dlAt < 4000) return;   // cegah dobel
       _dlLast = url; _dlAt = Date.now();
       var pid = u.searchParams.get('p');
+      var toko = u.searchParams.get('toko');
+      if (cold && toko) {
+        if (location.search.indexOf('toko=') >= 0) return;               // sudah ditangani handleDeepLink
+        if (window._etOpenFromLink) window._etOpenFromLink(toko);
+        return;
+      }
       if (cold && pid) {
         if (location.search.indexOf('p=' + pid) >= 0) return;          // sudah ditangani handleDeepLink
         (function wait(n) {                                             // tunggu daftar produk siap
