@@ -3220,6 +3220,11 @@ h3.text-sm.font-bold.text-gray-800 {
       <!-- Gradient overlay -->
       <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.05) 0%,rgba(0,0,0,.6) 100%)"></div>
 
+      <!-- Menu toko sendiri (⋯): Bagikan toko -->
+      <button type="button" id="profileMoreBtn" onclick="_etToggleMenu(event,'profileMoreBtn','self')" class="back-btn-glass" style="left:auto;right:16px;top:16px" aria-label="Menu toko saya">
+        <i class="fa-solid fa-ellipsis text-sm"></i>
+      </button>
+
       <!-- Upload cover button -->
       <label for="profileCoverInput" class="cover-upload-btn" style="z-index:5">
         <i class="fa-solid fa-camera text-xs"></i>
@@ -11738,10 +11743,12 @@ window.openChatRoomFromList = async function(chatDocId, adId, otherId, otherName
 // ── Menu ⋯ etalase + Bagikan toko (link: /?toko=<uid>) ──
 // Menu dipasang di <body> (bukan di dalam sampul yang overflow:hidden) supaya tidak terpotong.
 window._etCloseMenu = function(){ var m=document.getElementById('etalaseMoreMenu'); if(m) m.remove(); document.removeEventListener('click', window._etCloseMenu, true); };
-window._etToggleMenu = function(ev){
+// btnId: tombol pemicu (default etalase). who: 'self' = toko milik sendiri (halaman Akun).
+window._etToggleMenu = function(ev, btnId, who){
   if (ev) ev.stopPropagation();
   if (document.getElementById('etalaseMoreMenu')) { window._etCloseMenu(); return; }
-  var btn = document.getElementById('etalaseMoreBtn'); if (!btn) return;
+  window._etShareWho = who || '';
+  var btn = document.getElementById(btnId || 'etalaseMoreBtn'); if (!btn) return;
   var r = btn.getBoundingClientRect();
   var m = document.createElement('div');
   m.id = 'etalaseMoreMenu';
@@ -11752,9 +11759,11 @@ window._etToggleMenu = function(ev){
 };
 window._etStoreLink = function(uid){ return location.origin + '/?toko=' + encodeURIComponent(uid); };
 window._etShareStore = function(){
-  var uid = window._etalaseSellerUid;
-  if (!uid || uid === 'static') { showToast('Link toko belum tersedia','red'); return; }
-  var name = ((document.getElementById('etalaseName')||{}).textContent || '').trim() || 'Toko';
+  var self = window._etShareWho === 'self';
+  var uid = self ? (window._S && window._S.user && window._S.user.uid) : window._etalaseSellerUid;
+  if (!uid || uid === 'static') { showToast(self ? 'Login dulu' : 'Link toko belum tersedia','red'); return; }
+  var name = self ? ((window._S.user.name || '').trim() || 'Toko saya')
+                  : (((document.getElementById('etalaseName')||{}).textContent || '').trim() || 'Toko');
   var url = window._etStoreLink(uid);
   try { if (window.trackEvent) trackEvent('share_store', { seller_uid: uid, method: navigator.share ? 'native' : 'copy_link' }); } catch(e){}
   if (navigator.share) {
