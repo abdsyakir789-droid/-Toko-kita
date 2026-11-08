@@ -5498,11 +5498,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       // ── Timeout 5 detik: kalau query database macet/hang (terutama
       // setelah refresh berturut-turut di iOS), JANGAN tunggu selamanya.
       // Lanjut dengan data dasar agar window._S.user tetap terisi. ──
-      const _queryPromise = supabase
-        .from('users')
-        .select(window._USERS_COLS)
-        .eq('uid', user.id)
-        .limit(1);
+      const _queryPromise = supabase.rpc('get_my_profile');
       const _timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('TIMEOUT_PROFILE_QUERY')), 5000)
       );
@@ -5564,7 +5560,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       setTimeout(async () => {
         try {
           const _uid = user.id;
-          const _r = await supabase.from('users').select(window._USERS_COLS).eq('uid', _uid).limit(1);
+          const _r = await supabase.rpc('get_my_profile');
           const _rows = _r.data;
           if (_rows && _rows.length > 0 && window._S.user?.uid === _uid) {
             const d = _rows[0];
@@ -5794,7 +5790,7 @@ function startProfileListener(uid) {
         window._S.user.coverPhotoPublicId  = d.cover_photo_public_id || '';
         window._S.user.photoUrl   = d.photo_url || '';
         window._S.user.name       = d.name      || window._S.user.name;
-        window._S.user.phone      = d.phone     || '';
+        if ('phone' in d) window._S.user.phone = d.phone || '';
         window._S.user.docId      = d.id;
         if (changed) {
           renderUserState();
@@ -5852,10 +5848,13 @@ window._FB = {
     if (!uid) throw new Error('Gagal mendapatkan ID user. Coba lagi.');
 
     // Upsert agar tidak duplikat jika user sudah ada
-    const { error: upsertErr } = await supabase.from('users').upsert(
-      { uid, name, phone, email, photo_url: '', created_at: new Date().toISOString() },
-      { onConflict: 'uid', ignoreDuplicates: false }
-    );
+    // Simpan lewat RPC (kolom email/HP tidak bisa dibaca langsung → upsert merge biasa ditolak)
+    const { error: upsertErr } = data.session
+      ? await supabase.rpc('save_my_user_row', { p_name: name, p_phone: phone, p_email: email })
+      : await supabase.from('users').upsert(
+          { uid, name, phone, email, photo_url: '', created_at: new Date().toISOString() },
+          { onConflict: 'uid', ignoreDuplicates: true }
+        );
     if (upsertErr) console.warn('[register] upsert users:', upsertErr.message);
 
     // Jika konfirmasi email dimatikan, session langsung ada
@@ -11824,7 +11823,7 @@ window.viewSellerStore = async function(sellerUid) {
   const _profileMaxAttempts = 4;
   for (let _attempt = 1; _attempt <= _profileMaxAttempts; _attempt++) {
     try {
-      const _uRes = await window._supaFetch('/rest/v1/users?uid=eq.' + sellerUid + '&select=name,photo_url,email&limit=1');
+      const _uRes = await window._supaFetch('/rest/v1/users?uid=eq.' + sellerUid + '&select=name,photo_url&limit=1');
       const _uRows = _uRes.ok ? await _uRes.json() : [];
       userRow = _uRows[0] || null;
     } catch(e) {
@@ -14237,8 +14236,9 @@ window.doLogin=async()=>{
           const SUPA_URL2 = window._SUPA_URL;
           const SUPA_KEY2 = window._SUPA_ANON;
           const profileRes = await Promise.race([
-            fetch(SUPA_URL2+'/rest/v1/users?uid=eq.'+u.id+'&limit=1&select='+window._USERS_COLS,{
-              headers:{'apikey': SUPA_KEY2,'Authorization': 'Bearer '+json.access_token}
+            fetch(SUPA_URL2+'/rest/v1/rpc/get_my_profile',{
+              method:'POST', body:'{}',
+              headers:{'apikey': SUPA_KEY2,'Authorization': 'Bearer '+json.access_token,'Content-Type':'application/json'}
             }),
             new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000))
           ]);
@@ -14496,15 +14496,13 @@ window.doRegister=async()=>{
     const _intlPhone = window._toFonntePhone(phone);
     const _localPhone = _intlPhone.startsWith('20') ? '0' + _intlPhone.slice(2) : phone;
     const _phoneVariants = [phone, _intlPhone, _localPhone];
-    const _orParts = _phoneVariants.map(p => 'phone.eq.' + encodeURIComponent(p));
-    _orParts.push('email.ilike.' + encodeURIComponent(email));
-    const _dupRes = await window._supaFetch(
-      '/rest/v1/users?or=(' + _orParts.join(',') + ')&select=email,phone&limit=10'
-    );
+    const _dupRes = await window._supaFetch('/rest/v1/rpc/check_signup_taken', {
+      method: 'POST', body: JSON.stringify({ p_email: email, p_phones: _phoneVariants })
+    });
     if (_dupRes.ok) {
       const _dupRows = await _dupRes.json();
-      const _emailDup = (_dupRows||[]).some(u => (u.email||'').toLowerCase() === email.toLowerCase());
-      const _phoneDup = (_dupRows||[]).some(u => _phoneVariants.includes(u.phone));
+      const _emailDup = !!(_dupRows && _dupRows[0] && _dupRows[0].email_taken);
+      const _phoneDup = !!(_dupRows && _dupRows[0] && _dupRows[0].phone_taken);
       if (_emailDup) { showToast('Email telah terdaftar', 'red'); return; }
       if (_phoneDup) { showToast('Nomor WA telah terdaftar', 'red'); return; }
     }
@@ -14552,15 +14550,15 @@ window.doRegister=async()=>{
     // akun kebuat di Supabase Auth tapi row di tabel users tidak pernah ada.
     // Fix: pakai access_token user yang baru saja didapat dari signup di atas.
     const _regUserToken = json.access_token || SUPA_KEY;
-    const _insUserRes = await fetch(SUPA_URL+'/rest/v1/users',{
+    // Simpan lewat RPC save_my_user_row (insert, atau perbarui nama/HP bila baris sudah ada)
+    const _insUserRes = await fetch(SUPA_URL+'/rest/v1/rpc/save_my_user_row',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
         'apikey':SUPA_KEY,
-        'Authorization':'Bearer '+_regUserToken,
-        'Prefer':'resolution=merge-duplicates'
+        'Authorization':'Bearer '+_regUserToken
       },
-      body:JSON.stringify({uid, name, phone, email, photo_url:'', created_at:new Date().toISOString()})
+      body:JSON.stringify({p_name:name, p_phone:phone, p_email:email})
     }).catch(e => { console.warn('[doRegister] insert users network error:', e.message); return null; });
     if (_insUserRes && !_insUserRes.ok) {
       const _insErrJson = await _insUserRes.json().catch(()=>({}));
@@ -16379,7 +16377,7 @@ async function loadShopsAdminData() {
     const uids = [...new Set(shops.map(s => s.user_id).filter(Boolean))];
     let ownerMap = {};
     if (uids.length) {
-      const uRes = await window._supaFetch('/rest/v1/users?uid=in.(' + uids.join(',') + ')&select=uid,name,email,phone');
+      const uRes = await window._supaFetch('/rest/v1/rpc/admin_users_contacts', { method: 'POST', body: JSON.stringify({ p_uids: uids }) });
       if (uRes.ok) {
         const urows = await uRes.json();
         urows.forEach(r => { ownerMap[r.uid] = r; });
@@ -16679,7 +16677,7 @@ async function loadUsersAdminData() {
   if (countEl) countEl.textContent = 'Memuat...';
 
   try {
-    const res = await window._supaFetch('/rest/v1/users?select=uid,name,email,address,created_at,is_blocked&order=created_at.desc');
+    const res = await window._supaFetch('/rest/v1/rpc/admin_list_users', { method: 'POST', body: '{}' });
     if (!res.ok) throw new Error(await res.text());
     const users = await res.json();
     window._usersAdminData = users;
@@ -16908,7 +16906,7 @@ window.saveSponsorSectionTitle = async function() {
 // ── Aktivasi Iklan per User (Supabase) ─────────────────────────
 async function _findUserByEmail(emailInput) {
   const emailLower = emailInput.trim().toLowerCase();
-  const _res = await window._supaFetch('/rest/v1/users?email=ilike.' + encodeURIComponent(emailLower) + '&limit=1&select=' + window._USERS_COLS);
+  const _res = await window._supaFetch('/rest/v1/rpc/admin_find_user_by_email', { method: 'POST', body: JSON.stringify({ p_email: emailLower }) });
   const _rows = _res.ok ? await _res.json() : [];
   return _rows.length ? _rows[0] : null;
 }
@@ -19020,7 +19018,7 @@ window.openAlamatSaya = async function() {
   if(editBtn) editBtn.style.display = 'none';
 
   try {
-    var res = await window._supaFetch('/rest/v1/users?uid=eq.'+u.uid+'&select=address&limit=1');
+    var res = await window._supaFetch('/rest/v1/rpc/get_my_profile', { method: 'POST', body: '{}' });
     var data = await res.json();
     var existing = data && data[0] && data[0].address;
     input.value = existing || '';
@@ -19059,7 +19057,7 @@ window.openBuyerAddress = async function(buyerId, ownerUid) {
 
   try {
     // Ambil data alamat real-time dari profil pembeli (bukan cache)
-    var res = await window._supaFetch('/rest/v1/users?uid=eq.'+buyerId+'&select=address&limit=1');
+    var res = await window._supaFetch('/rest/v1/rpc/get_buyer_address', { method: 'POST', body: JSON.stringify({ p_buyer: buyerId }) });
     if(!res.ok) throw new Error('Gagal memuat data (' + res.status + ')');
     var data = await res.json();
     var u = data && data[0];
@@ -20970,7 +20968,7 @@ window.checkoutToChat = async function(){
 
   // [VALIDASI BARU] Cek alamat pembeli sebelum mulai proses checkout
   try {
-    var _addrRes = await window._supaFetch('/rest/v1/users?uid=eq.'+window._S.user.uid+'&select=address&limit=1');
+    var _addrRes = await window._supaFetch('/rest/v1/rpc/get_my_profile', { method: 'POST', body: '{}' });
     var _addrData = await _addrRes.json();
     var _buyerAddress = _addrData && _addrData[0] && _addrData[0].address;
     if(!_buyerAddress || _buyerAddress.trim() === ''){
@@ -21044,7 +21042,7 @@ window.checkoutToChat = async function(){
 
       // ── Notifikasi WA ke Seller (per toko) ──────────────────
       try {
-        var sellerRes = await window._supaFetch('/rest/v1/users?uid=eq.' + grp.sellerId + '&select=phone,name&limit=1');
+        var sellerRes = await window._supaFetch('/rest/v1/rpc/get_seller_contact', { method: 'POST', body: JSON.stringify({ p_seller: grp.sellerId }) });
         var sellerRows = sellerRes.ok ? await sellerRes.json() : [];
         var sellerPhone = sellerRows[0] && sellerRows[0].phone ? sellerRows[0].phone : null;
         if(sellerPhone){
@@ -24824,7 +24822,7 @@ window.yfSubmitFoodOrder = async function() {
   // masuk ke antrean kurir tanpa alamat valid.
   let _buyerAddress = '';
   try {
-    const _addrRes = await window._supaFetch('/rest/v1/users?uid=eq.' + user.uid + '&select=address&limit=1');
+    const _addrRes = await window._supaFetch('/rest/v1/rpc/get_my_profile', { method: 'POST', body: '{}' });
     const _addrData = await _addrRes.json();
     _buyerAddress = (_addrData && _addrData[0] && _addrData[0].address || '').trim();
     if (!_buyerAddress) {
