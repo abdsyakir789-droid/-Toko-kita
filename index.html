@@ -13,6 +13,7 @@
   window._SUPA_URL  = 'https://jgnjgfuypcelwjztebsy.supabase.co';
   window._SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbmpnZnV5cGNlbHdqenRlYnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDU0MjksImV4cCI6MjA5Mjg4MTQyOX0.pg-BlEjwhkCquvl1QzsUC6whe3MA_au38W164Ovhx4c';
   window._SUPA_REF  = 'jgnjgfuypcelwjztebsy';
+  window._USERS_COLS = 'id,uid,name,email,phone,photo_url,cover_photo,cover_photo_url,cover_photo_public_id,is_ads_enabled,ads_expiry_date,verification_status,verification_expiry,created_at,name_updated_at,pin_enabled,bio_enabled,address,ads_posted_total,is_blocked';
   window._R2_URL    = 'https://yallamart-upload.abdsyakir789.workers.dev';
   window._R2_TOKEN  = 'yallamart2024secret';   // ⚠️ VERIFIKASI: token upload R2 prod (nilai ini dipakai fungsi cleanup prod)
   window._KV_ENABLED = true;    // production: KV cache aktif
@@ -25,6 +26,7 @@
   window._SUPA_URL  = 'https://ipbxwdqnwcshezzrtxzr.supabase.co';
   window._SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwYnh3ZHFud2NzaGV6enJ0eHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MTM0NTksImV4cCI6MjA5NTQ4OTQ1OX0.UHaK9Tyd7c48j1q_kdX7C_gQCzojAcfIOQ2IZHEJENg';
   window._SUPA_REF  = 'ipbxwdqnwcshezzrtxzr';
+  window._USERS_COLS = 'id,uid,name,email,phone,photo_url,cover_photo,cover_photo_url,cover_photo_public_id,is_ads_enabled,ads_expiry_date,verification_status,verification_expiry,created_at,name_updated_at,pin_enabled,bio_enabled,address,ads_posted_total,is_blocked';
   window._R2_URL    = 'https://yallamart-upload-staging.abdsyakir789.workers.dev';
   window._R2_TOKEN  = 'yallamart-staging-2026';
   window._KV_ENABLED = false;
@@ -5498,7 +5500,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       // Lanjut dengan data dasar agar window._S.user tetap terisi. ──
       const _queryPromise = supabase
         .from('users')
-        .select('*')
+        .select(window._USERS_COLS)
         .eq('uid', user.id)
         .limit(1);
       const _timeoutPromise = new Promise((_, reject) =>
@@ -5562,7 +5564,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       setTimeout(async () => {
         try {
           const _uid = user.id;
-          const _r = await supabase.from('users').select('*').eq('uid', _uid).limit(1);
+          const _r = await supabase.from('users').select(window._USERS_COLS).eq('uid', _uid).limit(1);
           const _rows = _r.data;
           if (_rows && _rows.length > 0 && window._S.user?.uid === _uid) {
             const d = _rows[0];
@@ -5613,7 +5615,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     setTimeout(async function() {
       try {
         if (!window._S.user) return;
-        var _pinRes = await window._supaFetch('/rest/v1/users?uid=eq.'+user.id+'&select=pin_enabled,pin&limit=1');
+        var _pinRes = await window._supaFetch('/rest/v1/rpc/get_my_pin', { method: 'POST', body: '{}' });
         var _pinData = await _pinRes.json();
         if (_pinData && _pinData[0]) {
           window._S.user.pin_enabled = !!((_pinData[0].pin_enabled) && _pinData[0].pin);
@@ -5949,7 +5951,7 @@ window._FB = {
       // Kalau 0 baris (mis. RLS menolak / uid tak match), foto profil TIDAK tersimpan
       // ke users.photo_url → user lain lihat ikon lonceng, bukan foto. Dulu pakai
       // return=minimal jadi kegagalan ini tak terdeteksi (gagal senyap).
-      const _pRes = await window._supaFetch('/rest/v1/users?uid=eq.' + uid, {
+      const _pRes = await window._supaFetch('/rest/v1/users?uid=eq.' + uid + '&select=id,uid', {
         method: 'PATCH', prefer: 'return=representation',
         body: JSON.stringify({ photo_url: imgUrl })
       });
@@ -5960,7 +5962,7 @@ window._FB = {
       }
       window._S.user.docId = _exRows[0].id;
     } else {
-      const _insRes = await window._supaFetch('/rest/v1/users', {
+      const _insRes = await window._supaFetch('/rest/v1/users?select=id,uid', {
         method: 'POST', prefer: 'return=representation',
         body: JSON.stringify({ uid, name: window._S.user.name, phone: window._S.user.phone || '',
           email: window._S.user.email || '', photo_url: imgUrl, created_at: new Date().toISOString() })
@@ -6471,7 +6473,7 @@ window._FB = {
         });
         window._S.user.docId = _exRows[0].id;
       } else {
-        const _insRes = await window._supaFetch('/rest/v1/users', {
+        const _insRes = await window._supaFetch('/rest/v1/users?select=id,uid', {
           method: 'POST', prefer: 'return=representation',
           body: JSON.stringify({
             uid: u.uid, name: u.name||'', phone: u.phone||'',
@@ -9657,7 +9659,7 @@ window.renderProducts = () => {
 // Share product
 window.pcShareProduct = function(pid, encodedName) {
   const name = decodeURIComponent(encodedName);
-  const url = window.location.href.split('?')[0] + '?p=' + pid;
+  const url = window.location.origin + '/share?p=' + pid; // /share → pratinjau WA berisi foto produk
   trackEvent('share', { item_id: pid, method: navigator.share ? 'native' : 'copy_link' });
   if (navigator.share) {
     navigator.share({ title: name, text: 'Lihat produk ini di Yalla Mart: ' + name, url })
@@ -10248,7 +10250,7 @@ window.closeDetailDirect=()=>{
 window.detailShareProduct = function() {
   const p = window._S.activeAdData; if(!p) return;
   const name = p.title || p.name || '';
-  const url = window.location.href.split('?')[0] + '?p=' + (p.id||'');
+  const url = window.location.origin + '/share?p=' + (p.id||''); // /share → pratinjau WA berisi foto produk
   trackEvent('share', { item_id: p.id||'', method: navigator.share ? 'native' : 'copy_link' });
   if(navigator.share) {
     navigator.share({ title: name, text: 'Lihat produk ini di Yalla Mart: ' + name, url }).catch(()=>{});
@@ -11757,7 +11759,7 @@ window._etToggleMenu = function(ev, btnId, who){
   document.body.appendChild(m);
   setTimeout(function(){ document.addEventListener('click', window._etCloseMenu, true); }, 0);
 };
-window._etStoreLink = function(uid){ return location.origin + '/?toko=' + encodeURIComponent(uid); };
+window._etStoreLink = function(uid){ return location.origin + '/share?toko=' + encodeURIComponent(uid); }; // /share → pratinjau WA berisi foto toko
 window._etShareStore = function(){
   var self = window._etShareWho === 'self';
   var uid = self ? (window._S && window._S.user && window._S.user.uid) : window._etalaseSellerUid;
@@ -13605,7 +13607,7 @@ window.openFollowingStores = async function() {
 
     // ── Helper: share dari feed card ─────────────────────────────
     window._feedShare = function(adId, adTitle) {
-      const url = window.location.href.split('?')[0] + '?p=' + adId;
+      const url = window.location.origin + '/share?p=' + adId; // /share → pratinjau WA berisi foto produk
       trackEvent('share', { item_id: adId||'', method: navigator.share ? 'native' : 'copy_link' });
       if(navigator.share) {
         navigator.share({ title: adTitle||'Yalla Mart', text: 'Lihat produk ini di Yalla Mart: '+(adTitle||''), url }).catch(()=>{});
@@ -14235,7 +14237,7 @@ window.doLogin=async()=>{
           const SUPA_URL2 = window._SUPA_URL;
           const SUPA_KEY2 = window._SUPA_ANON;
           const profileRes = await Promise.race([
-            fetch(SUPA_URL2+'/rest/v1/users?uid=eq.'+u.id+'&limit=1&select=*',{
+            fetch(SUPA_URL2+'/rest/v1/users?uid=eq.'+u.id+'&limit=1&select='+window._USERS_COLS,{
               headers:{'apikey': SUPA_KEY2,'Authorization': 'Bearer '+json.access_token}
             }),
             new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000))
@@ -16545,7 +16547,7 @@ window.toggleShopBlock = async function(shopId, currentlyActive) {
     // larangan posting iklan & transaksi, bukan sekadar status toko.
     const ownerUid = item && item.user_id;
     if (ownerUid) {
-      const uRes = await window._supaFetch('/rest/v1/users?uid=eq.' + ownerUid, {
+      const uRes = await window._supaFetch('/rest/v1/users?uid=eq.' + ownerUid + '&select=id,uid', {
         method: 'PATCH',
         prefer: 'return=representation',
         body: JSON.stringify({ is_blocked: !willActivate })
@@ -16607,7 +16609,7 @@ window.toggleUserBlock = async function(uid, currentlyBlocked) {
     : 'Buka blokir akun ini?\n\nPemilik bisa kembali bertransaksi normal.';
   if (!confirm(msg)) return;
   try {
-    const r = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(uid), {
+    const r = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(uid) + '&select=id,uid', {
       method: 'PATCH', prefer: 'return=representation',
       body: JSON.stringify({ is_blocked: willBlock })
     });
@@ -16906,7 +16908,7 @@ window.saveSponsorSectionTitle = async function() {
 // ── Aktivasi Iklan per User (Supabase) ─────────────────────────
 async function _findUserByEmail(emailInput) {
   const emailLower = emailInput.trim().toLowerCase();
-  const _res = await window._supaFetch('/rest/v1/users?email=ilike.' + encodeURIComponent(emailLower) + '&limit=1&select=*');
+  const _res = await window._supaFetch('/rest/v1/users?email=ilike.' + encodeURIComponent(emailLower) + '&limit=1&select=' + window._USERS_COLS);
   const _rows = _res.ok ? await _res.json() : [];
   return _rows.length ? _rows[0] : null;
 }
@@ -19514,7 +19516,7 @@ async function hashPin(pin) {
 window._syncPinStatus = async function _syncPinStatus() {
   var u = window._S && window._S.user;
   if(!u) return;
-  var res = await window._supaFetch('/rest/v1/users?uid=eq.'+u.uid+'&select=pin_enabled,pin&limit=1');
+  var res = await window._supaFetch('/rest/v1/rpc/get_my_pin', { method: 'POST', body: '{}' });
   var data = await res.json();
   if(!data || !data[0]) return;
   var enabled = data[0].pin_enabled && data[0].pin;
@@ -19968,7 +19970,7 @@ window.requirePin = function(callback) {
   (function(){
     const toko = new URLSearchParams(window.location.search).get('toko');
     if (!toko) return;
-    try { history.replaceState(null, '', window.location.pathname); } catch(e) {}
+    try { history.replaceState(null, '', window.location.pathname.indexOf('/share') === 0 ? '/' : window.location.pathname); } catch(e) {}
     setTimeout(() => { if (window._etOpenFromLink) window._etOpenFromLink(toko); }, 1000);
   })();
   function tryOpenAd(attempt) {
@@ -19979,7 +19981,7 @@ window.requirePin = function(callback) {
     const ads = window._S?.fbAds || [];
     if(ads.length > 0) {
       // Bersihkan URL tanpa reload
-      history.replaceState(null, '', window.location.pathname);
+      history.replaceState(null, '', window.location.pathname.indexOf('/share') === 0 ? '/' : window.location.pathname);
       openDetail(pid);
     } else if(attempt < 30) {
       setTimeout(() => tryOpenAd(attempt + 1), 500);
