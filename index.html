@@ -4209,6 +4209,16 @@ h3.text-sm.font-bold.text-gray-800 {
   .reg-submit:active { transform: scale(.985); }
   .reg-submit:disabled { opacity: .65; cursor: not-allowed; }
   .reg-login { text-align: center; padding: 20px 24px 6px; margin-top: auto; }
+  /* Tombol pilihan daftar/masuk (Google / Email) */
+  .ym-choice { width: 100%; height: 58px; display: flex; align-items: center; gap: 0; padding: 0 16px 0 0; background: #fff; border: 1px solid #eef2f1; border-radius: 18px; box-shadow: 0 8px 22px rgba(15,23,42,.07); cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+  .ym-choice:active { transform: scale(.99); }
+  .ym-choice-ic { width: 60px; height: 34px; display: flex; align-items: center; justify-content: center; border-right: 1px solid #e5e7eb; flex-shrink: 0; color: #374151; font-size: 20px; }
+  .ym-choice-txt { flex: 1; text-align: left; padding-left: 14px; font-size: 15px; font-weight: 700; color: #111827; }
+  .ym-choice-chev { color: #374151; font-size: 13px; }
+  .ym-or-line { display: flex; align-items: center; gap: 12px; color: #9ca3af; font-size: 12px; font-weight: 600; letter-spacing: .06em; margin: 2px 4px; }
+  .ym-or-line::before, .ym-or-line::after { content: ''; flex: 1; height: 1px; background: #d1d5db; }
+  #regChoice { position: relative; z-index: 2; margin: 18px 14px 0; display: flex; flex-direction: column; gap: 18px; }
+  .ym-reg-back { align-self: flex-start; background: none; border: none; color: #059669; font-size: 13px; font-weight: 700; padding: 0 2px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
   .reg-or { display: flex; align-items: center; gap: 12px; color: #4b5563; font-size: 13px; font-weight: 500; }
   .reg-or::before, .reg-or::after { content: ''; flex: 1; height: 1px; background: #d9e2dd; }
   .reg-login button { margin-top: 6px; border: none; background: none; color: #10B981; font-size: 14px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; }
@@ -4272,6 +4282,11 @@ h3.text-sm.font-bold.text-gray-800 {
 
       <!-- KARTU FORM -->
       <div class="reg-card">
+        <!-- Masuk dengan Google -->
+        <button type="button" class="ym-choice" onclick="ymGoogleSignIn()">
+          <span class="ym-choice-ic"><svg width="22" height="22" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.2-.1-2.3-.4-3.5z"/></svg></span><span class="ym-choice-txt">Lanjutkan dengan Google</span><i class="fa-solid fa-chevron-right ym-choice-chev"></i>
+        </button>
+        <div class="ym-or-line">ATAU</div>
         <!-- Email -->
         <div class="reg-field">
           <i class="fa-solid fa-envelope reg-ic"></i>
@@ -4348,8 +4363,20 @@ h3.text-sm.font-bold.text-gray-800 {
         </div>
       </div>
 
-      <!-- KARTU FORM -->
-      <div class="reg-card">
+      <!-- PILIHAN CARA DAFTAR -->
+      <div id="regChoice">
+        <button type="button" class="ym-choice" onclick="ymGoogleSignIn()">
+          <span class="ym-choice-ic"><svg width="22" height="22" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.2-.1-2.3-.4-3.5z"/></svg></span><span class="ym-choice-txt">Lanjutkan dengan Google</span><i class="fa-solid fa-chevron-right ym-choice-chev"></i>
+        </button>
+        <div class="ym-or-line">ATAU</div>
+        <button type="button" class="ym-choice" onclick="ymShowRegEmail(true)">
+          <span class="ym-choice-ic"><i class="fa-solid fa-envelope"></i></span><span class="ym-choice-txt">Daftar dengan Email</span><i class="fa-solid fa-chevron-right ym-choice-chev"></i>
+        </button>
+      </div>
+
+      <!-- KARTU FORM (daftar dengan email) -->
+      <div class="reg-card" id="regEmailCard" style="display:none">
+        <button type="button" class="ym-reg-back" onclick="ymShowRegEmail(false)"><i class="fa-solid fa-chevron-left"></i> Pilihan lain</button>
         <!-- 1. Nama Lengkap -->
         <div class="reg-field">
           <i class="fa-solid fa-user reg-ic"></i>
@@ -14017,7 +14044,14 @@ window.closeAuth=()=>{const ov=document.getElementById('authOverlay');ov.style.o
   const rh=document.getElementById('regOtpHint');if(rh)rh.classList.add('hidden');
 };
 window.closeAuthOv=e=>{if(e.target===document.getElementById('authOverlay'))closeAuth();};
+window.ymShowRegEmail=function(show){
+  var c=document.getElementById('regChoice'), e=document.getElementById('regEmailCard');
+  if(c) c.style.display=show?'none':'flex';
+  if(e) e.style.display=show?'flex':'none';
+  var _in=document.getElementById('authInner'); if(_in) _in.scrollTop=0;
+};
 window.switchTab=t=>{
+  if(t==='register' && window.ymShowRegEmail) window.ymShowRegEmail(false);
   document.getElementById('loginForm').style.display=t==='login'?'flex':'none';
   document.getElementById('regForm').style.display=t==='register'?'flex':'none';
   // Mode daftar: header & tab umum disembunyikan, form daftar punya hero sendiri
@@ -19957,6 +19991,162 @@ window.requirePin = function(callback) {
     document.getElementById('wishlistOverlay').style.display = 'none';
     document.body.style.overflow = '';
   };
+})();
+</script>
+
+<!-- ── MASUK / DAFTAR DENGAN GOOGLE ──
+     Web/PWA : halaman Google terbuka, lalu kembali ke /?auth=google (token di #hash).
+     APK     : Chrome terbuka (Google melarang login di WebView), lalu link
+               https://app.yallamart.my.id/?auth=google#... membuka aplikasi lagi
+               (deep link) → token dipakai di dalam aplikasi lewat _ymConsumeGoogleUrl.
+     Akun baru otomatis dibuat oleh alur login biasa (onAuthStateChange); setelah itu
+     user WAJIB melengkapi nomor WhatsApp Mesir. -->
+<script>
+(function () {
+  var PROD_REDIRECT = 'https://app.yallamart.my.id/?auth=google';
+  function redirectUrl() { return window._ymIsNativeApp ? PROD_REDIRECT : (location.origin + '/?auth=google'); }
+  function waitSb(ms) {
+    return new Promise(function (res) {
+      var t0 = Date.now();
+      (function w() { if (window.supabase && window.supabase.auth) return res(true); if (Date.now() - t0 > (ms || 15000)) return res(false); setTimeout(w, 150); })();
+    });
+  }
+
+  // ── Tombol "Lanjutkan dengan Google" ──
+  window.ymGoogleSignIn = async function () {
+    if (!(await waitSb(5000))) { showToast('Aplikasi masih dimuat, coba lagi sebentar', 'red'); return; }
+    try {
+      var r = await window.supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: redirectUrl(), skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } }
+      });
+      if (r.error) throw r.error;
+      var url = r.data && r.data.url;
+      if (!url) throw new Error('alamat login Google kosong');
+      try { localStorage.setItem('ym_google_started', String(Date.now())); } catch (e) {}
+      // Web: pindah ke halaman Google. APK: Capacitor membuka domain luar ini di Chrome.
+      location.href = url;
+    } catch (e) {
+      showToast('Gagal masuk dengan Google: ' + (e.message || e), 'red');
+    }
+  };
+
+  // ── Kembali dari Google: pakai token dari URL ──
+  var _consumed = '';
+  window._ymConsumeGoogleUrl = async function (urlStr) {
+    var u; try { u = new URL(urlStr, location.origin); } catch (e) { return false; }
+    if (u.searchParams.get('auth') !== 'google') return false;
+    if (_consumed === urlStr) return true; _consumed = urlStr;
+    var h = new URLSearchParams((u.hash || '').replace(/^#/, ''));
+    var q = u.searchParams;
+    var err = h.get('error_description') || q.get('error_description') || h.get('error') || q.get('error');
+    if (err) { showToast('Masuk dengan Google dibatalkan / gagal: ' + err, 'red'); return true; }
+    var at = h.get('access_token'), rt = h.get('refresh_token'), code = q.get('code');
+    if (!(at && rt) && !code) return true;
+    if (!(await waitSb())) return true;
+    try {
+      var r = (at && rt)
+        ? await window.supabase.auth.setSession({ access_token: at, refresh_token: rt })
+        : await window.supabase.auth.exchangeCodeForSession(code);
+      if (r.error) throw r.error;
+      try { if (typeof window.closeAuth === 'function') window.closeAuth(); } catch (e) {}
+      showToast('Berhasil masuk dengan Google', 'green');
+      setTimeout(function () { window.ymEnsurePhone(0); }, 2500);
+    } catch (e) {
+      showToast('Masuk dengan Google gagal: ' + (e.message || e), 'red');
+    }
+    return true;
+  };
+  // Web/PWA: halaman dibuka dari redirect Google
+  if (/[?&]auth=google/.test(location.search)) {
+    var _href = location.href;
+    try { history.replaceState(null, '', location.pathname.indexOf('/share') === 0 ? '/' : location.pathname); } catch (e) {}
+    window._ymConsumeGoogleUrl(_href);
+  }
+
+  // ── Wajib lengkapi nomor WhatsApp (khusus akun yang masuk lewat Google) ──
+  function readSessionUser() {
+    try {
+      var raw = localStorage.getItem('sb-' + window._SUPA_REF + '-auth-token');
+      var s = raw ? JSON.parse(raw) : null;
+      return (s && (s.user || (s.currentSession && s.currentSession.user))) || null;
+    } catch (e) { return null; }
+  }
+  function isGoogleUser(user) {
+    var am = (user && user.app_metadata) || {};
+    var prov = am.providers || (am.provider ? [am.provider] : []);
+    return prov.indexOf('google') >= 0;
+  }
+  window.ymEnsurePhone = async function (attempt) {
+    attempt = attempt || 0;
+    var user = readSessionUser();
+    if (!user || !isGoogleUser(user)) return;
+    if (document.getElementById('ymPhoneModal')) return;
+    try {
+      var r = await window._supaFetch('/rest/v1/rpc/get_my_profile', { method: 'POST', body: '{}' });
+      var rows = r.ok ? await r.json() : [];
+      var me = rows && rows[0];
+      if (!me) { if (attempt < 6) setTimeout(function () { window.ymEnsurePhone(attempt + 1); }, 2000); return; }
+      // Foto profil dari Google (kalau belum punya foto)
+      var pic = user.user_metadata && (user.user_metadata.avatar_url || user.user_metadata.picture);
+      if (!me.photo_url && pic && /^https:\/\//.test(pic)) {
+        window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(me.uid), { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ photo_url: pic }) })
+          .then(function () { if (window._S && window._S.user) { window._S.user.photoUrl = pic; try { renderUserState(); } catch (e) {} } }).catch(function () {});
+      }
+      if (!String(me.phone || '').trim()) showPhoneModal(me);
+    } catch (e) {
+      if (attempt < 6) setTimeout(function () { window.ymEnsurePhone(attempt + 1); }, 2000);
+    }
+  };
+
+  function showPhoneModal(me) {
+    if (document.getElementById('ymPhoneModal')) return;
+    var o = document.createElement('div');
+    o.id = 'ymPhoneModal';
+    o.style.cssText = 'position:fixed;inset:0;z-index:2147482000;background:rgba(17,24,39,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+    o.innerHTML = '<div style="background:#fff;border-radius:22px;max-width:360px;width:100%;padding:26px 20px 18px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.25);font-family:\'Plus Jakarta Sans\',sans-serif">'
+      + '<div style="width:62px;height:62px;border-radius:50%;background:#DCFCE7;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="fa-brands fa-whatsapp" style="font-size:30px;color:#16A34A"></i></div>'
+      + '<h3 style="margin:0 0 6px;font-size:17px;font-weight:800;color:#111827">Lengkapi nomor WhatsApp</h3>'
+      + '<p style="margin:0 0 16px;font-size:13px;line-height:1.5;color:#4B5563">Satu langkah lagi! Nomor WhatsApp Mesir dibutuhkan untuk pesanan, kurir, dan dihubungi penjual/pembeli.</p>'
+      + '<div style="display:flex;align-items:center;gap:10px;background:#F3F4F6;border-radius:14px;padding:0 14px;height:50px;margin-bottom:12px">'
+      + '<i class="fa-brands fa-whatsapp" style="color:#16A34A;font-size:18px"></i>'
+      + '<input id="ymPhoneInput" type="tel" inputmode="tel" placeholder="Nomor WhatsApp (01xxxxxxxxx)" style="flex:1;border:none;background:transparent;font-size:15px;outline:none;min-width:0"/></div>'
+      + '<p id="ymPhoneErr" style="display:none;margin:-4px 0 10px;font-size:12px;color:#DC2626;font-weight:600"></p>'
+      + '<button type="button" id="ymPhoneSave" style="width:100%;height:50px;border:none;border-radius:14px;background:linear-gradient(90deg,#10B981,#059669);color:#fff;font-size:15px;font-weight:800;cursor:pointer">Simpan & Lanjutkan</button>'
+      + '<button type="button" id="ymPhoneLogout" style="margin-top:10px;background:none;border:none;color:#6B7280;font-size:12.5px;font-weight:600;cursor:pointer">Keluar dari akun ini</button>'
+      + '</div>';
+    document.body.appendChild(o);
+    var inp = o.querySelector('#ymPhoneInput'), errEl = o.querySelector('#ymPhoneErr'), btn = o.querySelector('#ymPhoneSave');
+    function fail(msg) { errEl.textContent = msg; errEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Simpan & Lanjutkan'; }
+    o.querySelector('#ymPhoneLogout').onclick = function () { o.remove(); try { if (window.doLogout) window.doLogout(); else window.supabase.auth.signOut().then(function () { location.reload(); }); } catch (e) { location.reload(); } };
+    btn.onclick = async function () {
+      errEl.style.display = 'none';
+      var raw = (inp.value || '').trim();
+      var clean = raw.replace(/\D/g, '');
+      if (clean.length < 10) return fail('Masukkan nomor WhatsApp yang lengkap');
+      var isEgypt = clean.startsWith('20') || clean.startsWith('010') || clean.startsWith('011') || clean.startsWith('012') || clean.startsWith('015');
+      if (!isEgypt) return fail('YallaMart hanya untuk nomor WhatsApp Mesir 🇪🇬');
+      btn.disabled = true; btn.textContent = 'Menyimpan...';
+      var intl = window._toFonntePhone ? window._toFonntePhone(raw) : clean;
+      var local = intl.startsWith('20') ? '0' + intl.slice(2) : clean;
+      try {
+        var dr = await window._supaFetch('/rest/v1/rpc/check_signup_taken', { method: 'POST', body: JSON.stringify({ p_email: '__tidak_dicek__', p_phones: [raw, clean, intl, local] }) });
+        var drow = dr.ok ? await dr.json() : [];
+        if (drow && drow[0] && drow[0].phone_taken) return fail('Nomor WhatsApp ini sudah dipakai akun lain');
+        var pr = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(me.uid) + '&select=id,uid', { method: 'PATCH', prefer: 'return=representation', body: JSON.stringify({ phone: local }) });
+        var prow = pr.ok ? await pr.json().catch(function () { return []; }) : [];
+        if (!pr.ok || !prow.length) return fail('Gagal menyimpan, coba lagi');
+        if (window._S && window._S.user) window._S.user.phone = local;
+        o.remove();
+        showToast('Nomor WhatsApp tersimpan. Selamat berbelanja!', 'green');
+        try { renderUserState(); } catch (e) {}
+      } catch (e) { fail('Gagal menyimpan, periksa koneksi lalu coba lagi'); }
+    };
+    setTimeout(function () { try { inp.focus(); } catch (e) {} }, 200);
+  }
+
+  // Saat aplikasi dibuka & sudah masuk dengan Google tapi belum isi nomor → tanyakan lagi
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { window.ymEnsurePhone(0); }, 4000); });
 })();
 </script>
 
@@ -31507,6 +31697,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!window._bcIsInternal || !window._bcIsInternal(u)) return;
       if (url === _dlLast && Date.now() - _dlAt < 4000) return;   // cegah dobel
       _dlLast = url; _dlAt = Date.now();
+      // Kembali dari login Google (Chrome → deep link) → pakai token di dalam aplikasi
+      if (u.searchParams.get('auth') === 'google' && window._ymConsumeGoogleUrl) { window._ymConsumeGoogleUrl(u.href); return; }
       var pid = u.searchParams.get('p');
       var toko = u.searchParams.get('toko');
       if (cold && toko) {
