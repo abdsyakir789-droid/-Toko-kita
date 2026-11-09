@@ -32,7 +32,7 @@
 <div class="wrap">
   <header>
     <h1>Kebijakan Privasi YallaMart</h1>
-    <p class="updated">Terakhir diperbarui: 8 Agustus 2026</p>
+    <p class="updated">Terakhir diperbarui: 9 November 2026</p>
   </header>
 
   <div class="card">
@@ -42,6 +42,7 @@
     <table>
       <tr><th>Kategori</th><th>Contoh Data</th><th>Tujuan</th></tr>
       <tr><td>Data Akun</td><td>Nama, nomor telepon, alamat email, kata sandi (terenkripsi)</td><td>Membuat &amp; mengamankan akun, autentikasi, verifikasi OTP</td></tr>
+      <tr><td>Data Login Google (opsional)</td><td>Nama, alamat email, dan foto profil akun Google Anda &mdash; hanya jika Anda memilih &ldquo;Lanjutkan dengan Google&rdquo;</td><td>Membuat akun atau masuk ke akun YallaMart Anda, serta mengisi nama &amp; foto profil</td></tr>
       <tr><td>Lokasi</td><td>Alamat pengantaran, titik koordinat saat menggunakan fitur kurir/pengiriman</td><td>Menampilkan lokasi di peta, menghitung rute &amp; ongkir, live tracking kurir</td></tr>
       <tr><td>Konten Pengguna</td><td>Foto produk/toko yang diunggah, pesan chat, ulasan</td><td>Menampilkan listing, komunikasi antar pengguna</td></tr>
       <tr><td>Data Notifikasi</td><td>Token push notification perangkat</td><td>Mengirim notifikasi pesan &amp; pesanan</td></tr>
@@ -60,10 +61,14 @@
       <li>Memverifikasi identitas calon kurir YallaKurir (KTP/paspor + selfie) demi keamanan layanan pengiriman barang.</li>
     </ul>
 
+    <h3 style="margin-top:18px">Masuk dengan Google</h3>
+    <p>Jika Anda memilih <strong>&ldquo;Lanjutkan dengan Google&rdquo;</strong>, kami hanya menerima <strong>nama, alamat email, dan foto profil</strong> akun Google Anda. Kami <strong>tidak</strong> menerima kata sandi Google Anda dan <strong>tidak</strong> mengakses Gmail, kontak, Drive, atau data Google lainnya. Data ini hanya digunakan untuk membuat akun dan masuk ke YallaMart, tidak dijual, tidak digunakan untuk iklan, dan tidak dibagikan kepada pihak lain di luar penyedia layanan yang tercantum di bawah. Penggunaan informasi yang diterima dari Google API mematuhi <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Kebijakan Data Pengguna Layanan Google API</a>, termasuk persyaratan Penggunaan Terbatas (<em>Limited Use</em>). Anda dapat mencabut akses YallaMart kapan saja melalui <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">pengaturan akun Google Anda</a>.</p>
+
     <h2>3. Pihak Ketiga yang Memproses Data</h2>
     <p>Kami menggunakan penyedia layanan berikut yang dapat memproses sebagian data untuk menjalankan aplikasi:</p>
     <ul>
       <li><strong>Supabase</strong> — database, autentikasi, dan penyimpanan data akun.</li>
+      <li><strong>Google</strong> — layanan &ldquo;Masuk dengan Google&rdquo; (opsional).</li>
       <li><strong>Cloudflare</strong> (R2, Workers, KV) — hosting, penyimpanan gambar, dan cache.</li>
       <li><strong>Cloudinary</strong> — pengoptimalan dan penyajian gambar.</li>
       <li><strong>OpenRouteService</strong> — perhitungan rute dan jarak pengiriman.</li>
