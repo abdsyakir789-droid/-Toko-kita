@@ -3600,6 +3600,15 @@ h3.text-sm.font-bold.text-gray-800 {
         <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Iklan Siaran</p>
       </div>
 
+      <!-- 8. Laporan Pengguna (Admin Only) -->
+      <div onclick="openReportsAdmin()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 flex-1 transition-all hover:shadow-md hover:-translate-y-0.5 text-center cursor-pointer group" style="position:relative">
+        <span id="ymReportsBadge" style="display:none;position:absolute;top:8px;right:10px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;align-items:center;justify-content:center"></span>
+        <div class="w-10 h-10 rounded-xl bg-red-50 group-hover:bg-red-100 flex items-center justify-center flex-shrink-0 transition-colors">
+          <i class="fa-solid fa-flag text-red-500"></i>
+        </div>
+        <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Laporan Pengguna</p>
+      </div>
+
     </div>
   </div>
 
@@ -8712,6 +8721,11 @@ function _runNotifCardDefault(card) {
     setTimeout(() => { if (window.openKelolaPesananYallaFood) openKelolaPesananYallaFood(); }, 150);
     return;
   }
+  if (type === 'user_report') {
+    closeNotifFullScreen();
+    setTimeout(() => { if (window.openReportsAdmin) openReportsAdmin(); }, 150);
+    return;
+  }
   if (type === 'yallakurir_order') {
     // Cek status order dulu: kalau masih tersedia → buka dashboard (default aman);
     // kalau sudah diambil kurir LAIN / dibatalkan → beri tahu, jangan buka dashboard.
@@ -10755,6 +10769,17 @@ window.ymReportUser = function (uid, name, context) {
       }
       o.remove();
       showToast('Laporan terkirim. Terima kasih!', 'green');
+      // Push ke HP admin (fire-and-forget)
+      (async function () {
+        try {
+          var ar = await window._supaFetch('/rest/v1/rpc/get_report_admin_uids', { method: 'POST', body: '{}' });
+          var admins = ar.ok ? await ar.json() : [];
+          (admins || []).forEach(function (a) {
+            var auid = typeof a === 'string' ? a : (a && (a.get_report_admin_uids || a.uid));
+            if (auid && auid !== me && window.sendPushToUser) window.sendPushToUser(auid, '🚩 Laporan Pengguna', (name || 'Pengguna') + ' dilaporkan: ' + reason, '/?go=reports').catch(function () {});
+          });
+        } catch (e) {}
+      })();
     } catch (e) { btn.disabled = false; btn.textContent = 'Kirim Laporan'; showToast('Gagal mengirim laporan: ' + (e.message || e), 'red'); }
   };
 };
@@ -10797,6 +10822,115 @@ window.ymApplyChatBlockState = function () {
     return orig.call(this, chats, query);
   };
 })();
+// ── HALAMAN LAPORAN PENGGUNA (admin) ──
+window._ymReportsFilter = 'baru';
+window.ymRefreshReportsBadge = async function () {
+  var b = document.getElementById('ymReportsBadge'); if (!b) return;
+  var u = window._S && window._S.user;
+  if (!u || typeof isAdmin !== 'function' || !isAdmin(u.email)) { b.style.display = 'none'; return; }
+  try {
+    var r = await window._supaFetch('/rest/v1/rpc/admin_new_reports_count', { method: 'POST', body: '{}' });
+    var n = r.ok ? Number(await r.json()) || 0 : 0;
+    b.textContent = n > 99 ? '99+' : String(n);
+    b.style.display = n > 0 ? 'flex' : 'none';
+  } catch (e) {}
+};
+function _ymRepTime(t) {
+  try { var d = new Date(t); return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
+}
+window.openReportsAdmin = async function () {
+  var u = window._S && window._S.user;
+  if (!u || typeof isAdmin !== 'function' || !isAdmin(u.email)) { showToast('Akses ditolak', 'red'); return; }
+  var o = document.getElementById('ymReportsOverlay');
+  if (!o) {
+    o = document.createElement('div'); o.id = 'ymReportsOverlay';
+    o.style.cssText = 'position:fixed;inset:0;z-index:2147480000;background:#f8fafc;display:flex;flex-direction:column;font-family:\'Plus Jakarta Sans\',sans-serif';
+    document.body.appendChild(o);
+  }
+  o.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  o.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fff;border-bottom:1px solid #f1f5f9;flex-shrink:0">'
+    + '<button type="button" aria-label="Kembali" onclick="closeReportsAdmin()" style="width:36px;height:36px;border:none;background:transparent;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fa-solid fa-chevron-left" style="color:#374151"></i></button>'
+    + '<h2 style="margin:0;font-size:16px;font-weight:800;color:#111827;flex:1">Laporan Pengguna</h2>'
+    + '<button type="button" onclick="openReportsAdmin()" aria-label="Muat ulang" style="width:36px;height:36px;border:none;background:transparent;border-radius:50%;cursor:pointer"><i class="fa-solid fa-rotate-right" style="color:#6b7280"></i></button></div>'
+    + '<div id="ymRepTabs" style="display:flex;gap:8px;padding:10px 12px;background:#fff;border-bottom:1px solid #f1f5f9;overflow-x:auto;flex-shrink:0"></div>'
+    + '<div id="ymRepList" style="flex:1;overflow:auto;padding:12px"><p style="text-align:center;color:#9ca3af;font-size:13px;padding:30px">Memuat...</p></div>';
+  var rows = [];
+  try { var r = await window._supaFetch('/rest/v1/rpc/admin_list_reports', { method: 'POST', body: '{}' }); rows = r.ok ? await r.json() : []; } catch (e) {}
+  window._ymReportsRows = rows || [];
+  _ymRenderReports();
+  window.ymRefreshReportsBadge();
+};
+window.closeReportsAdmin = function () {
+  var o = document.getElementById('ymReportsOverlay'); if (o) o.style.display = 'none';
+  document.body.style.overflow = '';
+  window.ymRefreshReportsBadge();
+};
+window._ymSetReportsFilter = function (f) { window._ymReportsFilter = f; _ymRenderReports(); };
+function _ymRenderReports() {
+  var rows = window._ymReportsRows || [];
+  var tabs = [['baru', 'Baru'], ['ditinjau', 'Ditinjau'], ['selesai', 'Selesai'], ['diabaikan', 'Diabaikan'], ['semua', 'Semua']];
+  var tabEl = document.getElementById('ymRepTabs'); if (!tabEl) return;
+  tabEl.innerHTML = tabs.map(function (t) {
+    var n = t[0] === 'semua' ? rows.length : rows.filter(function (x) { return x.status === t[0]; }).length;
+    var on = window._ymReportsFilter === t[0];
+    return '<button type="button" onclick="_ymSetReportsFilter(\'' + t[0] + '\')" style="flex-shrink:0;height:32px;padding:0 12px;border-radius:16px;border:1px solid ' + (on ? '#10B981' : '#e5e7eb') + ';background:' + (on ? '#ecfdf5' : '#fff') + ';color:' + (on ? '#047857' : '#374151') + ';font-size:12.5px;font-weight:700;cursor:pointer">' + t[1] + ' (' + n + ')</button>';
+  }).join('');
+  var list = window._ymReportsFilter === 'semua' ? rows : rows.filter(function (x) { return x.status === window._ymReportsFilter; });
+  var el = document.getElementById('ymRepList');
+  if (!list.length) { el.innerHTML = '<p style="text-align:center;color:#9ca3af;font-size:13px;padding:40px 20px">Tidak ada laporan di sini.</p>'; return; }
+  var stLabel = { baru: ['Baru', '#fef2f2', '#dc2626'], ditinjau: ['Ditinjau', '#fffbeb', '#b45309'], selesai: ['Selesai', '#ecfdf5', '#047857'], diabaikan: ['Diabaikan', '#f3f4f6', '#6b7280'] };
+  var ctxLabel = { toko: 'dari halaman toko', chat: 'dari chat' };
+  var av = function (src) { return src ? '<img src="' + _ymEsc(src) + '" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:34px;height:34px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-user" style="color:#9ca3af;font-size:13px"></i></div>'; };
+  el.innerHTML = list.map(function (x) {
+    var st = stLabel[x.status] || stLabel.baru;
+    var cntBadge = Number(x.report_count) > 1 ? '<span style="font-size:10.5px;font-weight:800;color:#dc2626;background:#fee2e2;border-radius:8px;padding:2px 7px;margin-left:6px">Dilaporkan ' + x.report_count + '×</span>' : '';
+    var blk = x.reported_blocked ? '<span style="font-size:10.5px;font-weight:800;color:#6b7280;background:#f3f4f6;border-radius:8px;padding:2px 7px;margin-left:6px">Akun diblokir</span>' : '';
+    var btn = function (fn, label, bg, fg, bd) { return '<button type="button" onclick="' + fn + '" style="height:34px;padding:0 12px;border-radius:10px;border:1px solid ' + (bd || bg) + ';background:' + bg + ';color:' + fg + ';font-size:12px;font-weight:700;cursor:pointer">' + label + '</button>'; };
+    return '<div style="background:#fff;border-radius:16px;padding:14px;margin-bottom:10px;box-shadow:0 2px 10px rgba(15,23,42,.05)">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:11px;font-weight:800;color:' + st[2] + ';background:' + st[1] + ';border-radius:8px;padding:3px 9px">' + st[0] + '</span>'
+      + '<span style="font-size:11px;color:#9ca3af">' + _ymRepTime(x.created_at) + (x.context && ctxLabel[x.context] ? ' · ' + ctxLabel[x.context] : '') + '</span></div>'
+      + '<div style="display:flex;align-items:center;gap:10px">' + av(x.reported_photo)
+      + '<div style="min-width:0;flex:1"><p style="margin:0;font-size:11px;color:#9ca3af">Dilaporkan</p><p style="margin:0;font-size:14px;font-weight:800;color:#111827;display:flex;align-items:center;flex-wrap:wrap">' + _ymEsc(x.reported_name || 'Pengguna') + cntBadge + blk + '</p></div></div>'
+      + '<div style="margin:10px 0;padding:10px 12px;background:#f8fafc;border-radius:12px"><p style="margin:0;font-size:13px;font-weight:800;color:#b91c1c">' + _ymEsc(x.reason) + '</p>'
+      + (x.details ? '<p style="margin:4px 0 0;font-size:12.5px;color:#374151;line-height:1.5;white-space:pre-wrap">' + _ymEsc(x.details) + '</p>' : '') + '</div>'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' + av(x.reporter_photo).replace('34px;height:34px', '24px;height:24px').replace('34px;height:34px', '24px;height:24px')
+      + '<p style="margin:0;font-size:12px;color:#6b7280">Pelapor: <b style="color:#374151">' + _ymEsc(x.reporter_name || 'Pengguna') + '</b></p></div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      + btn("_ymRepViewStore('" + x.reported_uid + "')", 'Lihat toko', '#fff', '#047857', '#10B981')
+      + btn("_ymRepToggleBlock('" + x.reported_uid + "'," + (x.reported_blocked ? 'true' : 'false') + ")", x.reported_blocked ? 'Buka blokir akun' : 'Blokir akun', x.reported_blocked ? '#fff' : '#dc2626', x.reported_blocked ? '#dc2626' : '#fff', '#dc2626')
+      + (x.status !== 'ditinjau' && x.status !== 'selesai' ? btn("_ymRepSetStatus('" + x.id + "','ditinjau')", 'Tinjau', '#fffbeb', '#b45309', '#fde68a') : '')
+      + (x.status !== 'selesai' ? btn("_ymRepSetStatus('" + x.id + "','selesai')", 'Selesai', '#10B981', '#fff') : '')
+      + (x.status !== 'diabaikan' && x.status !== 'selesai' ? btn("_ymRepSetStatus('" + x.id + "','diabaikan')", 'Abaikan', '#fff', '#6b7280', '#e5e7eb') : '')
+      + '</div></div>';
+  }).join('');
+}
+window._ymRepViewStore = function (uid) {
+  if (!uid) return;
+  window.ymPushReturn && window.ymPushReturn('etalase', function () { window.openReportsAdmin(); });
+  var o = document.getElementById('ymReportsOverlay'); if (o) o.style.display = 'none';
+  document.body.style.overflow = '';
+  window.viewSellerStore(uid);
+};
+window._ymRepToggleBlock = async function (uid, blocked) {
+  if (typeof window.toggleUserBlock !== 'function') return;
+  await window.toggleUserBlock(uid, blocked);
+  window.openReportsAdmin();
+};
+window._ymRepSetStatus = async function (id, st) {
+  if (st === 'selesai' && !confirm('Tandai laporan ini selesai?\n\nPelapor akan mendapat notifikasi bahwa laporannya sudah ditindaklanjuti.')) return;
+  try {
+    var r = await window._supaFetch('/rest/v1/rpc/admin_set_report_status', { method: 'POST', body: JSON.stringify({ p_id: id, p_status: st }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var row = (window._ymReportsRows || []).find(function (x) { return x.id === id; });
+    if (row) row.status = st;
+    _ymRenderReports();
+    window.ymRefreshReportsBadge();
+    showToast(st === 'selesai' ? 'Laporan selesai — pelapor sudah dikabari' : st === 'ditinjau' ? 'Ditandai sedang ditinjau' : 'Laporan diabaikan', 'green');
+  } catch (e) { showToast('Gagal ubah status: ' + (e.message || e), 'red'); }
+};
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') window.ymRefreshReportsBadge(); });
+
 // Daftar "Pengguna Diblokir" (Pengaturan)
 window.ymOpenBlockedList = async function () {
   await window.ymLoadBlocks(true);
@@ -10829,7 +10963,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var last = null;
   setInterval(function () {
     var me = window._S && window._S.user && window._S.user.uid;
-    if (me !== last) { last = me; window.ymLoadBlocks(true).then(_ymRefreshAfterBlockChange); }
+    if (me !== last) { last = me; window.ymLoadBlocks(true).then(_ymRefreshAfterBlockChange); setTimeout(function () { window.ymRefreshReportsBadge(); }, 1500); }
   }, 2000);
 });
 
@@ -20555,7 +20689,8 @@ window._routePushGo = function(params) {
     yfseller: 'openKelolaPesananYallaFood', // notif pesanan YallaFood → kelola pesanan (seller)
     yforders: 'openFoodOrderTracking',      // notif status YallaFood → "Pesanan Saya" (buyer)
     yfhome:   'openYallaFoodHome',          // Iklan Siaran terjadwal → beranda YallaFood
-    notif:    'openNotifFullScreen'         // peringatan iklan dari admin → daftar notifikasi (lonceng)
+    notif:    'openNotifFullScreen',        // peringatan iklan dari admin → daftar notifikasi (lonceng)
+    reports:  'openReportsAdmin'            // laporan pengguna baru → halaman Laporan Pengguna (admin)
   };
   const fnName = fnMap[go];
   if (!fnName) return;
