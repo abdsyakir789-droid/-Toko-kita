@@ -5559,15 +5559,12 @@ supabase.auth.onAuthStateChange(async (event, session) => {
           }));
         } catch(_) {}
       } else {
-        // Row belum ada (misal baru register via OAuth atau flow lain) — buat sekarang
-        await supabase.from('users').upsert({
-          uid: user.id,
-          name: profile.name,
-          phone: '',
-          email: user.email,
-          photo_url: '',
-          created_at: new Date().toISOString()
-        }, { onConflict: 'uid', ignoreDuplicates: true }).catch(() => {});
+        // Row belum ada (misal baru register via Google/OAuth atau flow lain) — buat sekarang.
+        // (Dulu pakai .upsert(...).catch() — builder supabase tidak punya .catch sehingga
+        //  error sebelum terkirim & row tidak pernah dibuat. Kini lewat RPC aman.)
+        try {
+          await supabase.rpc('save_my_user_row', { p_name: profile.name, p_phone: '', p_email: user.email || '' });
+        } catch (_rowErr) { console.warn('[onAuthStateChange] buat row users gagal:', _rowErr && _rowErr.message); }
       }
     } catch(e) {
       console.warn('[onAuthStateChange] load profile error:', e.message);
@@ -20088,7 +20085,17 @@ window.requirePin = function(callback) {
       var r = await window._supaFetch('/rest/v1/rpc/get_my_profile', { method: 'POST', body: '{}' });
       var rows = r.ok ? await r.json() : [];
       var me = rows && rows[0];
-      if (!me) { if (attempt < 6) setTimeout(function () { window.ymEnsurePhone(attempt + 1); }, 2000); return; }
+      if (!me) {
+        // Profil belum ada (mis. pembuatan otomatis gagal) → buat sendiri lewat RPC aman, lalu cek ulang
+        if (attempt >= 1) {
+          var md = user.user_metadata || {};
+          try {
+            await window._supaFetch('/rest/v1/rpc/save_my_user_row', { method: 'POST', body: JSON.stringify({ p_name: md.full_name || md.name || (user.email || '').split('@')[0], p_phone: '', p_email: user.email || '' }) });
+          } catch (e) {}
+        }
+        if (attempt < 6) setTimeout(function () { window.ymEnsurePhone(attempt + 1); }, 2000);
+        return;
+      }
       // Foto profil dari Google (kalau belum punya foto)
       var pic = user.user_metadata && (user.user_metadata.avatar_url || user.user_metadata.picture);
       if (!me.photo_url && pic && /^https:\/\//.test(pic)) {
