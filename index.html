@@ -708,6 +708,11 @@ button, .btn {
   }
 }
 
+  .yf-vpill { display:flex; align-items:center; gap:5px; padding:3px 8px 3px 3px; border-radius:99px; border:2px solid #e5e7eb; background:#fff; cursor:pointer; flex-shrink:0; transition:border-color .15s, background .15s; }
+  .yf-vpill .yf-vlabel { font-size:11.5px; font-weight:700; color:#374151; white-space:nowrap; }
+  .yf-vpill.yf-vpill-on { border-color:#10B981; background:#ecfdf5; }
+  .yf-vpill.yf-vpill-on .yf-vlabel { color:#047857; }
+  .yf-vpill .yf-vsize { font-size:9px; font-weight:800; color:#374151; background:#f3f4f6; border-radius:99px; padding:2px 6px; white-space:nowrap; }
 /* INPUT */
 .inp{transition:border-color .2s,box-shadow .2s,background .2s}
 .inp:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(16,185,129,.12);background:#fff}
@@ -8473,10 +8478,10 @@ window.renderNotifFull = function(notifs) {
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-start justify-between gap-2">
-            <p class="text-sm font-semibold text-gray-900 leading-snug">${n.title||'Pesan Siaran'}</p>
+            <p class="text-sm font-semibold text-gray-900 leading-snug">${_ymH(n.title||'Pesan Siaran')}</p>
             ${isAdminUser ? `<button onclick="event.stopPropagation();event.preventDefault();deleteBroadcastMessage('${rawDocId}','${encodeURIComponent(n.title||n.message||'')}')" class="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 hover:bg-red-100 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash-can text-red-400" style="font-size:9px"></i></button>` : ''}
           </div>
-          <p class="text-sm text-gray-500 mt-0.5 leading-relaxed" id="fs-bc-msg-${rawDocId}" style="${(n.message||'').length>120?'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden':'display:block'}">${n.message||''}</p>
+          <p class="text-sm text-gray-500 mt-0.5 leading-relaxed" id="fs-bc-msg-${rawDocId}" style="${(n.message||'').length>120?'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden':'display:block'}">${_ymH(n.message||'')}</p>
           ${(n.message||'').length>120?`<button id="fs-bc-btn-${rawDocId}" onclick="event.stopPropagation();event.preventDefault();toggleFsBcExpand('${rawDocId}')" class="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">Baca selengkapnya <i class="fa-solid fa-chevron-down text-[8px]"></i></button>`:''}
           ${(window._bcHasImage && window._bcHasImage(n)) ? '' : `${window._bcLinkChip ? window._bcLinkChip(n) : ''}<p class="text-xs text-gray-400 mt-1.5">${timeStr}</p>`}
         </div>
@@ -8600,7 +8605,7 @@ window.renderNotifFull = function(notifs) {
       // Foto: dari notif langsung, atau dari cache, atau fallback icon
       const photo = n.senderPhoto || (n.senderUid ? (_photoCache[n.senderUid] || '') : '');
       const avatarHtml = photo
-        ? `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
+        ? `<img src="${_ymH(photo)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
         : '';
       const iconFallbackStyle = photo ? 'display:none' : '';
       // Navigasi ke profil pengirim saat foto/nama diklik — pakai data-action (event delegation), bukan onclick inline
@@ -8619,20 +8624,33 @@ window.renderNotifFull = function(notifs) {
       const senderNavAttr = n.senderUid
         ? ` data-action="profile" data-uid="${n.senderUid}" style="font-weight:700;color:#111827;cursor:pointer;touch-action:manipulation"`
         : ` style="font-weight:700;color:#111827"`;
-      const senderBold = n.senderName ? `<span${senderNavAttr}>${n.senderName}</span> ` : '';
+      const senderBold = n.senderName ? `<span${senderNavAttr}>${_ymH(n.senderName)}</span> ` : '';
       const msgText = (n.message||'').replace(n.senderName||'__NONE__','').trim();
       const timeInline = timeStr ? ` <span style="color:#9ca3af;font-size:11px;font-weight:400">${timeStr}</span>` : '';
 
       // "Lihat Selengkapnya" — potong teks panjang di 90 karakter, toggle expand/collapse
       const MAX_CHARS = 90;
-      const isLongMsg = msgText.length > MAX_CHARS;
+      // Notif laporan: nama pengguna ditebalkan (teks di-escape dulu — nama toko buatan user)
+      const _repHtml = (function(){
+        if (n.type !== 'report_done' && n.type !== 'user_report') return null;
+        const esc = String(msgText).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const B = t => '<b style="font-weight:800;color:#111827">' + t + '</b>';
+        if (n.type === 'report_done') return esc.replace(/tentang (.+?) sudah kami/, (m, nm) => 'tentang ' + B(nm) + ' sudah kami');
+        return esc.replace(/melaporkan (.+?) — /, (m, b) => 'melaporkan ' + B(b) + ' — ');
+      })();
+      const _wp = n.type === 'peringatan' ? _ymWarnParts(n) : null;
+      const _warnHtml = _wp
+        ? '<span style="color:#6b7280">memberi peringatan untuk iklan <i style="color:#374151">&ldquo;' + _ymH(_wp.title) + '&rdquo;</i></span>'
+          + '<span style="display:block;margin-top:6px;padding:8px 10px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:8px;color:#111827;font-weight:600;line-height:1.45;white-space:pre-wrap">' + _ymH(_wp.reason) + '</span>'
+        : null;
+      const isLongMsg = !_repHtml && !_warnHtml && msgText.length > MAX_CHARS;
       const shortMsg = isLongMsg ? msgText.slice(0, MAX_CHARS).trim() + '…' : msgText;
       const expandToggleHtml = isLongMsg
         ? ` <span data-action="toggle-expand" data-notif-id="${n.id}" role="button" style="color:#10B981;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block;touch-action:manipulation">Lihat Selengkapnya</span>`
         : '';
-      const msgHtml = isLongMsg
-        ? `<span id="notifMsgShort-${n.id}">${shortMsg}${expandToggleHtml}</span><span id="notifMsgFull-${n.id}" style="display:none">${msgText} <span data-action="toggle-expand" data-notif-id="${n.id}" role="button" style="color:#10B981;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block;touch-action:manipulation">Sembunyikan</span></span>`
-        : msgText;
+      const msgHtml = _repHtml ? _repHtml : _warnHtml ? _warnHtml : isLongMsg
+        ? `<span id="notifMsgShort-${n.id}">${_ymH(shortMsg)}${expandToggleHtml}</span><span id="notifMsgFull-${n.id}" style="display:none">${_ymH(msgText)} <span data-action="toggle-expand" data-notif-id="${n.id}" role="button" style="color:#10B981;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block;touch-action:manipulation">Sembunyikan</span></span>`
+        : _ymH(msgText);
 
       // Tombol "Ikuti Balik" — kolom TERSENDIRI di sisi kanan (sejajar avatar
       // lewat align-items:center bawaan .notif-act-item), jadi tidak pernah
@@ -9037,8 +9055,8 @@ window.renderToaPanel = function(notifs) {
   body.innerHTML = broadcasts.map((n, idx) => {
     const ts = n.createdAt?.seconds || n.timestamp?.seconds;
     const timeStr = _bcRelativeTime(ts);
-    const title = n.title || 'Pesan Siaran';
-    const msg = n.message || '';
+    const title = _ymH(n.title || 'Pesan Siaran');
+    const msg = _ymH(n.message || '');
     const rawDocId = (n.id||'').startsWith('sub_') ? n.id.slice(4) : n.id;
     const bcId = n.broadcastId || '';
     const isLong = msg.length > 120;
@@ -9054,7 +9072,7 @@ window.renderToaPanel = function(notifs) {
       <div class="flex-1 min-w-0">
         <div class="flex items-start justify-between gap-2">
           <p class="text-sm font-semibold text-gray-900 leading-snug">${title}</p>
-          ${isAdminToa ? `<button onclick="event.stopPropagation();event.preventDefault();deleteBroadcastMessage('${rawDocId}','${encodeURIComponent(title)}')" class="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 hover:bg-red-100 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash-can text-red-400" style="font-size:9px"></i></button>` : ''}
+          ${isAdminToa ? `<button onclick="event.stopPropagation();event.preventDefault();deleteBroadcastMessage('${rawDocId}','${encodeURIComponent(n.title || 'Pesan Siaran')}')" class="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 hover:bg-red-100 flex items-center justify-center transition-colors"><i class="fa-solid fa-trash-can text-red-400" style="font-size:9px"></i></button>` : ''}
         </div>
         <p class="text-sm text-gray-800 mt-0.5 leading-relaxed" id="toa-bc-msg-${rawDocId}" style="word-break:break-word;${isLong?'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden':'display:block'}">${isLong ? msgPreviewHtml : msgFullHtml}</p>
         ${isLong?`<button onclick="event.stopPropagation();event.preventDefault();toggleToaBcExpand('${rawDocId}')" id="toa-bc-btn-${rawDocId}" class="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">Baca selengkapnya <i class="fa-solid fa-chevron-down text-[8px]"></i></button>`:''}
@@ -9082,6 +9100,26 @@ window.renderToaPanel = function(notifs) {
 // Hanya URL https yang dipakai (dari upload R2 admin). Ketuk → lihat layar penuh.
 // Gambar ditaruh di BARIS SENDIRI selebar kartu (di luar kolom teks) → jarak kiri = kanan
 // (padding kartu 16px), simetris walau ada ikon toa di kiri. Sudut siku (tanpa lengkungan).
+// Escape teks buatan user sebelum dimasukkan ke HTML notifikasi (cegah kode berbahaya ikut berjalan)
+function _ymH(str) { return String(str == null ? '' : str).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+window._ymH = _ymH;
+// Judul iklan dipendekkan (caption bisa sangat panjang)
+function _ymShortTitle(t, max) { t = String(t || '').replace(/\s+/g, ' ').trim(); max = max || 40; return t.length > max ? t.slice(0, max).trim() + '…' : t; }
+window._ymShortTitle = _ymShortTitle;
+// Notif peringatan: pisahkan judul iklan & isi peringatan dari pesan lama/baru
+function _ymWarnParts(n) {
+  var msg = String((n && n.message) || '');
+  var m = msg.match(/^Peringatan untuk iklan "([\s\S]*)": ([\s\S]*)$/);
+  if (!m) return null;
+  var title = n.adTitle || n.ad_title || m[1], reason = m[2];
+  // judul bisa mengandung '": ' → kalau judul asli diketahui, potong tepat sesudahnya
+  if (n.adTitle || n.ad_title) {
+    var full = n.adTitle || n.ad_title;
+    [full, _ymShortTitle(full)].some(function (t) { var p = 'Peringatan untuk iklan "' + t + '": '; if (msg.indexOf(p) === 0) { reason = msg.slice(p.length); return true; } return false; });
+  }
+  return { title: _ymShortTitle(title), reason: reason };
+}
+window._ymWarnParts = _ymWarnParts;
 window._bcHasImage = function(n) {
   const url = n && (n.image_url || n.imageUrl);
   return !!url && /^https:\/\//i.test(url);
@@ -9323,8 +9361,8 @@ window.renderNotifList = function(notifs) {
         <i class="fa-solid ${icon} text-sm"></i>
       </div>
       <div class="flex-1 min-w-0">
-        <p class="text-xs ${isUnread?'font-semibold text-gray-800':'font-medium text-gray-600'} leading-snug">${n.message}</p>
-        ${n.senderName?`<p class="text-[10px] text-gray-400 mt-0.5">dari: ${(n.type==='broadcast'||n.type==='official_broadcast'||n.isSticky)?'Admin Yalla Mart':n.senderName}</p>`:''}
+        <p class="text-xs ${isUnread?'font-semibold text-gray-800':'font-medium text-gray-600'} leading-snug">${(n.type==='peringatan' && _ymWarnParts(n)) ? ('⚠️ ' + _ymH(_ymWarnParts(n).reason) + ' <span style="color:#9ca3af;font-weight:400">— iklan &ldquo;' + _ymH(_ymWarnParts(n).title) + '&rdquo;</span>') : _ymH(n.message)}</p>
+        ${n.senderName?`<p class="text-[10px] text-gray-400 mt-0.5">dari: ${(n.type==='broadcast'||n.type==='official_broadcast'||n.isSticky)?'Admin Yalla Mart':_ymH(n.senderName)}</p>`:''}
         <p class="text-[10px] text-gray-300 mt-0.5">${timeStr}</p>
       </div>
       ${isUnread?`<div class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 mt-1.5"></div>`:''}
@@ -9867,7 +9905,7 @@ window._sendWarning = async function(adId, sellerUid, encTitle) {
       body: JSON.stringify({
         to_uid: sellerUid, user_id: sellerUid,
         type: 'peringatan',
-        message: 'Peringatan untuk iklan "' + adTitle + '": ' + reason,
+        message: 'Peringatan untuk iklan "' + _ymShortTitle(adTitle) + '": ' + reason,
         sender_name: 'Tim YallaMart',
         ad_id: adId, ad_title: adTitle,
         is_read: false,
@@ -9877,7 +9915,7 @@ window._sendWarning = async function(adId, sellerUid, encTitle) {
     if(!res.ok) throw new Error('Gagal kirim (' + res.status + ')');
     // Push notification ke HP pemilik iklan (muncul di layar walau app ditutup) — fire-and-forget,
     // kalau gagal, peringatan in-app di atas tetap dianggap sukses.
-    if(window.sendPushToUser) window.sendPushToUser(sellerUid, '⚠️ Peringatan YallaMart', 'Iklan "' + adTitle + '": ' + reason, '/?go=notif').catch(function(){});
+    if(window.sendPushToUser) window.sendPushToUser(sellerUid, '⚠️ Peringatan YallaMart', 'Iklan "' + _ymShortTitle(adTitle, 30) + '": ' + reason, '/?go=notif').catch(function(){});
     showToast('✅ Peringatan terkirim ke pemilik iklan', 'green');
     _closeWarnModal();
   } catch(e) {
@@ -24382,7 +24420,7 @@ window.closeKelolaToko = function() {
   <div class="bg-white w-full rounded-t-3xl p-5" style="max-width:480px">
     <h3 class="font-bold text-base mb-3">Konfirmasi Pesanan</h3>
     <div id="yfOrderSummaryBody" class="text-sm text-gray-700" style="display:flex;flex-direction:column;gap:6px"></div>
-    <button id="yfOrderSubmitBtn" onclick="yfSubmitFoodOrder()" class="w-full bg-primary text-white font-bold rounded-2xl py-3 mt-4">Konfirmasi Pesanan (COD)</button>
+    <button id="yfOrderSubmitBtn" onclick="yfSubmitFoodOrder()" class="w-full bg-primary text-white font-bold rounded-2xl py-3 mt-4">Konfirmasi Pesanan</button>
     <button onclick="yfCloseOrderSummary()" class="w-full text-gray-500 font-semibold rounded-2xl py-2 mt-1">Batal</button>
   </div>
 </div>
@@ -24394,7 +24432,18 @@ window.closeKelolaToko = function() {
       <h3 class="font-bold text-base">Pilih Varian</h3>
       <button onclick="_yfCloseVariantConfirmModal()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 flex-shrink-0"><i class="fa-solid fa-xmark text-gray-500"></i></button>
     </div>
-    <div id="yfVariantConfirmList" class="flex gap-2 flex-wrap mb-4"></div>
+    <!-- Pratinjau varian: foto besar + harga + nama (berubah sesuai varian yang diklik) -->
+    <div style="display:flex;align-items:center;gap:14px;padding:2px 0 12px;border-bottom:1px solid #f3f4f6;margin-bottom:10px">
+      <div onclick="_yfVarPreviewZoom()" style="width:104px;height:104px;border-radius:16px;overflow:hidden;background:#f3f4f6;flex-shrink:0;cursor:zoom-in">
+        <img id="yfVarPreviewImg" src="" alt="" style="width:100%;height:100%;object-fit:cover;display:block"/>
+      </div>
+      <div style="min-width:0">
+        <p id="yfVarPreviewPrice" style="font-size:22px;font-weight:900;color:#10B981;margin:0"></p>
+        <p id="yfVarPreviewName" style="font-size:12px;color:#6b7280;margin:4px 0 0;line-height:1.4"></p>
+      </div>
+    </div>
+    <p style="font-size:11px;font-weight:700;color:#6b7280;margin:0 0 8px">Pilih Varian:</p>
+    <div id="yfVariantConfirmList" class="flex flex-wrap mb-4" style="gap:8px 6px"></div>
     <div class="flex items-center justify-between mb-1">
       <span class="text-sm font-semibold">Jumlah</span>
       <div class="flex items-center gap-3">
@@ -25222,18 +25271,19 @@ function _yfOpenVariantConfirmModal() {
       return `<span style="font-size:9px;font-weight:600;color:${n <= 0 ? '#EF4444' : '#111827'};padding-left:6px">${n > 0 ? 'Stok: ' + n : 'Stok habis'}</span>`;
     };
     let html = `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
-      <button onclick="_yfModalToggleVariant(0,'','${baseLabel.replace(/'/g,"\\'")}',${basePrice})" data-vname="" data-label="${baseLabel.replace(/"/g,'&quot;')}" class="text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 bg-white text-gray-700 border-gray-200">${baseLabel}</button>
+      <button onclick="_yfModalToggleVariant(0,'','${baseLabel.replace(/'/g,"\\'")}',${basePrice})" data-vname="" data-label="${baseLabel.replace(/"/g,'&quot;')}" data-img="${_yfImgAttr(ad?.img_url)}" data-price="${basePrice}" data-dname="${_ymH(ad?.var_name || ad?.title || 'Utama')}" class="yf-vpill">${_yfThumb(ad?.img_url)}<span class="yf-vlabel">${_ymH(_ymShortTitle(ad?.var_name || ad?.title || 'Utama', 22))}</span>${ad?.size ? '<span class="yf-vsize">' + _ymH(ad.size) + '</span>' : ''}</button>
       ${_yfStockLabel(ad?.stock)}
     </div>`;
     html += variants.map((v, i) => {
       const label = v.name + (v.size ? ' (' + v.size + ')' : '');
       const price = Number(v.price || ad?.price || 0);
       return `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
-        <button onclick="_yfModalToggleVariant(${i + 1},'${(v.name||'').replace(/'/g,"\\'")}','${label.replace(/'/g,"\\'")}',${price})" data-vname="${(v.name||'').replace(/"/g,'&quot;')}" data-label="${label.replace(/"/g,'&quot;')}" class="text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 bg-white text-gray-700 border-gray-200">${label}</button>
+        <button onclick="_yfModalToggleVariant(${i + 1},'${(v.name||'').replace(/'/g,"\\'")}','${label.replace(/'/g,"\\'")}',${price})" data-vname="${(v.name||'').replace(/"/g,'&quot;')}" data-label="${label.replace(/"/g,'&quot;')}" data-img="${_yfImgAttr(v.img_url || ad?.img_url)}" data-price="${price}" data-dname="${_ymH(v.name || '')}" class="yf-vpill">${_yfThumb(v.img_url || ad?.img_url)}<span class="yf-vlabel">${_ymH(v.name || '')}</span>${v.size ? '<span class="yf-vsize">' + _ymH(v.size) + '</span>' : ''}</button>
         ${_yfStockLabel(v.stock)}
       </div>`;
     }).join('');
     list.innerHTML = html;
+    _yfSetVarPreview(ad?.img_url, Number(ad?.price || 0), baseLabel);
   }
   _yfRefreshVariantConfirmActive();
   document.getElementById('yfVariantConfirmModal').style.display = 'flex';
@@ -25253,7 +25303,39 @@ window._yfModalToggleVariant = function(slideIdx, key, label, price) {
     window._yfState.lastActiveKey = key;
     yfDetailGoSlide(slideIdx);
   }
+  // Pratinjau: tampilkan varian yang barusan diklik (foto, harga, nama)
+  try {
+    const list = document.getElementById('yfVariantConfirmList');
+    const btn = list && Array.from(list.querySelectorAll('button')).find(b => (b.dataset.vname || '') === (key || ''));
+    if (btn) _yfSetVarPreview(btn.dataset.img, Number(btn.dataset.price || price) || 0, label);
+  } catch (e) {}
   _yfRefreshVariantConfirmActive();
+};
+function _yfImgAttr(u) { return (typeof u === 'string' && /^https?:\/\//i.test(u)) ? _ymH(u) : ''; }
+function _yfThumb(u) {
+  const src = _yfImgAttr(u);
+  return src
+    ? '<img src="' + src + '" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0">'
+    : '<span style="width:28px;height:28px;border-radius:50%;background:#f3f4f6;flex-shrink:0;display:inline-block"></span>';
+}
+function _yfSetVarPreview(img, price, name) {
+  const im = document.getElementById('yfVarPreviewImg');
+  const pr = document.getElementById('yfVarPreviewPrice');
+  const nm = document.getElementById('yfVarPreviewName');
+  const src = (typeof img === 'string' && /^https?:\/\//i.test(img)) ? img : '';
+  if (im) { if (src) { im.src = src; im.style.visibility = ''; } else { im.removeAttribute('src'); im.style.visibility = 'hidden'; } }
+  if (pr) pr.textContent = _yfFmtPrice(Number(price) || 0);
+  if (nm) nm.textContent = name || '';
+}
+// Ketuk foto pratinjau → lihat lebih besar
+window._yfVarPreviewZoom = function () {
+  const im = document.getElementById('yfVarPreviewImg'); const src = im && im.getAttribute('src');
+  if (!src) return;
+  const o = document.createElement('div');
+  o.style.cssText = 'position:fixed;inset:0;z-index:2147482000;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out';
+  o.innerHTML = '<img src="' + _ymH(src) + '" alt="" style="max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain">';
+  o.onclick = function () { o.remove(); };
+  document.body.appendChild(o);
 };
 function _yfRefreshVariantConfirmActive() {
   const list = document.getElementById('yfVariantConfirmList');
@@ -25262,8 +25344,9 @@ function _yfRefreshVariantConfirmActive() {
     list.querySelectorAll('button').forEach(btn => {
       const key = btn.dataset.vname;
       const entry = sel[key];
-      btn.className = 'text-xs font-semibold px-3 py-1.5 rounded-full border flex-shrink-0 ' + (entry ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-200');
-      btn.textContent = btn.dataset.label + (entry && entry.qty > 1 ? ' ×' + entry.qty : '');
+      btn.classList.toggle('yf-vpill-on', !!entry);
+      const lb = btn.querySelector('.yf-vlabel');
+      if (lb) lb.textContent = _ymShortTitle(btn.dataset.dname || btn.dataset.label, 22) + (entry && entry.qty > 1 ? ' ×' + entry.qty : '');
     });
   }
   const totalQty = Object.values(sel).reduce((s, e) => s + e.qty, 0);
@@ -25431,7 +25514,7 @@ async function _yfComputeAndShowSummary(ad, buyerLat, buyerLng) {
     ${summaryRowsHtml}
     <div class="flex justify-between text-gray-500"><span>Jarak ke toko</span><span>${distanceKm.toFixed(1)} km</span></div>
     <div class="flex justify-between"><span>Ongkir Instan</span><span>${_yfFmtPrice(ongkir)}</span></div>
-    <div class="flex justify-between font-bold text-base border-t border-gray-100 pt-2 mt-1"><span>Total (COD)</span><span>${_yfFmtPrice(total)}</span></div>
+    <div class="flex justify-between font-bold text-base border-t border-gray-100 pt-2 mt-1"><span>Total Pesanan</span><span>${_yfFmtPrice(total)}</span></div>
   `;
   document.getElementById('yfOrderSummaryModal').style.display = 'flex';
 }
@@ -25509,7 +25592,7 @@ window.yfSubmitFoodOrder = async function() {
   }
   } finally {
     window._yfOrderSubmitting = false;
-    if (_yfSubmitBtn) { _yfSubmitBtn.disabled = false; _yfSubmitBtn.style.opacity = ''; _yfSubmitBtn.style.pointerEvents = ''; _yfSubmitBtn.textContent = _yfSubmitBtnLabel || 'Konfirmasi Pesanan (COD)'; }
+    if (_yfSubmitBtn) { _yfSubmitBtn.disabled = false; _yfSubmitBtn.style.opacity = ''; _yfSubmitBtn.style.pointerEvents = ''; _yfSubmitBtn.textContent = _yfSubmitBtnLabel || 'Konfirmasi Pesanan'; }
   }
 };
 
