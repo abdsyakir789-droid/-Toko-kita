@@ -15512,6 +15512,9 @@ window.showToast=(msg,type)=>{
 
   var rawToast = window.showToast;
   window.showToast = function(msg, type){
+    if (type === 'red' && String(msg||'').indexOf('YM_BLOCKED') >= 0) {
+      return rawToast('Tidak bisa diproses: kamu dan pengguna ini saling terblokir', 'red');
+    }
     if (type === 'red') {
       var kind = classify(msg);
       if (kind) {
@@ -18874,7 +18877,7 @@ function updateYcBadge(count) {
         </div>
 
         <!-- Pengguna Diblokir -->
-        <div class="stg-item"
+        <div class="stg-item" onclick="ymOpenBlockedList()"
           style="display:flex;align-items:center;gap:14px;padding:17px 16px;cursor:pointer">
           <div style="width:40px;height:40px;border-radius:13px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;flex-shrink:0">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="22" y2="13"/><line x1="22" y1="8" x2="17" y2="13"/></svg>
@@ -18919,20 +18922,6 @@ function updateYcBadge(count) {
           <div style="flex:1;min-width:0">
             <p style="font-size:14px;font-weight:700;color:#111827;margin:0">Notifikasi</p>
             <p id="notifSettingStatus" style="font-size:11.5px;color:#9ca3af;margin:2px 0 0">Tap untuk aktifkan</p>
-          </div>
-          <i class="fa-solid fa-chevron-right" style="color:#d1d5db;font-size:12px;flex-shrink:0"></i>
-        </div>
-
-        <!-- ── Pengguna diblokir ── -->
-        <div style="height:1px;background:#f3f4f6;margin:0 16px"></div>
-        <div class="stg-item" onclick="ymOpenBlockedList()"
-          style="display:flex;align-items:center;gap:14px;padding:17px 16px;cursor:pointer">
-          <div style="width:40px;height:40px;border-radius:13px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
-          </div>
-          <div style="flex:1;min-width:0">
-            <p style="font-size:14px;font-weight:700;color:#111827;margin:0">Pengguna Diblokir</p>
-            <p style="font-size:11.5px;color:#9ca3af;margin:2px 0 0">Lihat &amp; buka blokir pengguna</p>
           </div>
           <i class="fa-solid fa-chevron-right" style="color:#d1d5db;font-size:12px;flex-shrink:0"></i>
         </div>
@@ -21590,7 +21579,8 @@ window.checkoutToChat = async function(){
       });
     } catch(e) {
       console.warn('[checkout] gagal proses toko', grp.sellerName, e.message);
-      failedShopNames.push(grp.sellerName);
+      if (String(e && e.message || '').indexOf('tidak bisa dikirim') >= 0) { (window._ymBlockedShops = window._ymBlockedShops || []).push(grp.sellerName); }
+      else failedShopNames.push(grp.sellerName);
     }
   }
 
@@ -21603,8 +21593,12 @@ window.checkoutToChat = async function(){
   if(failedShopNames.length){
     showToast("Gagal checkout: "+failedShopNames.join(', '),"red");
   }
+  if(window._ymBlockedShops && window._ymBlockedShops.length){
+    showToast("Pesanan tidak bisa dibuat ke toko: "+window._ymBlockedShops.join(', '),"red");
+    var _hadBlocked = true; window._ymBlockedShops = [];
+  }
   if(!successGroups.length){
-    if(!closedShopNames.length && !failedShopNames.length) showToast("Checkout gagal","red");
+    if(!closedShopNames.length && !failedShopNames.length && !_hadBlocked) showToast("Checkout gagal","red");
     return;
   }
   window.playCheckoutSuccessSound();
