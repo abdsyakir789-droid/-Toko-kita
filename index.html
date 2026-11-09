@@ -3651,7 +3651,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.05) 0%,rgba(0,0,0,.55) 100%)"></div>
 
       <!-- Back button -->
-      <button onclick="showPage('home')" class="back-btn-glass">
+      <button onclick="etalaseBack()" class="back-btn-glass">
         <i class="fa-solid fa-chevron-left text-sm"></i>
       </button>
       <!-- Menu toko (⋯): Bagikan toko -->
@@ -4703,7 +4703,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <!-- Slider track -->
       <div id="detailSliderTrack" class="flex h-full" style="transition:transform .3s ease;will-change:transform"></div>
       <!-- Back button -->
-      <button onclick="closeDetailDirect()" class="absolute top-4 left-4 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-sm transition-colors shadow-lg" style="z-index:5">
+      <button onclick="detailBack()" class="absolute top-4 left-4 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-sm transition-colors shadow-lg" style="z-index:5">
         <i class="fa-solid fa-chevron-left text-base"></i>
       </button>
 
@@ -5002,10 +5002,10 @@ h3.text-sm.font-bold.text-gray-800 {
   <!-- ── Chat Header ── -->
   <div class="flex-shrink-0 bg-white border-b border-gray-100 shadow-sm">
     <div class="flex items-center gap-3 px-4 py-3 max-w-2xl mx-auto w-full">
-      <button onclick="closeChatRoom()" class="w-9 h-9 flex items-center justify-center rounded-2xl hover:bg-gray-100 transition-colors flex-shrink-0">
+      <button onclick="chatRoomBack()" class="w-9 h-9 flex items-center justify-center rounded-2xl hover:bg-gray-100 transition-colors flex-shrink-0">
         <i class="fa-solid fa-chevron-left text-gray-700 text-base"></i>
       </button>
-      <button onclick="viewSellerStore(window._S.activeChatOther)" class="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:opacity-75 transition-opacity">
+      <button onclick="ymPushReturn('etalase', window._ymReopenChatFn());viewSellerStore(window._S.activeChatOther)" class="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:opacity-75 transition-opacity">
         <div id="chatRoomAvatarWrap" class="flex-shrink-0 relative">
           <div id="chatRoomAvatar" class="w-9 h-9 rounded-full ym-avatar-fb overflow-hidden"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
           <span id="chatOnlineDot" class="online-dot absolute -bottom-0.5 -right-0.5" style="display:none"></span>
@@ -10385,7 +10385,7 @@ function _miniAdCard(p, highlightSeller) {
   const price = fmtLE(p.price);
   const admin = isAdmin(p.sellerEmail||'');
   return `
-    <div class="recom-card" onclick="closeDetailDirect();setTimeout(()=>openDetail('${p.id||''}'),120)">
+    <div class="recom-card" onclick="ymPushReturn('detail', window._ymReopenDetailFn());closeDetailDirect();setTimeout(()=>openDetail('${p.id||''}'),120)">
       <div class="relative bg-gray-100 overflow-hidden" style="aspect-ratio:1/1">
         <img src="${img}" alt="${name}" class="w-full h-full object-cover hover:scale-110 transition-transform duration-400" loading="lazy"
           onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22 fill=%22%23f3f4f6%22%3E%3Crect width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23d1d5db%22 font-size=%2240%22%3E🛍%3C/text%3E%3C/svg%3E'"/>
@@ -10496,6 +10496,8 @@ function _applyDetailFollowBtn(following) {
 // Navigate to seller store from detail page
 window.openDetailStore = function() {
   const p=window._S.activeAdData; if(!p) return;
+  var _pid = p.id;
+  ymPushReturn('etalase', function(){ if(_pid) openDetail(_pid); });   // kembali → detail produk
   closeDetailDirect();
   viewSellerStore(p.sellerUid);
 };
@@ -10579,6 +10581,8 @@ window.sendComment=()=>{
 window.startChat=async()=>{
   if(window._etalaseIsOpen === false){ showToast('Toko sedang tutup 🔴','red'); return; }
   const p=window._S.activeAdData; if(!p) return;
+  var _pidC = p.id;
+  ymPushReturn('chatroom', function(){ if(_pidC) openDetail(_pidC); });  // kembali → detail produk
   closeDetailDirect();
   // Jalur ini selalu dibuka oleh Pembeli (lihat produk orang lain) — pastikan flag seller-view bersih
   window._S.activeChatBuyerId = window._S.user && window._S.user.uid;
@@ -10595,7 +10599,59 @@ window.quickChat=async id=>{
   await openChatRoom(p.id, p.sellerUid||'static', p.sellerName||'Penjual', p.sellerPhoto||'', p.title||p.name||'', p.imgUrl||p.img||'', p.price);
 };
 
+// ════════════════════════════════════════════════════════════
+// JEJAK LANGKAH (tombol kembali mundur 1 layar, bukan loncat ke beranda)
+// Saat layar A ditutup untuk membuka layar B, A dicatat (ymPushReturn) dengan
+// "tag" layar B. Tombol kembali B (tombol ‹ maupun tombol kembali Android) lalu
+// membuka A lagi (ymPopReturn). Navigasi lewat menu bawah menghapus jejak.
+// ════════════════════════════════════════════════════════════
+window._ymRet = [];
+window.ymPushReturn = function (tag, reopen) {
+  if (typeof reopen !== 'function') return;
+  var pg = document.querySelector('.page.active');
+  window._ymRet.push({ tag: tag, reopen: reopen, page: pg ? pg.id.replace(/^page-/, '') : '' });
+  if (window._ymRet.length > 15) window._ymRet.shift();
+};
+window.ymPopReturn = function (tag) {
+  var st = window._ymRet, top = st[st.length - 1];
+  if (!top || top.tag !== tag) return false;
+  st.pop();
+  setTimeout(function () {
+    try {
+      var cur = document.querySelector('.page.active');
+      if (top.page && (!cur || cur.id !== 'page-' + top.page) && typeof window.showPage === 'function') window.showPage(top.page);
+      top.reopen();
+    } catch (e) {}
+  }, 30);
+  return true;
+};
+window.ymClearReturn = function () { window._ymRet.length = 0; };
+// Tombol kembali per layar
+window.chatRoomBack = function () { window.closeChatRoom(); window.ymPopReturn('chatroom'); };
+window.detailBack = function () { window.closeDetailDirect(); window.ymPopReturn('detail'); };
+window.etalaseBack = function () { if (!window.ymPopReturn('etalase')) window.showPage('home'); };
+// Fungsi untuk membuka lagi ruang chat / detail yang sedang tampil
+window._ymLastChat = null;
+window._ymReopenChatFn = function () {
+  var c = window._ymLastChat; if (!c) return null;
+  var flags = { b: window._S.activeChatBuyerId, s: window._S.activeChatSellerId, v: window._S.activeChatIsSellerView, l: window._S._fromChatList };
+  return function () {
+    window._S.activeChatBuyerId = flags.b; window._S.activeChatSellerId = flags.s;
+    window._S.activeChatIsSellerView = flags.v; window._S._fromChatList = flags.l;
+    openChatRoom.apply(null, c);
+  };
+};
+window._ymReopenDetailFn = function () {
+  var id = window._S.activeAdData && window._S.activeAdData.id; if (!id) return null;
+  return function () { openDetail(id); };
+};
+// Menu bawah (Beranda, YallaFood, dst.) = mulai dari awal → hapus jejak
+document.addEventListener('click', function (e) {
+  if (e.target && e.target.closest && e.target.closest('#mobileBottomNav')) window.ymClearReturn();
+}, true);
+
 async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, adImg, adPrice) {
+  window._ymLastChat = [adId, sellerId, sellerName, sellerPhoto, adTitle, adImg, adPrice];
   if(!window._S.user){showToast('Login dulu untuk chat','red');openAuth('login');return;}
   if(window._S.user.uid===sellerId){showToast('Ini iklan kamu sendiri','red');return;}
   // Set header
@@ -11241,6 +11297,7 @@ window.closeChatRoom=()=>{
 // Helper: buka detail iklan dari dalam chat room (tutup chat dulu)
 window.openAdFromChat = function(adId) {
   if(!adId) return;
+  ymPushReturn('detail', window._ymReopenChatFn());   // kembali → ruang chat ini
   window.closeChatRoom();
   setTimeout(() => window.openDetail(adId), 200);
 };
@@ -11757,6 +11814,7 @@ function renderChatListUI(chats, query='') {
     window._S.activeChatSellerId   = sellerId;
     window._S.activeChatIsSellerView = !isMe; // true = user ini adalah penjual
     window._S._fromChatList = true; // ← chat dari daftar chat: jangan blokir berdasarkan jam
+    ymPushReturn('chatroom', function(){ openChatList(); });   // kembali → daftar chat
     openChatRoom(adId, otherId, otherName, otherPhoto, adTitle, adImg, Number(adPrice));
   };
   window._openSellerFromList = function(idx) {
@@ -11766,6 +11824,7 @@ function renderChatListUI(chats, query='') {
     const isMe = buyerId === window._S.user.uid;
     const otherId = isMe ? sellerId : buyerId;
     closeChatList();
+    ymPushReturn('etalase', function(){ openChatList(); });    // kembali → daftar chat
     viewSellerStore(otherId);
   };
 }
@@ -31726,6 +31785,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     var home = document.getElementById('page-home');
+    var etl = document.getElementById('page-etalase');
+    if (etl && etl.classList.contains('active') && typeof window.etalaseBack === 'function') { window.etalaseBack(); return; }
     if (home && !home.classList.contains('active')) {
       var nav = document.getElementById('mnav-home');
       if (nav) nav.click(); else if (window.showPage) window.showPage('home');
