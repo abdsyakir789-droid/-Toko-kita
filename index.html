@@ -7426,6 +7426,7 @@ window.startNotifListener = function() {
     const _toaOv = document.getElementById('toaPanelOverlay');
     if(_toaOv && _toaOv.classList.contains('open')) {
       renderToaPanel(all);
+      try { updateToaBadge(0); if (window._markBroadcastsRead) window._markBroadcastsRead(); } catch(_e) {}
       // Restore state expanded setelah re-render — kembalikan HTML versi lengkap
       // dari map yang baru dibuat renderToaPanel (bukan cuma ubah CSS display),
       // supaya baris baru (<br>) tidak hilang saat realtime update masuk.
@@ -7468,6 +7469,9 @@ window.startNotifListener = function() {
     mergeAndRender(data || []);
   };
 
+  // Bisa dipanggil dari luar (mis. panel Pesan Siaran dibuka dari notifikasi) untuk ambil data TERBARU
+  window._ymReloadNotifs = function () { window._ymNotifLoadedAt = Date.now(); return loadNotifs().catch(function () {}); };
+  window._ymNotifLoadedAt = Date.now();
   loadNotifs();
   _notifChannel = supabase.channel('notif_' + uid)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'to_uid=eq.' + uid }, loadNotifs)
@@ -7478,6 +7482,13 @@ window.startNotifListener = function() {
       else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[notifChannel] ' + status, err?.message || '');
     });
 };
+
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState !== 'visible') return;
+  if (!window._S || !window._S.user) return;
+  if (Date.now() - (window._ymNotifLoadedAt || 0) < 30000) return;
+  try { window.startNotifListener(); } catch (e) {}
+});
 
 window.stopNotifListener = function() {
   if(_notifChannel) { supabase.removeChannel(_notifChannel); _notifChannel = null; }
@@ -8535,19 +8546,21 @@ window.renderNotifFull = function(notifs) {
 
     // Cache foto profil sender — ambil dari Firestore jika belum ada di notif (untuk notif lama)
     const _photoCache = window._S._senderPhotoCache || (window._S._senderPhotoCache = {});
+    // Selalu pakai foto profil TERBARU pengirim (by uid). Foto yang tersimpan di notif bisa
+    // sudah usang/terhapus (mis. admin ganti foto → file lama dihapus dari R2 → 404 → ikon lonceng).
     const uidsToFetch = [...new Set(
-      sorted.filter(n => n.senderUid && !n.senderPhoto && !_photoCache[n.senderUid]).map(n => n.senderUid)
+      sorted.filter(n => n.senderUid && !(n.senderUid in _photoCache)).map(n => n.senderUid)
     )];
     if(uidsToFetch.length) {
-      // Fetch secara background, lalu re-render saat selesai
-      // Fetch sender photos via Supabase
-      Promise.all(uidsToFetch.map(async uid => {
+      // Satu permintaan untuk semua pengirim (bukan satu per pengirim)
+      (async () => {
         try {
-          const _r = await window._supaFetch('/rest/v1/users?uid=eq.'+uid+'&select=photo_url&limit=1');
+          const _r = await window._supaFetch('/rest/v1/users?uid=in.(' + uidsToFetch.map(encodeURIComponent).join(',') + ')&select=uid,photo_url');
           const _rows = _r.ok ? await _r.json() : [];
-          _photoCache[uid] = _rows[0]?.photo_url || '';
-        } catch(e) { _photoCache[uid] = ''; }
-      })).then(() => {
+          uidsToFetch.forEach(u => { _photoCache[u] = ''; });
+          (_rows || []).forEach(r => { _photoCache[r.uid] = r.photo_url || ''; });
+        } catch(e) { uidsToFetch.forEach(u => { if (!(u in _photoCache)) _photoCache[u] = ''; }); }
+      })().then(() => {
         if(!document.getElementById('notifFullScreen')?.classList.contains('active')) return;
         // Update avatar IN-PLACE (tanpa rebuild seluruh list) supaya node yang sedang
         // di-tap user tidak diganti mendadak → cegah "harus tap berkali-kali".
@@ -8555,7 +8568,8 @@ window.renderNotifFull = function(notifs) {
           const _url = _photoCache[_u];
           if(!_url) return;
           document.querySelectorAll('.notif-act-icon[data-uid="'+_u+'"]').forEach(function(iconEl){
-            if(iconEl.querySelector('img')) return; // sudah ada foto
+            const _old = iconEl.querySelector('img');
+            if(_old) { if(_old.getAttribute('src') !== _url) { _old.src = _url; _old.style.display = ''; const _f = iconEl.querySelector('div'); if(_f) _f.style.display = 'none'; } return; }
             const _img = document.createElement('img');
             _img.src = _url;
             _img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
@@ -8612,7 +8626,7 @@ window.renderNotifFull = function(notifs) {
         ? _relativeTimeShort(n.createdAt.seconds)
         : '';
       // Foto: dari notif langsung, atau dari cache, atau fallback icon
-      const photo = n.senderPhoto || (n.senderUid ? (_photoCache[n.senderUid] || '') : '');
+      const photo = (n.senderUid && _photoCache[n.senderUid]) || n.senderPhoto || '';
       const avatarHtml = photo
         ? `<img src="${_ymH(photo)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
         : '';
@@ -9276,6 +9290,8 @@ window.openToaPanel = function() {
   // Otomatis clear badge
   updateToaBadge(0);
   _markBroadcastsRead();
+  // Ambil daftar TERBARU (sambungan realtime bisa putus saat app di latar → daftar lama)
+  if (typeof window._ymReloadNotifs === 'function') window._ymReloadNotifs();
 };
 
 // Tutup Toa Panel
@@ -11087,14 +11103,23 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
   else window.ymSetAvatarFallback(cra);
   document.getElementById('chatRoomName').textContent=sellerName;
   const cg=document.getElementById('chatRoomGold'); if(cg) cg.innerHTML=_embossBadgeSVG('gold');
-  cg.style.display=isAdmin(window._S.activeAdData?.sellerEmail||'')?'inline':'none';
+  // Lencana emas = AKUN LAWAN CHAT adalah admin (dulu salah: dilihat dari produk terakhir yang dibuka)
+  window._ymChatHdrFor = sellerId;
+  cg.style.display = (window.ymIsAdminUidSync && window.ymIsAdminUidSync(sellerId)) ? 'inline' : 'none';
+  if (window.ymIsAdminUid) window.ymIsAdminUid(sellerId).then(function (adm) {
+    if (window._ymChatHdrFor !== sellerId) return;   // sudah pindah ke chat lain
+    cg.style.display = adm ? 'inline' : 'none';
+  });
   // Badge verifikasi (Centang Biru/Silver) di header chat — tampilan saja, tidak menyentuh logika chat
   (async () => {
     const crnEl = document.getElementById('chatRoomName');
-    if (!crnEl || !sellerId || sellerId==='static' || typeof getVerificationStatus !== 'function') return;
+    if (!crnEl) return;
     crnEl.parentElement.querySelectorAll('.vbadge-blue,.vbadge-silver').forEach(el=>el.remove());
+    if (!sellerId || sellerId==='static' || typeof getVerificationStatus !== 'function') return;
     try {
       const status = await getVerificationStatus(sellerId);
+      if (window._ymChatHdrFor !== sellerId) return;   // hasil telat dari chat sebelumnya → abaikan
+      crnEl.parentElement.querySelectorAll('.vbadge-blue,.vbadge-silver').forEach(el=>el.remove());
       if (status) {
         const badge = document.createElement('span');
         badge.innerHTML = renderVerifyBadge(status);
@@ -12392,7 +12417,7 @@ window.viewSellerStore = async function(sellerUid) {
   const sellerName  = userRow?.name      || (sellerAds[0]?.sellerName)  || 'Penjual';
   const sellerPhoto = userRow?.photo_url || (sellerAds[0]?.sellerPhoto) || '';
   const sellerEmail = userRow?.email     || (sellerAds[0]?.sellerEmail) || '';
-  const adminSeller = isAdmin(sellerEmail);
+  const adminSeller = isAdmin(sellerEmail) || (window.ymIsAdminUidSync && window.ymIsAdminUidSync(sellerUid));
   // Set etalase header
   if(sellerPhoto) eav.innerHTML = `<img src="${sellerPhoto}" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>`;
   else window.ymSetAvatarFallback(eav);
@@ -16738,21 +16763,96 @@ window.guardedPost = async function() {
 // Cache verifikasi per UID agar tidak query berulang
 window._verifyCache = window._verifyCache || {};
 
+// Daftar SEMUA akun berlencana dimuat sekali (sedikit baris) + disimpan di HP, supaya centang
+// tidak hilang-muncul saat internet lemah. Dulu: cek per akun, dan kalau gagal sekali
+// hasil "tidak punya centang" diingat sampai aplikasi ditutup → centang sering hilang.
+window._verifyAll = null;
+window._verifyAllPromise = null;
+try {
+  const _vc = JSON.parse(localStorage.getItem('ym_verify_all') || 'null');
+  if (_vc && _vc.m && (Date.now() - (_vc.t || 0)) < 7 * 864e5) window._verifyAll = _vc.m;
+} catch (e) {}
+function _ymVerifyActive(row) {
+  if (!row || !row.verification_status) return null;
+  if (row.verification_expiry) {
+    const ms = new Date(row.verification_expiry).getTime();
+    if (ms && ms < Date.now()) return null;
+  }
+  return row.verification_status;
+}
+function _ymLoadVerifyAll() {
+  if (window._verifyAllPromise) return window._verifyAllPromise;
+  window._verifyAllPromise = (async () => {
+    try {
+      const r = await window._supaFetch('/rest/v1/users?verification_status=not.is.null&select=uid,verification_status,verification_expiry');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const rows = await r.json();
+      const m = {};
+      (rows || []).forEach(x => { const st = _ymVerifyActive(x); if (st) m[x.uid] = st; });
+      window._verifyAll = m;
+      window._verifyCache = {};
+      try { localStorage.setItem('ym_verify_all', JSON.stringify({ t: Date.now(), m })); } catch (e) {}
+      return m;
+    } catch (e) {
+      window._verifyAllPromise = null;   // gagal → coba lagi lain kali (jangan anggap "tanpa centang")
+      return null;
+    }
+  })();
+  return window._verifyAllPromise;
+}
 async function getVerificationStatus(uid) {
   if (!uid) return null;
+  // Sudah ada daftar (dari HP / dari server) → langsung jawab; daftar diperbarui di belakang
+  if (window._verifyAll) { _ymLoadVerifyAll(); return window._verifyAll[uid] || null; }
+  const m = await _ymLoadVerifyAll();
+  if (m) return m[uid] || null;
+  // Cadangan: cek per akun (hasil gagal TIDAK diingat)
   if (window._verifyCache[uid] !== undefined) return window._verifyCache[uid];
   try {
-    const { data } = await window.supabase.from('users')
-      .select('verification_status,verification_expiry').eq('uid', uid).single();
-    const status = data?.verification_status || null;
-    if (status && data.verification_expiry) {
-      const expiryMs = new Date(data.verification_expiry).getTime();
-      if (expiryMs && expiryMs < Date.now()) { window._verifyCache[uid] = null; return null; }
-    }
-    window._verifyCache[uid] = status;
-    return status;
-  } catch(e) { window._verifyCache[uid] = null; return null; }
+    const r = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(uid) + '&select=verification_status,verification_expiry&limit=1');
+    if (!r.ok) return null;
+    const rows = await r.json();
+    const st = _ymVerifyActive(rows && rows[0]);
+    window._verifyCache[uid] = st;
+    return st;
+  } catch (e) { return null; }
 }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { window._verifyAllPromise = null; _ymLoadVerifyAll(); } });
+
+// ── Akun admin (lencana emas) berdasarkan UID — dimuat sekali, disimpan di HP ──
+window._ymAdminUids = null;
+try { const _au = JSON.parse(localStorage.getItem('ym_admin_uids') || 'null'); if (Array.isArray(_au)) window._ymAdminUids = new Set(_au); } catch (e) {}
+window._ymAdminUidsPromise = null;
+function _ymLoadAdminUids() {
+  if (window._ymAdminUidsPromise) return window._ymAdminUidsPromise;
+  window._ymAdminUidsPromise = (async () => {
+    try {
+      const r = await window._supaFetch('/rest/v1/rpc/get_admin_uids', { method: 'POST', body: '{}' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const rows = await r.json();
+      const arr = (rows || []).map(x => typeof x === 'string' ? x : (x && (x.get_admin_uids || x.uid))).filter(Boolean);
+      window._ymAdminUids = new Set(arr);
+      try { localStorage.setItem('ym_admin_uids', JSON.stringify(arr)); } catch (e) {}
+      return window._ymAdminUids;
+    } catch (e) { window._ymAdminUidsPromise = null; return window._ymAdminUids; }
+  })();
+  return window._ymAdminUidsPromise;
+}
+window.ymIsAdminUidSync = function (uid) {
+  if (!uid) return false;
+  if (window._ymAdminUids && window._ymAdminUids.has(String(uid))) return true;
+  try {   // cadangan: data iklan milik akun ini membawa email admin
+    const ad = (window._S.fbAds || []).find(a => a.sellerUid === uid && a.sellerEmail);
+    if (ad && isAdmin(ad.sellerEmail)) return true;
+    const me = window._S.user; if (me && me.uid === uid && isAdmin(me.email)) return true;
+  } catch (e) {}
+  return false;
+};
+window.ymIsAdminUid = async function (uid) {
+  if (!uid) return false;
+  await _ymLoadAdminUids();
+  return window.ymIsAdminUidSync(uid);
+};
 
 // Render badge HTML sesuai status
 function renderVerifyBadge(status) {
@@ -17497,7 +17597,7 @@ Berlaku hingga: ${expiryStr}`;
     statusEl.style.color = '#059669';
     statusEl.style.whiteSpace = 'pre-line';
     showToast('✅ Akses iklan user diaktifkan!', 'green');
-    if(userRow.uid) delete window._verifyCache[userRow.uid];
+    if(userRow.uid) delete window._verifyCache[userRow.uid]; window._verifyAllPromise = null; if (typeof _ymLoadVerifyAll === "function") _ymLoadVerifyAll();
   } catch(e) {
     statusEl.textContent = '❌ Error: ' + (e.message||e);
     showToast('Gagal: ' + (e.message||e), 'red');
@@ -17558,7 +17658,7 @@ window.applyVerification = async function() {
     });
     if (_vErr) throw _vErr;
 
-    if(userRow.uid) delete window._verifyCache[userRow.uid];
+    if(userRow.uid) delete window._verifyCache[userRow.uid]; window._verifyAllPromise = null; if (typeof _ymLoadVerifyAll === "function") _ymLoadVerifyAll();
 
     const typeLabel = verifyType === 'verified_blue' ? '✅ Centang Biru' : '🥈 Centang Silver (Official Partner)';
     const expiryStr = new Date(expiryMs).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
@@ -17595,7 +17695,7 @@ window.removeVerification = async function() {
       new_expiry: null
     });
     if (_vErr) throw _vErr;
-    if(userRow.uid) delete window._verifyCache[userRow.uid];
+    if(userRow.uid) delete window._verifyCache[userRow.uid]; window._verifyAllPromise = null; if (typeof _ymLoadVerifyAll === "function") _ymLoadVerifyAll();
     statusEl.textContent = '✅ Verifikasi dihapus.';
     statusEl.style.color = '#6B7280';
     showToast('Verifikasi dihapus', 'red');
@@ -20778,7 +20878,9 @@ window._routePushGo = function(params) {
       [1500, 4000].forEach(function(ms) {
         setTimeout(function() {
           const ov = document.getElementById('toaPanelOverlay');
-          if (ov && ov.classList.contains('open') && typeof window.renderToaPanel === 'function') window.renderToaPanel(window._S.notifs || []);
+          if (!ov || !ov.classList.contains('open')) return;
+          if (typeof window._ymReloadNotifs === 'function') window._ymReloadNotifs();
+          else if (typeof window.renderToaPanel === 'function') window.renderToaPanel(window._S.notifs || []);
         }, ms);
       });
     });
