@@ -5025,6 +5025,9 @@ h3.text-sm.font-bold.text-gray-800 {
           </div>
         </div>
       </button>
+      <button type="button" id="chatRoomMoreBtn" onclick="ymChatMenu(event)" aria-label="Menu chat" class="w-9 h-9 flex items-center justify-center rounded-2xl hover:bg-gray-100 transition-colors flex-shrink-0">
+        <i class="fa-solid fa-ellipsis-vertical text-gray-700 text-base"></i>
+      </button>
     </div>
   </div>
 
@@ -5072,6 +5075,10 @@ h3.text-sm.font-bold.text-gray-800 {
     </div>
   </div>
 
+  <!-- ── Catatan blokir (pengganti kolom tulis saat pengguna ini diblokir) ── -->
+  <div id="chatBlockedNote" style="display:none;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));text-align:center;font-size:13px;color:#4b5563;border-top:1px solid #f3f4f6;background:#fff" class="flex-shrink-0 max-w-2xl mx-auto w-full">
+    Kamu memblokir pengguna ini. <button type="button" onclick="ymUnblockUser(window._S.activeChatOther)" style="background:none;border:none;color:#059669;font-weight:700;cursor:pointer;padding:0">Buka blokir</button> untuk mengirim pesan.
+  </div>
   <!-- ── Input Bar ── -->
   <div id="chatRoomInputBar" class="flex-shrink-0 bg-white border-t border-gray-100 max-w-2xl mx-auto w-full">
     <div class="px-4 py-3 flex gap-2 items-center">
@@ -6225,6 +6232,7 @@ window._FB = {
     if (!_msgRes.ok) {
       let _errDetail = '';
       try { const _errJson = await _msgRes.json(); _errDetail = _errJson.message || _errJson.error || JSON.stringify(_errJson); } catch(e) {}
+      if (String(_errDetail).indexOf('YM_BLOCKED') >= 0) throw new Error('Pesan tidak bisa dikirim ke pengguna ini');
       throw new Error('Gagal simpan pesan (HTTP ' + _msgRes.status + ')' + (_errDetail ? ': ' + _errDetail : ''));
     }
     trackEvent('send_message', { chat_id: chatId, message_type: type });
@@ -10650,8 +10658,184 @@ document.addEventListener('click', function (e) {
   if (e.target && e.target.closest && e.target.closest('#mobileBottomNav')) window.ymClearReturn();
 }, true);
 
+// ════════════════════════════════════════════════════════════
+// BLOKIR & LAPORKAN PENGGUNA
+// Tabel user_blocks (RLS: hanya milik sendiri) + trigger trg_chat_block_guard di
+// server menolak pesan teks/foto antar pihak yang saling blokir (pesan pesanan tetap lewat).
+// ════════════════════════════════════════════════════════════
+window._ymBlocked = new Set();
+window._ymBlocksUid = null;
+window.ymIsBlocked = function (uid) { return !!uid && window._ymBlocked.has(String(uid)); };
+window.ymLoadBlocks = async function (force) {
+  var me = window._S && window._S.user && window._S.user.uid;
+  if (!me) { window._ymBlocked = new Set(); window._ymBlocksUid = null; return; }
+  if (!force && window._ymBlocksUid === me) return;
+  try {
+    var r = await window._supaFetch('/rest/v1/user_blocks?blocker_uid=eq.' + encodeURIComponent(me) + '&select=blocked_uid');
+    var rows = r.ok ? await r.json() : [];
+    window._ymBlocked = new Set((rows || []).map(function (x) { return String(x.blocked_uid); }));
+    window._ymBlocksUid = me;
+  } catch (e) {}
+};
+function _ymRefreshAfterBlockChange() {
+  try { if (Array.isArray(window._S._chatList) && document.getElementById('chatListOverlay').style.display !== 'none') renderChatListUI(window._S._chatList); } catch (e) {}
+  try { window.ymApplyChatBlockState(); } catch (e) {}
+}
+function _ymConfirm(title, text, okLabel, okColor) {
+  return new Promise(function (res) {
+    var o = document.createElement('div');
+    o.style.cssText = 'position:fixed;inset:0;z-index:2147482500;background:rgba(17,24,39,.5);display:flex;align-items:center;justify-content:center;padding:20px';
+    o.innerHTML = '<div style="background:#fff;border-radius:20px;max-width:340px;width:100%;padding:22px 20px 16px;text-align:center;font-family:\'Plus Jakarta Sans\',sans-serif">'
+      + '<h3 style="margin:0 0 8px;font-size:16px;font-weight:800;color:#111827">' + title + '</h3>'
+      + '<p style="margin:0 0 18px;font-size:13px;line-height:1.55;color:#4b5563">' + text + '</p>'
+      + '<div style="display:flex;gap:10px"><button type="button" data-a="0" style="flex:1;height:44px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;font-weight:700;color:#374151;cursor:pointer">Batal</button>'
+      + '<button type="button" data-a="1" style="flex:1;height:44px;border-radius:12px;border:none;background:' + (okColor || '#dc2626') + ';font-weight:800;color:#fff;cursor:pointer">' + okLabel + '</button></div></div>';
+    o.addEventListener('click', function (e) { var a = e.target.getAttribute && e.target.getAttribute('data-a'); if (a !== null || e.target === o) { o.remove(); res(a === '1'); } });
+    document.body.appendChild(o);
+  });
+}
+function _ymEsc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+window.ymBlockUser = async function (uid, name) {
+  var me = window._S && window._S.user && window._S.user.uid;
+  if (!me) { showToast('Login dulu', 'red'); return; }
+  if (!uid || uid === me) return;
+  var ok = await _ymConfirm('Blokir ' + _ymEsc(name || 'pengguna ini') + '?',
+    'Kalian tidak akan bisa saling mengirim pesan, dan chat dengannya disembunyikan dari daftar chat. Pengguna ini tidak akan diberi tahu. Kamu bisa membuka blokir kapan saja di Akun → Pengaturan.',
+    'Blokir');
+  if (!ok) return;
+  try {
+    var r = await window._supaFetch('/rest/v1/user_blocks', { method: 'POST', prefer: 'return=minimal,resolution=ignore-duplicates', body: JSON.stringify({ blocker_uid: me, blocked_uid: uid }) });
+    if (!r.ok && r.status !== 409) throw new Error('HTTP ' + r.status);
+    window._ymBlocked.add(String(uid));
+    showToast((name ? name + ' ' : 'Pengguna ') + 'diblokir', 'green');
+    _ymRefreshAfterBlockChange();
+  } catch (e) { showToast('Gagal memblokir: ' + (e.message || e), 'red'); }
+};
+window.ymUnblockUser = async function (uid) {
+  var me = window._S && window._S.user && window._S.user.uid;
+  if (!me || !uid) return;
+  try {
+    var r = await window._supaFetch('/rest/v1/user_blocks?blocker_uid=eq.' + encodeURIComponent(me) + '&blocked_uid=eq.' + encodeURIComponent(uid), { method: 'DELETE', prefer: 'return=minimal' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    window._ymBlocked.delete(String(uid));
+    showToast('Blokir dibuka', 'green');
+    _ymRefreshAfterBlockChange();
+    var lst = document.getElementById('ymBlockedOverlay'); if (lst && lst.style.display !== 'none') window.ymOpenBlockedList();
+  } catch (e) { showToast('Gagal membuka blokir: ' + (e.message || e), 'red'); }
+};
+window.ymReportUser = function (uid, name, context) {
+  var me = window._S && window._S.user && window._S.user.uid;
+  if (!me) { showToast('Login dulu', 'red'); return; }
+  if (!uid || uid === me) return;
+  var reasons = ['Penipuan', 'Spam / iklan berulang', 'Konten tidak pantas', 'Pelecehan / kata kasar', 'Barang terlarang', 'Lainnya'];
+  var o = document.createElement('div');
+  o.style.cssText = 'position:fixed;inset:0;z-index:2147482500;background:rgba(17,24,39,.5);display:flex;align-items:flex-end;justify-content:center';
+  o.innerHTML = '<div style="background:#fff;border-radius:22px 22px 0 0;max-width:480px;width:100%;padding:20px 18px calc(18px + env(safe-area-inset-bottom,0px));font-family:\'Plus Jakarta Sans\',sans-serif;max-height:90vh;overflow:auto">'
+    + '<h3 style="margin:0 0 4px;font-size:16px;font-weight:800;color:#111827">Laporkan ' + _ymEsc(name || 'pengguna') + '</h3>'
+    + '<p style="margin:0 0 14px;font-size:12.5px;color:#6b7280">Laporanmu dikirim ke tim YallaMart dan bersifat rahasia.</p>'
+    + reasons.map(function (r, i) { return '<label style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#111827;cursor:pointer"><input type="radio" name="ymRepReason" value="' + r + '"' + (i === 0 ? ' checked' : '') + ' style="accent-color:#10B981;width:18px;height:18px">' + r + '</label>'; }).join('')
+    + '<textarea id="ymRepDetail" rows="3" maxlength="500" placeholder="Ceritakan singkat (opsional)" style="width:100%;margin-top:12px;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;font-size:13px;resize:none;box-sizing:border-box"></textarea>'
+    + '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:#374151"><input type="checkbox" id="ymRepBlock" checked style="accent-color:#10B981;width:16px;height:16px"> Blokir pengguna ini juga</label>'
+    + '<div style="display:flex;gap:10px;margin-top:16px"><button type="button" id="ymRepCancel" style="flex:1;height:46px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;font-weight:700;color:#374151;cursor:pointer">Batal</button>'
+    + '<button type="button" id="ymRepSend" style="flex:1;height:46px;border-radius:12px;border:none;background:#dc2626;font-weight:800;color:#fff;cursor:pointer">Kirim Laporan</button></div></div>';
+  document.body.appendChild(o);
+  o.addEventListener('click', function (e) { if (e.target === o) o.remove(); });
+  o.querySelector('#ymRepCancel').onclick = function () { o.remove(); };
+  o.querySelector('#ymRepSend').onclick = async function () {
+    var btn = this; btn.disabled = true; btn.textContent = 'Mengirim...';
+    var reason = (o.querySelector('input[name="ymRepReason"]:checked') || {}).value || 'Lainnya';
+    var detail = (o.querySelector('#ymRepDetail').value || '').trim();
+    var alsoBlock = o.querySelector('#ymRepBlock').checked;
+    try {
+      var r = await window._supaFetch('/rest/v1/user_reports', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify({ reporter_uid: me, reported_uid: uid, reason: reason, details: detail || null, context: context || null }) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (alsoBlock && !window.ymIsBlocked(uid)) {
+        await window._supaFetch('/rest/v1/user_blocks', { method: 'POST', prefer: 'return=minimal,resolution=ignore-duplicates', body: JSON.stringify({ blocker_uid: me, blocked_uid: uid }) });
+        window._ymBlocked.add(String(uid)); _ymRefreshAfterBlockChange();
+      }
+      o.remove();
+      showToast('Laporan terkirim. Terima kasih!', 'green');
+    } catch (e) { btn.disabled = false; btn.textContent = 'Kirim Laporan'; showToast('Gagal mengirim laporan: ' + (e.message || e), 'red'); }
+  };
+};
+// Menu ⋯ ruang chat
+window.ymChatMenu = function (ev) {
+  if (ev) ev.stopPropagation();
+  var old = document.getElementById('ymChatMenuPop'); if (old) { old.remove(); return; }
+  var other = window._S.activeChatOther; if (!other || other === 'static') return;
+  var nm = ((document.getElementById('chatRoomName') || {}).textContent || '').trim().replace(/'/g, '');
+  var btn = document.getElementById('chatRoomMoreBtn'); var rc = btn.getBoundingClientRect();
+  var m = document.createElement('div');
+  m.id = 'ymChatMenuPop';
+  m.style.cssText = 'position:fixed;z-index:2147482000;top:' + (rc.bottom + 6) + 'px;right:' + Math.max(8, window.innerWidth - rc.right) + 'px;min-width:190px;background:rgba(17,24,39,.96);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);padding:6px 0';
+  var it = function (fn, icon, label, color) { return '<button type="button" onclick="document.getElementById(\'ymChatMenuPop\').remove();' + fn + '" style="display:flex;align-items:center;gap:12px;width:100%;padding:11px 16px;background:none;border:none;color:' + (color || '#fff') + ';font-size:14px;font-weight:600;text-align:left;cursor:pointer"><i class="fa-solid ' + icon + '" style="width:18px;text-align:center"></i>' + label + '</button>'; };
+  m.innerHTML = (window.ymIsBlocked(other) ? it("ymUnblockUser('" + other + "')", 'fa-unlock', 'Buka blokir') : it("ymBlockUser('" + other + "','" + nm + "')", 'fa-ban', 'Blokir pengguna', '#fca5a5'))
+    + it("ymReportUser('" + other + "','" + nm + "','chat')", 'fa-flag', 'Laporkan pengguna', '#fca5a5');
+  document.body.appendChild(m);
+  setTimeout(function () { document.addEventListener('click', function h() { var x = document.getElementById('ymChatMenuPop'); if (x) x.remove(); document.removeEventListener('click', h, true); }, true); }, 0);
+};
+// Ruang chat: kolom tulis diganti catatan bila lawan bicara diblokir
+window.ymApplyChatBlockState = function () {
+  var ov = document.getElementById('chatRoomOverlay'); if (!ov || ov.style.display === 'none') return;
+  var blocked = window.ymIsBlocked(window._S.activeChatOther);
+  var bar = document.getElementById('chatRoomInputBar'), note = document.getElementById('chatBlockedNote');
+  if (bar) bar.style.display = blocked ? 'none' : '';
+  if (note) note.style.display = blocked ? 'block' : 'none';
+};
+// Daftar chat: sembunyikan chat dengan pengguna yang diblokir
+(function () {
+  var orig = window.renderChatListUI;
+  if (typeof orig !== 'function') return;
+  window.renderChatListUI = function (chats, query) {
+    var me = window._S && window._S.user && window._S.user.uid;
+    if (Array.isArray(chats) && window._ymBlocked.size && me) {
+      chats = chats.filter(function (ch) {
+        var b = ch.buyer_id || ch.buyerId || '', sl = ch.seller_id || ch.sellerId || '';
+        return !window.ymIsBlocked(b === me ? sl : b);
+      });
+    }
+    return orig.call(this, chats, query);
+  };
+})();
+// Daftar "Pengguna Diblokir" (Pengaturan)
+window.ymOpenBlockedList = async function () {
+  await window.ymLoadBlocks(true);
+  var o = document.getElementById('ymBlockedOverlay');
+  if (!o) {
+    o = document.createElement('div'); o.id = 'ymBlockedOverlay';
+    o.style.cssText = 'position:fixed;inset:0;z-index:2147481000;background:#fff;display:flex;flex-direction:column';
+    document.body.appendChild(o);
+  }
+  o.style.display = 'flex';
+  var head = '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #f3f4f6;flex-shrink:0">'
+    + '<button type="button" aria-label="Kembali" onclick="document.getElementById(\'ymBlockedOverlay\').style.display=\'none\'" style="width:36px;height:36px;border:none;background:transparent;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fa-solid fa-chevron-left" style="color:#374151"></i></button>'
+    + '<h2 style="margin:0;font-size:16px;font-weight:800;color:#111827">Pengguna Diblokir</h2></div>';
+  var ids = Array.from(window._ymBlocked);
+  if (!ids.length) { o.innerHTML = head + '<p style="text-align:center;color:#9ca3af;font-size:13px;padding:40px 20px">Kamu belum memblokir siapa pun.</p>'; return; }
+  o.innerHTML = head + '<p style="text-align:center;color:#9ca3af;font-size:13px;padding:30px">Memuat...</p>';
+  var users = [];
+  try { var r = await window._supaFetch('/rest/v1/users?uid=in.(' + ids.map(encodeURIComponent).join(',') + ')&select=uid,name,photo_url'); users = r.ok ? await r.json() : []; } catch (e) {}
+  var byId = {}; users.forEach(function (u) { byId[u.uid] = u; });
+  o.innerHTML = head + '<div style="overflow:auto;flex:1">' + ids.map(function (id) {
+    var u = byId[id] || {}; var nm = _ymEsc(u.name || 'Pengguna');
+    var av = u.photo_url ? '<img src="' + _ymEsc(u.photo_url) + '" style="width:44px;height:44px;border-radius:50%;object-fit:cover">' : '<div style="width:44px;height:44px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-user" style="color:#9ca3af"></i></div>';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f3f4f6">' + av
+      + '<p style="flex:1;margin:0;font-size:14px;font-weight:700;color:#111827;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nm + '</p>'
+      + '<button type="button" onclick="ymUnblockUser(\'' + id + '\')" style="height:34px;padding:0 14px;border-radius:10px;border:1px solid #10B981;background:#fff;color:#059669;font-weight:700;font-size:12.5px;cursor:pointer">Buka blokir</button></div>';
+  }).join('') + '</div>';
+};
+// Muat daftar blokir saat login / ganti akun
+document.addEventListener('DOMContentLoaded', function () {
+  var last = null;
+  setInterval(function () {
+    var me = window._S && window._S.user && window._S.user.uid;
+    if (me !== last) { last = me; window.ymLoadBlocks(true).then(_ymRefreshAfterBlockChange); }
+  }, 2000);
+});
+
 async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, adImg, adPrice) {
   window._ymLastChat = [adId, sellerId, sellerName, sellerPhoto, adTitle, adImg, adPrice];
+  setTimeout(function () { try { window.ymApplyChatBlockState(); } catch (e) {} }, 400);
   if(!window._S.user){showToast('Login dulu untuk chat','red');openAuth('login');return;}
   if(window._S.user.uid===sellerId){showToast('Ini iklan kamu sendiri','red');return;}
   // Set header
@@ -11869,7 +12053,18 @@ window._etToggleMenu = function(ev, btnId, who){
   var m = document.createElement('div');
   m.id = 'etalaseMoreMenu';
   m.style.cssText = 'position:fixed;z-index:9000;top:'+(r.bottom+8)+'px;right:'+Math.max(8, window.innerWidth-r.right)+'px;min-width:170px;background:rgba(17,24,39,.96);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);padding:6px 0;overflow:hidden';
-  m.innerHTML = '<button type="button" onclick="window._etCloseMenu();window._etShareStore()" style="display:flex;align-items:center;gap:12px;width:100%;padding:11px 16px;background:none;border:none;color:#fff;font-size:14px;font-weight:600;text-align:left;cursor:pointer"><i class="fa-solid fa-share" style="width:18px;text-align:center"></i>Bagikan toko</button>';
+  var _it = function (fn, icon, label, color) { return '<button type="button" onclick="window._etCloseMenu();' + fn + '" style="display:flex;align-items:center;gap:12px;width:100%;padding:11px 16px;background:none;border:none;color:' + (color || '#fff') + ';font-size:14px;font-weight:600;text-align:left;cursor:pointer"><i class="fa-solid ' + icon + '" style="width:18px;text-align:center"></i>' + label + '</button>'; };
+  var _html = _it('window._etShareStore()', 'fa-share', 'Bagikan toko');
+  var _other = (who === 'self') ? '' : window._etalaseSellerUid;
+  var _me = window._S && window._S.user && window._S.user.uid;
+  if (_other && _other !== 'static' && _me && _other !== _me) {
+    var _nm = ((document.getElementById('etalaseName') || {}).textContent || '').trim().replace(/'/g, '');
+    _html += window.ymIsBlocked(_other)
+      ? _it("ymUnblockUser('" + _other + "')", 'fa-unlock', 'Buka blokir')
+      : _it("ymBlockUser('" + _other + "','" + _nm + "')", 'fa-ban', 'Blokir pengguna', '#fca5a5');
+    _html += _it("ymReportUser('" + _other + "','" + _nm + "','toko')", 'fa-flag', 'Laporkan pengguna', '#fca5a5');
+  }
+  m.innerHTML = _html;
   document.body.appendChild(m);
   setTimeout(function(){ document.addEventListener('click', window._etCloseMenu, true); }, 0);
 };
@@ -18724,6 +18919,20 @@ function updateYcBadge(count) {
           <div style="flex:1;min-width:0">
             <p style="font-size:14px;font-weight:700;color:#111827;margin:0">Notifikasi</p>
             <p id="notifSettingStatus" style="font-size:11.5px;color:#9ca3af;margin:2px 0 0">Tap untuk aktifkan</p>
+          </div>
+          <i class="fa-solid fa-chevron-right" style="color:#d1d5db;font-size:12px;flex-shrink:0"></i>
+        </div>
+
+        <!-- ── Pengguna diblokir ── -->
+        <div style="height:1px;background:#f3f4f6;margin:0 16px"></div>
+        <div class="stg-item" onclick="ymOpenBlockedList()"
+          style="display:flex;align-items:center;gap:14px;padding:17px 16px;cursor:pointer">
+          <div style="width:40px;height:40px;border-radius:13px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+          </div>
+          <div style="flex:1;min-width:0">
+            <p style="font-size:14px;font-weight:700;color:#111827;margin:0">Pengguna Diblokir</p>
+            <p style="font-size:11.5px;color:#9ca3af;margin:2px 0 0">Lihat &amp; buka blokir pengguna</p>
           </div>
           <i class="fa-solid fa-chevron-right" style="color:#d1d5db;font-size:12px;flex-shrink:0"></i>
         </div>
