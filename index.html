@@ -3202,8 +3202,38 @@ h3.text-sm.font-bold.text-gray-800 {
       <span class="text-[10px] text-gray-300 flex items-center gap-1"><i class="fa-solid fa-truck-fast text-primary"></i> Pengiriman Cepat</span>
       <span class="text-[10px] text-gray-300 flex items-center gap-1"><i class="fa-solid fa-headset text-primary"></i> Support 24/7</span>
     </div>
-    <p class="text-xs text-gray-500 mt-3" style="line-height:1.5">YallaMart adalah marketplace, layanan pesan makanan (YallaFood), dan kirim barang (YallaKurir) untuk mahasiswa Indonesia di Kairo.</p>
-    <p class="text-xs mt-2"><a href="/privacy.html" class="text-primary font-semibold" style="text-decoration:underline">Kebijakan Privasi</a></p>
+    <!-- Khusus browser biasa (syarat verifikasi branding Google: beranda wajib menautkan Kebijakan Privasi).
+         Di APK & PWA terpasang disembunyikan — di sana Kebijakan Privasi ada di Akun → Pengaturan. -->
+    <div class="ym-web-only">
+      <p class="text-xs text-gray-500 mt-3" style="line-height:1.5">YallaMart adalah marketplace, layanan pesan makanan (YallaFood), dan kirim barang (YallaKurir) untuk mahasiswa Indonesia di Kairo.</p>
+      <p class="text-xs mt-2"><a href="/privacy.html" class="text-primary font-semibold" style="text-decoration:underline">Kebijakan Privasi</a></p>
+    </div>
+    <style>
+      @media (display-mode: standalone) { .ym-web-only { display: none !important; } }
+      html.ym-app .ym-web-only { display: none !important; }
+    </style>
+    <script>
+      (function(){ try {
+        var C = window.Capacitor;
+        if ((C && C.isNativePlatform && C.isNativePlatform()) || window.navigator.standalone === true) document.documentElement.classList.add('ym-app');
+      } catch(e){} })();
+      // Kebijakan Privasi dibuka di dalam aplikasi (overlay + iframe), supaya tidak keluar dari app
+      window.openPrivacyPolicy = function(){
+        var o = document.getElementById('ymPrivacyOverlay');
+        if (!o) {
+          o = document.createElement('div');
+          o.id = 'ymPrivacyOverlay';
+          o.style.cssText = 'position:fixed;inset:0;z-index:2147481000;background:#fff;display:flex;flex-direction:column';
+          o.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #f3f4f6;flex-shrink:0">'
+            + '<button type="button" aria-label="Kembali" onclick="closePrivacyPolicy()" style="width:36px;height:36px;border:none;background:transparent;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fa-solid fa-chevron-left" style="color:#374151"></i></button>'
+            + '<h2 style="margin:0;font-size:16px;font-weight:800;color:#111827">Kebijakan Privasi</h2></div>'
+            + '<iframe src="/privacy.html" title="Kebijakan Privasi" style="flex:1;width:100%;border:0"></iframe>';
+          document.body.appendChild(o);
+        }
+        o.style.display = 'flex';
+      };
+      window.closePrivacyPolicy = function(){ var o = document.getElementById('ymPrivacyOverlay'); if (o) o.style.display = 'none'; };
+    </script>
     <p class="text-[10px] text-gray-300 mt-2">© 2026 YallaMart. All rights reserved.</p>
   </div>
 </footer>
@@ -18635,6 +18665,20 @@ function updateYcBadge(count) {
           <div style="flex:1;min-width:0">
             <p style="font-size:14px;font-weight:700;color:#111827;margin:0">Notifikasi</p>
             <p id="notifSettingStatus" style="font-size:11.5px;color:#9ca3af;margin:2px 0 0">Tap untuk aktifkan</p>
+          </div>
+          <i class="fa-solid fa-chevron-right" style="color:#d1d5db;font-size:12px;flex-shrink:0"></i>
+        </div>
+
+        <!-- ── Kebijakan Privasi — dibuka di dalam aplikasi (overlay), di atas Hapus Akun ── -->
+        <div style="height:1px;background:#f3f4f6;margin:0 16px"></div>
+        <div class="stg-item" onclick="openPrivacyPolicy()"
+          style="display:flex;align-items:center;gap:14px;padding:17px 16px;cursor:pointer">
+          <div style="width:40px;height:40px;border-radius:13px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div style="flex:1;min-width:0">
+            <p style="font-size:14px;font-weight:700;color:#111827;margin:0">Kebijakan Privasi</p>
+            <p style="font-size:11.5px;color:#9ca3af;margin:2px 0 0">Data apa yang kami simpan &amp; cara menghapusnya</p>
           </div>
           <i class="fa-solid fa-chevron-right" style="color:#d1d5db;font-size:12px;flex-shrink:0"></i>
         </div>
