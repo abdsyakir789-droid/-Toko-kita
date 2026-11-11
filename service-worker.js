@@ -7,6 +7,12 @@
 const CACHE_NAME = 'yallamart-v3';
 const IMG_CACHE  = 'yallamart-img-v1'; // tetap v1 agar cache lama tidak terhapus
 const CDN_CACHE  = 'yallamart-cdn-v1';
+// Ikon tombol kategori (Semua, Taushil, Elektronik, …) — disimpan terpisah & TIDAK
+// ikut dibatasi 120 gambar, supaya tombol kategori tetap tampil saat offline.
+// Hanya folder "Icon kategori" (domain ini juga menyimpan file musik → jangan di-cache).
+const ICON_CACHE = 'yallamart-icon-v1';
+const ICON_HOST  = 'pub-9dd2194675504a8c9d0f67fd0ce3aa67.r2.dev';
+const ICON_PATH  = '/Icon%20kategori/';
 
 const IMG_DOMAINS = [
   'pub-6965427fe22841f2b1a71e9df9a3522f.r2.dev',
@@ -59,7 +65,7 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
-        keys.filter(k => k !== CACHE_NAME && k !== IMG_CACHE && k !== CDN_CACHE)
+        keys.filter(k => k !== CACHE_NAME && k !== IMG_CACHE && k !== CDN_CACHE && k !== ICON_CACHE)
           .map(k => caches.delete(k))
       )
     ).then(() => clients.claim())
@@ -79,6 +85,24 @@ self.addEventListener('fetch', event => {
   const url = new URL(req.url);
 
   if (req.method !== 'GET') return;
+
+  // ── Ikon kategori: Stale-While-Revalidate di cache sendiri ──
+  if (url.hostname === ICON_HOST && url.pathname.startsWith(ICON_PATH)) {
+    event.respondWith(
+      caches.open(ICON_CACHE).then(async cache => {
+        const cached = await cache.match(req, { ignoreSearch: true });
+        const networkFetch = fetchWithTimeout(req, 5000)
+          .then(response => {
+            // <img> lintas-domain → respons "opaque" (status 0); tetap disimpan agar bisa tampil offline
+            if (response && (response.status === 200 || response.type === 'opaque')) cache.put(req, response.clone());
+            return response;
+          })
+          .catch(() => cached || new Response('', { status: 408 }));
+        return cached || networkFetch;
+      })
+    );
+    return;
+  }
 
   // ── Gambar: Stale-While-Revalidate ──
   // Return cache DULU (instant, gambar tidak hilang saat refresh)
