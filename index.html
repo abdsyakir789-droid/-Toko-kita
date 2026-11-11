@@ -5894,13 +5894,14 @@ function startProfileListener(uid) {
 
 // ── Helper: Supabase REST fetch langsung dengan token ─────────────
 // Dipakai untuk operasi yang butuh auth tapi Supabase client belum siap
-window._supaFetch = function _supaFetch(path, opts={}) {
-  const SUPA_URL = window._SUPA_URL;
-  const SUPA_KEY = window._SUPA_ANON;
-  // Pertahanan berlapis: kalau _S._accessToken belum ke-set (mis. sesaat setelah
-  // daftar/login sebelum onAuthStateChange jalan), baca JWT dari sesi localStorage
-  // DULU sebelum fallback ke anon. Fallback ke anon bikin auth.uid() NULL server-side
-  // → semua tulis ber-RLS (cari kurir, chat, dll) ditolak DIAM-DIAM.
+// ── Tiket login (JWT) — cek masa berlaku & perbarui sebelum dipakai ──
+// Masalah lama: saat app dibuka lagi setelah >1 jam, token di HP sudah kedaluwarsa →
+// permintaan pertama (iklan, billboard, dll) ditolak server (401) → tampil kosong
+// sampai di-refresh. Sekarang token kedaluwarsa diperbarui dulu, dan 401 dicoba ulang.
+function _ymJwtExp(tok) {
+  try { const p = JSON.parse(atob(String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return Number(p.exp) || 0; } catch (e) { return 0; }
+}
+function _ymStoredToken() {
   let token = window._S?._accessToken;
   if (!token) {
     try {
@@ -5908,19 +5909,72 @@ window._supaFetch = function _supaFetch(path, opts={}) {
       token = (_sess && (_sess.access_token || (_sess[0] && _sess[0].access_token))) || '';
     } catch(e) {}
   }
+  return token || '';
+}
+window._ymRefreshPromise = null;
+function _ymRefreshToken(force) {
+  if (window._ymRefreshPromise) return window._ymRefreshPromise;
+  window._ymRefreshPromise = (async () => {
+    try {
+      const sb = window.supabase; if (!sb || !sb.auth) return '';
+      const call = force ? sb.auth.refreshSession() : sb.auth.getSession();
+      const res = await Promise.race([call, new Promise(r => setTimeout(() => r(null), 5000))]);
+      const tok = res && res.data && res.data.session && res.data.session.access_token;
+      if (tok) { if (window._S) window._S._accessToken = tok; return tok; }
+      return '';
+    } catch (e) { return ''; }
+    finally { setTimeout(() => { window._ymRefreshPromise = null; }, 0); }
+  })();
+  return window._ymRefreshPromise;
+}
+document.addEventListener('error', function (e) {
+  const img = e.target;
+  if (!img || img.tagName !== 'IMG') return;
+  const src = img.getAttribute('src') || '';
+  if (!/^https:\/\/(yallamart-upload\.abdsyakir789\.workers\.dev|res\.cloudinary\.com|pub-[a-z0-9]+\.r2\.dev)\//i.test(src)) return;
+  if (img.dataset.ymRetry) return;          // sudah dicoba ulang → biarkan penanganan biasa (kotak abu-abu)
+  img.dataset.ymRetry = '1';
+  e.stopPropagation();                      // tahan onerror bawaan dulu
+  setTimeout(function () { img.src = src + (src.indexOf('?') >= 0 ? '&' : '?') + 'r=1'; }, 1500);
+}, true);
+window._supaFetch = async function _supaFetch(path, opts={}) {
+  const SUPA_URL = window._SUPA_URL;
+  const SUPA_KEY = window._SUPA_ANON;
+  // Pertahanan berlapis: kalau _S._accessToken belum ke-set (mis. sesaat setelah
+  // daftar/login sebelum onAuthStateChange jalan), baca JWT dari sesi localStorage
+  // DULU sebelum fallback ke anon. Fallback ke anon bikin auth.uid() NULL server-side
+  // → semua tulis ber-RLS (cari kurir, chat, dll) ditolak DIAM-DIAM.
+  let token = _ymStoredToken();
+  const method = String((opts && opts.method) || 'GET').toUpperCase();
+  // Token kedaluwarsa (atau < 30 dtk lagi) → perbarui dulu
+  if (token && token !== SUPA_KEY) {
+    const exp = _ymJwtExp(token);
+    if (exp && exp * 1000 < Date.now() + 30000) {
+      const fresh = await _ymRefreshToken(false);
+      if (fresh && _ymJwtExp(fresh) * 1000 > Date.now()) token = fresh;
+      else if (method === 'GET') token = SUPA_KEY;   // data publik tetap bisa dibaca
+    }
+  }
   if (!token) token = SUPA_KEY;
   const { prefer, headers: extraHeaders, ...restOpts } = opts;
-  const mergedHeaders = {
-    'apikey': SUPA_KEY,
-    'Authorization': 'Bearer ' + token,
-    'Content-Type': 'application/json',
-    ...(prefer ? { 'Prefer': prefer } : {}),
-    ...(extraHeaders || {})
-  };
-  return fetch(SUPA_URL + path, {
+  const build = (tok) => ({
     ...restOpts,
-    headers: mergedHeaders
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + tok,
+      'Content-Type': 'application/json',
+      ...(prefer ? { 'Prefer': prefer } : {}),
+      ...(extraHeaders || {})
+    }
   });
+  let res = await fetch(SUPA_URL + path, build(token));
+  // Ditolak karena tiket (401) → perbarui tiket sekali lalu coba lagi
+  if (res.status === 401 && token !== SUPA_KEY) {
+    const fresh = await _ymRefreshToken(true);
+    if (fresh) res = await fetch(SUPA_URL + path, build(fresh));
+    else if (method === 'GET') res = await fetch(SUPA_URL + path, build(SUPA_KEY));
+  }
+  return res;
 }
 window._FB = {
   async register(name, phone, email, pass) {
@@ -7060,8 +7114,17 @@ async function startAdsListener(force) {
           setTimeout(() => { if(window.loadSponsorRow) window.loadSponsorRow(); }, 1000);
         }).catch(e => {
           console.warn('[AdsListener] initial load error:', e.message);
-          window._S.fbAds = [];
-          if(typeof renderProducts === 'function') renderProducts();
+          // Coba ulang 2x (mis. tiket login baru selesai diperbarui / sinyal lemah) sebelum menyerah
+          const _tryAgain = (n) => _loadAllAds().then(async ads => {
+            await _writeAllCaches(ads);
+            _applyAds(ads);
+            setTimeout(() => { if(window.loadSponsorRow) window.loadSponsorRow(); }, 1000);
+          }).catch(err => {
+            if (n < 2) { setTimeout(() => _tryAgain(n + 1), 2500 * (n + 1)); return; }
+            window._S.fbAds = [];
+            if(typeof renderProducts === 'function') renderProducts();
+          });
+          setTimeout(() => _tryAgain(0), 1500);
         });
       }
     });
@@ -15998,10 +16061,12 @@ async function _prefetchImageToCache(url) {
   }
 }
 
-async function loadBillboardImages(){
+async function loadBillboardImages(_attempt){
+  _attempt = _attempt || 0;
+  const _retry = () => { if (_attempt < 3) setTimeout(() => loadBillboardImages(_attempt + 1), 2500 * (_attempt + 1)); };
   try {
     const res = await window._supaFetch('/rest/v1/billboards?select=*&order=slide_index.asc');
-    if(!res.ok) return;
+    if(!res.ok) { _retry(); return; }
     const data = await res.json();
     if(!data || !data.length) return;
     data.forEach(d => {
@@ -16019,6 +16084,7 @@ async function loadBillboardImages(){
     _writeBillboardCache(data);
   } catch(e) {
     console.warn('[Billboard] Gagal load:', e.message);
+    _retry();
   }
 }
 // Expose ke window supaya bisa dipanggil ulang (retry) oleh pull-to-refresh
