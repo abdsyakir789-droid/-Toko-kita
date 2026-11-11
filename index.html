@@ -8,6 +8,8 @@
      window._SUPA_URL / window._SUPA_ANON / window._SUPA_REF sebelum jalan.
      ================================================================ -->
 <script>
+  // Gambar pengganti saat foto iklan gagal dimuat: ikon toko abu-abu (ditulis di kode → tetap tampil walau offline)
+  window._YM_PH = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="300" height="300"><rect width="100" height="100" fill="#f3f4f6"/><g fill="#d1d5db"><path d="M29 29h42l7 13H22z"/><path d="M22 42h56v3a7 7 0 0 1-14 0a7 7 0 0 1-14 0a7 7 0 0 1-14 0a7 7 0 0 1-14 0z"/><path d="M26 55h48v21a3 3 0 0 1-3 3H29a3 3 0 0 1-3-3z"/></g><rect x="44" y="63" width="12" height="16" rx="2" fill="#f3f4f6"/><rect x="31" y="61" width="9" height="8" rx="1.5" fill="#f3f4f6"/><rect x="60" y="61" width="9" height="8" rx="1.5" fill="#f3f4f6"/></svg>');
   // ═══════════ PRODUCTION (AKTIF) ═══════════
   // Untuk kembali ke STAGING: comment blok ini, uncomment blok STAGING di bawah.
   window._SUPA_URL  = 'https://jgnjgfuypcelwjztebsy.supabase.co';
@@ -5092,7 +5094,7 @@ h3.text-sm.font-bold.text-gray-800 {
   <div id="chatProductContext" style="display:none" class="flex-shrink-0 bg-white border-t border-gray-100 max-w-2xl mx-auto w-full">
     <div class="px-3 py-2.5 flex items-center gap-3">
       <img id="chatProductImg" src="" class="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-gray-100"
-        onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2256%22 height=%2256%22 fill=%22%23f3f4f6%22%3E%3Crect width=%2256%22 height=%2256%22/%3E%3Ctext x=%2250%25%22 y=%2255%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23d1d5db%22 font-size=%2224%22%3E🛍%3C/text%3E%3C/svg%3E'"/>
+        onerror="this.onerror=null;this.src=window._YM_PH"/>
       <div class="flex-1 min-w-0">
         <p class="text-[10px] text-gray-400 font-medium mb-0.5">Kamu menanyakan tentang produk ini</p>
         <p id="chatProductTitle" class="text-[12px] font-bold text-gray-800 leading-tight" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"></p>
@@ -9786,7 +9788,7 @@ window.renderProducts = () => {
     d.innerHTML=`
       <div class="relative" style="aspect-ratio:1/1;overflow:hidden;background:#f9fafb">
         <img src="${img}" alt="${name}" class="w-full h-full object-cover hover:scale-110 transition-transform duration-400" loading="lazy"
-          onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22 fill=%22%23f3f4f6%22%3E%3Crect width=%22300%22 height=%22300%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23d1d5db%22 font-size=%2240%22%3E🛍%3C/text%3E%3C/svg%3E'"/>
+          onerror="this.onerror=null;this.src=window._YM_PH"/>
         ${p.badge?`<span class="absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm ${badgeCls}" style="z-index:2">${p.badge}</span>`:''}
         ${p.siapTaushil?`<img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1781317917/file_00000000665871f4ae0c02ec23ea4b84-removebg-preview_fqwvyq.png" style="position:absolute;bottom:0;left:0;width:65px;height:auto;z-index:3;pointer-events:none" alt="Ready Taushil"/>`:''}
         <div class="absolute inset-0 bg-gradient-to-t from-black/15 to-transparent pointer-events-none" style="z-index:1"></div>
@@ -10634,7 +10636,7 @@ function _miniAdCard(p, highlightSeller) {
     <div class="recom-card" onclick="ymPushReturn('detail', window._ymReopenDetailFn());closeDetailDirect();setTimeout(()=>openDetail('${p.id||''}'),120)">
       <div class="relative bg-gray-100 overflow-hidden" style="aspect-ratio:1/1">
         <img src="${img}" alt="${name}" class="w-full h-full object-cover hover:scale-110 transition-transform duration-400" loading="lazy"
-          onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22 fill=%22%23f3f4f6%22%3E%3Crect width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23d1d5db%22 font-size=%2240%22%3E🛍%3C/text%3E%3C/svg%3E'"/>
+          onerror="this.onerror=null;this.src=window._YM_PH"/>
         ${p.badge?`<span class="absolute top-1.5 left-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400 text-white shadow-sm">${p.badge}</span>`:''}
         ${p.siapTaushil?`<img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1781317917/file_00000000665871f4ae0c02ec23ea4b84-removebg-preview_fqwvyq.png" style="position:absolute;bottom:0;left:0;width:65px;height:auto;z-index:3;pointer-events:none" alt="Ready Taushil"/>`:''}
       </div>
@@ -14649,7 +14651,7 @@ window.cartRenderSuggestions=function(){
     <div class="recom-card" onclick="toggleCart();setTimeout(()=>openDetail('${a.id||''}'),150)" style="cursor:pointer">
       <div style="position:relative;background:#f3f4f6;overflow:hidden;aspect-ratio:1/1">
         <img src="${a.imgUrl||a.img||''}" loading="lazy" style="width:100%;height:100%;object-fit:cover"
-          onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22 fill=%22%23f3f4f6%22%3E%3Crect width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23d1d5db%22 font-size=%2240%22%3E🛍%3C/text%3E%3C/svg%3E'"/>
+          onerror="this.onerror=null;this.src=window._YM_PH"/>
         ${a.siapTaushil?`<img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1781317917/file_00000000665871f4ae0c02ec23ea4b84-removebg-preview_fqwvyq.png" style="position:absolute;bottom:0;left:0;width:65px;height:auto;z-index:3;pointer-events:none" alt="Ready Taushil"/>`:''}
       </div>
       <div style="padding:8px">
