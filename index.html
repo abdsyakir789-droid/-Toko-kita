@@ -22571,16 +22571,19 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
     // Sebelumnya: query ilike ke Supabase (strict substring, gak toleran typo,
     // makanya "ayan" gak ketemu "ayam"). Sekarang pakai data yang sama dengan
     // home grid (getAllAds), jadi konsisten + gak perlu fetch ke server lagi.
-    let titles = [];
+    // Hasil produk = IKLAN (foto + judul singkat + harga), bukan teks judul panjang
+    let prodAds = [];
     if (typeof Fuse !== 'undefined') {
       const pool = localAds.map((p,i)=>({ i, judul: p.title||p.name||'' }));
       const fuse = new Fuse(pool, { keys:['judul'], threshold:0.35, ignoreLocation:true });
-      titles = [...new Set(fuse.search(q).map(r => localAds[r.item.i].title||localAds[r.item.i].name).filter(Boolean))].slice(0,7);
+      prodAds = fuse.search(q).map(r => localAds[r.item.i]);
     } else {
       // Fallback kalau CDN Fuse gagal load
       const ql = q.toLowerCase();
-      titles = [...new Set(localAds.filter(p => (p.title||p.name||'').toLowerCase().includes(ql)).map(p=>p.title||p.name).filter(Boolean))].slice(0,7);
+      prodAds = localAds.filter(p => (p.title||p.name||'').toLowerCase().includes(ql));
     }
+    { const seen = new Set(); prodAds = prodAds.filter(p => p && p.id && (p.title||p.name) && !seen.has(String(p.id)) && seen.add(String(p.id))).slice(0,8); }
+    const titles = prodAds;
 
     // ── Cari toko/penjual secara fuzzy — diturunkan dari seller_uid/name/photo ──
     // di ads yang sama (bukan dari tabel profiles yang gak ada). Toko "static"
@@ -22633,11 +22636,18 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
       hasResult = true;
       const prodListEl = document.getElementById('searchProductList');
       const regex = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
-      prodListEl.innerHTML = titles.map(t => {
-        const highlighted = t.replace(regex, '<strong class="font-bold text-gray-900">$1</strong>');
-        return `<div class="flex items-center gap-3 py-2.5 px-2 rounded-xl hover:bg-gray-50 cursor-pointer" onclick="_soSelectProduct('${t.replace(/'/g,"\'")}')">
-          <svg class="flex-shrink-0 text-gray-300" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <span class="text-sm text-gray-600">${highlighted}</span>
+      prodListEl.innerHTML = titles.map(p => {
+        const t = String(p.title || p.name || '');
+        const highlighted = _soEscape(t).replace(regex, '<strong class="font-bold text-gray-900">$1</strong>');
+        const img = String(p.imgUrl || p.img || '');
+        const imgSafe = /^https?:\/\//i.test(img) ? _soEscape(img) : '';
+        const price = (typeof fmtLE === 'function') ? fmtLE(p.price || 0) : ('LE ' + (p.price || 0));
+        return `<div class="flex items-center gap-3 py-2 px-2 rounded-xl hover:bg-gray-50 cursor-pointer" onclick="_soOpenAd('${_soEscape(String(p.id))}')">
+          <img src="${imgSafe}" alt="" loading="lazy" decoding="async" style="width:52px;height:52px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#f3f4f6" onerror="this.onerror=null;this.src=window._YM_PH"/>
+          <div style="flex:1;min-width:0">
+            <p class="text-sm text-gray-700" style="margin:0;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word">${highlighted}</p>
+            <p style="margin:3px 0 0;font-size:12px;font-weight:800;color:#10B981">${price}</p>
+          </div>
         </div>`;
       }).join('');
       document.getElementById('searchProductResults').style.display = 'block';
@@ -22673,6 +22683,15 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
     if (deskInp) deskInp.value = q;
   };
 
+  // ── Ketuk hasil produk (bergambar) → simpan kata kunci ke riwayat, buka iklannya ──
+  window._soOpenAd = function(id) {
+    const inp = document.getElementById('searchOverlayInput');
+    const q = inp ? inp.value.trim() : '';
+    if (q) _soSaveHistory(q);
+    closeSearchOverlay();
+    setTimeout(() => openDetail(id), 150);
+  };
+
   // ── Buka profil toko ──
   window._soGoToShop = function(userId) {
     closeSearchOverlay();
@@ -22681,6 +22700,98 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
     }, 150);
   };
 
+})();
+</script>
+
+<script>
+// ═══════════════════════════════════════════════
+//  TEKS PETUNJUK BERGILIR di kolom cari ("Cari martabak" → "Cari laptop" → …)
+//  Kata diambil otomatis dari iklan yang sedang tayang (judul pendek + kategori).
+//  Hanya tampilan; tidak menambah permintaan ke server.
+// ═══════════════════════════════════════════════
+(function () {
+  var FALLBACK = ['martabak', 'laptop', 'kasur', 'hp bekas', 'jasa taushil'];
+  var CAT_LABEL = { makanan: 'makanan', elektronik: 'elektronik', fashion: 'fashion', kecantikan: 'kecantikan', buku: 'buku', perabot: 'perabot', jasa: 'jasa' };
+  var words = [], idx = 0, built = 0, slots = [];
+
+  function clean(t) {
+    return String(t || '')
+      .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')   // buang emoji
+      .replace(/[^0-9A-Za-zÀ-ɏ\s\-'’]/g, ' ')
+      .replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+  function buildWords() {
+    var ads = [];
+    try { ads = getAllAds().filter(function (p) { return isAdVisible(p); }); } catch (e) {}
+    var set = {};
+    ads.forEach(function (p) {
+      var t = clean(p.title || p.name);
+      // hanya judul pendek (≤3 kata, ≤22 huruf) supaya enak dibaca, bukan caption panjang
+      if (t && t.length >= 3 && t.length <= 22 && t.split(' ').length <= 3) set[t] = 1;
+      var c = String(p.cat || '').toLowerCase();
+      if (CAT_LABEL[c]) set[CAT_LABEL[c]] = 1;
+      if (p.siapTaushil) set['jasa taushil'] = 1;
+    });
+    var list = Object.keys(set);
+    for (var i = list.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var x = list[i]; list[i] = list[j]; list[j] = x; }
+    words = (list.length >= 3 ? list : list.concat(FALLBACK.filter(function (w) { return list.indexOf(w) < 0; }))).slice(0, 15);
+    built = Date.now();
+  }
+
+  function makeSlot(input, left) {
+    if (!input || !input.parentElement) return null;
+    var wrap = input.parentElement;
+    if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+    var box = document.createElement('div');
+    box.className = 'ym-rotph';
+    box.setAttribute('aria-hidden', 'true');
+    box.style.cssText = 'position:absolute;top:0;bottom:0;left:' + left + 'px;right:8px;overflow:hidden;pointer-events:none;display:flex;align-items:center';
+    var txt = document.createElement('span');
+    txt.style.cssText = 'display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;color:#4b5563;font-weight:500;font-size:inherit;transition:transform .32s ease,opacity .32s ease';
+    box.appendChild(txt);
+    wrap.appendChild(box);
+    input.dataset.ymOrigPh = input.getAttribute('placeholder') || '';
+    txt.textContent = input.dataset.ymOrigPh;          // teks awal sebelum iklan termuat
+    input.setAttribute('placeholder', '');
+    return { input: input, box: box, txt: txt };
+  }
+
+  function show(slot, text, animate) {
+    var s = slot.txt;
+    slot.box.style.display = slot.input.value ? 'none' : 'flex';   // ada teks pencarian → sembunyikan petunjuk
+    if (!animate) { s.textContent = text; return; }
+    s.style.transform = 'translateY(-110%)'; s.style.opacity = '0';
+    setTimeout(function () {
+      s.style.transition = 'none';
+      s.textContent = text;
+      s.style.transform = 'translateY(110%)';
+      void s.offsetHeight;
+      s.style.transition = 'transform .32s ease,opacity .32s ease';
+      s.style.transform = 'translateY(0)'; s.style.opacity = '1';
+    }, 330);
+  }
+
+  function tick(animate) {
+    if (!slots.length) return;
+    if (!words.length || Date.now() - built > 120000) buildWords();   // segarkan tiap 2 menit
+    var w = words[idx % words.length]; idx++;
+    var text = w.charAt(0).toUpperCase() + w.slice(1);   // langsung kata kuncinya, mis. "Martabak rembulan"
+    slots.forEach(function (sl) { show(sl, text, animate); });
+  }
+
+  function start() {
+    var mob = document.getElementById('searchInputMob');
+    var desk = document.getElementById('searchInput');
+    var a = makeSlot(mob, 36), b = makeSlot(desk, 40);
+    if (a) { a.txt.style.fontSize = '12.5px'; slots.push(a); }
+    if (b) { b.txt.style.fontSize = '14px'; slots.push(b); }
+    // Font: samakan dengan kolom
+    slots.forEach(function (sl) { try { sl.txt.style.fontFamily = getComputedStyle(sl.input).fontFamily; } catch (e) {} });
+    // Tunggu iklan termuat sebentar, lalu mulai
+    setTimeout(function () { buildWords(); tick(false); }, 1500);
+    setInterval(function () { if (!document.hidden) tick(true); }, 3200);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 </script>
 
