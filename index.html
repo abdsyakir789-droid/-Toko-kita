@@ -10231,7 +10231,7 @@ window.loadSponsorRow = async function() {
         onclick="openDetail('${p.id}')">
         <!-- Foto -->
         <div style="width:58px;flex-shrink:0;border-radius:14px 0 0 14px;overflow:hidden">
-          <img src="${p.imgUrl||p.img||''}" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.style.background='#f3f4f6'"/>
+          <img src="${p.imgUrl||p.img||''}" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=window._YM_PH"/>
         </div>
         <!-- Info -->
         <div style="padding:8px 48px 8px 10px;flex:1;display:flex;flex-direction:column;justify-content:center;min-width:0;position:relative">
@@ -10378,7 +10378,7 @@ window.openDetail = async id => {
     // Render slides
     track.innerHTML = allSlides.map((s,i) => `
       <div class="flex-shrink-0 w-full h-full bg-black" style="min-width:100%">
-        <img src="${s.url}" class="w-full h-full object-cover" onerror="this.style.opacity='.3'" />
+        <img src="${s.url}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src=window._YM_PH"/>
       </div>
     `).join('');
 
@@ -10389,7 +10389,7 @@ window.openDetail = async id => {
         <div onclick="detailGoSlide(${i})" id="dThumb_${i}"
           class="flex-shrink-0 rounded-xl overflow-hidden cursor-pointer transition-all"
           style="width:58px;height:58px;border:2px solid ${i===0?'#10B981':'#e5e7eb'}">
-          <img src="${s.url}" class="w-full h-full object-cover" onerror="this.style.opacity='.3'"/>
+          <img src="${s.url}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src=window._YM_PH"/>
         </div>
       `).join('');
     }
@@ -25032,7 +25032,7 @@ function _yfBuildDetailSlider(ad, variants) {
 
   track.innerHTML = slides.map(s => `
     <div class="flex-shrink-0 w-full h-full bg-black" style="min-width:100%">
-      <img src="${s.url}" class="w-full h-full object-cover" onerror="this.style.opacity='.3'"/>
+      <img src="${s.url}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src=window._YM_PH"/>
     </div>
   `).join('');
 
@@ -25042,7 +25042,7 @@ function _yfBuildDetailSlider(ad, variants) {
     thumbStrip.style.display = 'flex';
     thumbStrip.innerHTML = slides.map((s, i) => `
       <div onclick="yfDetailGoSlide(${i})" id="yfThumb_${i}" class="flex-shrink-0 rounded-xl overflow-hidden cursor-pointer transition-all" style="width:58px;height:58px;border:2px solid ${i === startIdx ? '#10B981' : '#e5e7eb'}">
-        <img src="${s.url}" class="w-full h-full object-cover" onerror="this.style.opacity='.3'"/>
+        <img src="${s.url}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src=window._YM_PH"/>
       </div>
     `).join('');
   }
@@ -25297,7 +25297,7 @@ function _yfRenderList(rows) {
       const cardHtml = `
       <div class="bg-[#f8fafc] rounded-2xl overflow-hidden cursor-pointer flex flex-col" onclick="openFoodDetail('${ad.id}')">
         <div class="relative w-full" style="aspect-ratio:1/1;background:#f3f4f6">
-          <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0" loading="lazy" decoding="async" onerror="this.style.background='#eee'"/>
+          <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=window._YM_PH"/>
         </div>
         <div class="p-2.5 flex flex-col gap-1 flex-1">
           <p class="text-[12.5px] font-medium text-slate-900 lc2" style="font-family:'Inter',sans-serif;line-height:1.5;letter-spacing:-.01em">${ad.title || ''}</p>
@@ -25973,7 +25973,7 @@ async function _yfLoadTracking() {
           </div>
         </div>
         <div class="flex gap-3">
-          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
+          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0" onerror="this.onerror=null;this.src=window._YM_PH"/>
           <div class="flex-1 min-w-0">
             <p class="font-bold text-sm lc1">${o.ad_title}</p>
             ${o.variant ? `<p class="text-xs text-gray-600 mt-1" style="white-space:pre-line">${o.variant}</p>` : ''}
@@ -26248,7 +26248,7 @@ async function _yfLoadKelolaPesanan() {
           <button onclick="_yfCloseOrderMenu('${o.id}');yfDeleteOrder('${o.id}')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:700;color:#dc2626;background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash-can mr-1.5"></i>Hapus pesanan ini</button>
         </div>
         <div class="flex gap-3 mb-2" style="padding-right:26px">
-          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
+          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0" onerror="this.onerror=null;this.src=window._YM_PH"/>
           <div class="flex-1 min-w-0">
             <p class="font-bold text-sm lc1">${o.ad_title}</p>
             ${o.notes ? `<p class="text-xs text-gray-500 lc1">${o.notes}</p>` : ''}
@@ -26614,7 +26614,7 @@ async function _kurirLoadWaitingRoom() {
           <p class="text-xs font-semibold lc1" style="color:#111827;line-height:1${o.seller_id ? ';cursor:pointer' : ''}"${o.seller_id ? ` onclick="closeKurirDashboard();viewSellerStore('${o.seller_id}')"` : ''}>${o.seller_name || ''}</p>
         </div>
         <div class="flex gap-3 mb-2">
-          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
+          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0" onerror="this.onerror=null;this.src=window._YM_PH"/>
           <div class="flex-1 min-w-0">
             <p class="font-bold text-sm lc1">${o.ad_title}</p>
             ${o.variant ? `<p class="text-xs text-gray-600 mt-1" style="white-space:pre-line">${o.variant}</p>` : ''}
@@ -26723,7 +26723,7 @@ async function _kurirLoadMyDeliveries() {
           </div>
         </div>
         <div class="flex gap-3">
-          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
+          <img src="${o.ad_img || ''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0" onerror="this.onerror=null;this.src=window._YM_PH"/>
           <div class="flex-1 min-w-0">
             <p class="font-bold text-sm lc1">${o.ad_title}</p>
             ${o.variant ? `<p class="text-xs text-gray-600 mt-1" style="white-space:pre-line">${o.variant}</p>` : ''}
