@@ -691,6 +691,12 @@ button, .btn {
 }
 .pc:hover .abtn{background:var(--primary);color:#fff;letter-spacing:.3px}
 .abtn{transition:all .2s ease;letter-spacing:0}
+/* Layar sentuh (HP/tab): matikan efek zoom foto saat disentuh → scroll lebih mulus.
+   Di komputer (pakai mouse) efek hover tetap ada. */
+@media (hover:none), (pointer:coarse){
+  img.hover\:scale-110, img.hover\:scale-105{ transform:none !important; transition:none !important; }
+  .pc{ -webkit-tap-highlight-color:transparent; }
+}
 /* inline SVG icon helper */
 .yic{display:inline-flex;align-items:center;flex-shrink:0;vertical-align:middle}
 
@@ -3171,7 +3177,7 @@ h3.text-sm.font-bold.text-gray-800 {
         if (!ads || !ads.length) return;
         var g = document.getElementById('productGrid');
         if (!g || g.children.length > 0) return;
-        g.innerHTML = ads.map(function(p) {
+        g.innerHTML = ads.slice(0, 12).map(function(p) {
           var img = p.imgUrl || '';
           var title = (p.title || '').replace(/"/g, '&quot;');
           var price = p.price ? 'LE ' + Number(p.price).toLocaleString('id-ID') : '';
@@ -9750,7 +9756,12 @@ window.renderProducts = () => {
   g.innerHTML='';
   if(!list.length){e.style.display='block';return;}
   e.style.display='none';
-  list.forEach((p,i)=>{
+  // ── INFINITE SCROLL: kartu dibuat per 12 saat user menggulir mendekati bawah.
+  // Data tetap lengkap di HP → pencarian/filter/sortir tidak berubah perilakunya.
+  const _PC_BATCH = 12;
+  const _pcGen = (window._ymPcGen = (window._ymPcGen || 0) + 1);
+  let _pcShown = 0;
+  const _renderOne = (p,i)=>{
     const name=p.title||p.name||'';
     const img=p.imgUrl||p.img||'https://picsum.photos/300/300';
     const orig=p.disc>0?Math.round(p.price/(1-p.disc/100)):null;
@@ -9759,7 +9770,7 @@ window.renderProducts = () => {
     const locationText = p.location || p.loc || '';
     const d=document.createElement('div');
     d.className='pc bg-white overflow-hidden cursor-pointer';
-    d.style=`animation:fadeUp .3s ease ${i*.03}s both;border-radius:18px;border:1px solid rgba(0,0,0,.07);box-shadow:0 2px 10px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.04)`;
+    d.style=`animation:fadeUp .3s ease ${(i % _PC_BATCH)*.03}s both;border-radius:18px;border:1px solid rgba(0,0,0,.07);box-shadow:0 2px 10px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.04)`;
     // Cek apakah current user adalah pemilik produk
     const currentUid = window._S.user?.uid || '';
     const currentUserIsAdmin = window._S.user && isAdmin(window._S.user.email);
@@ -9854,8 +9865,33 @@ window.renderProducts = () => {
         </div>`:''}
       </div>`;
     g.appendChild(d);
-  });
+  };
+  const _pcMore = () => {
+    if (_pcGen !== window._ymPcGen) return;               // daftar sudah diganti (cari/filter baru)
+    const end = Math.min(list.length, _pcShown + _PC_BATCH);
+    for (let i = _pcShown; i < end; i++) _renderOne(list[i], i);
+    _pcShown = end;
+    _ymPcSentinel(g, _pcShown < list.length, _pcMore);
+  };
+  _pcMore();
 };
+// Penanda di bawah grid: saat terlihat (±700px sebelum bawah) → muat 12 kartu berikutnya
+function _ymPcSentinel(g, hasMore, loadMore) {
+  let sen = document.getElementById('pcMoreSentinel');
+  if (!sen) {
+    sen = document.createElement('div');
+    sen.id = 'pcMoreSentinel';
+    sen.style.cssText = 'height:1px;width:100%';
+    g.parentNode.insertBefore(sen, g.nextSibling);
+  }
+  if (window._ymPcObserver) { window._ymPcObserver.disconnect(); window._ymPcObserver = null; }
+  if (!hasMore) return;
+  if (!('IntersectionObserver' in window)) { loadMore(); return; }   // browser lama → tampilkan semua
+  window._ymPcObserver = new IntersectionObserver(function (entries) {
+    if (entries.some(function (en) { return en.isIntersecting; })) { window._ymPcObserver.disconnect(); window._ymPcObserver = null; loadMore(); }
+  }, { rootMargin: '700px 0px' });
+  window._ymPcObserver.observe(sen);
+}
 
 // ── Product Card Overlay Helpers ───────────────────────────────
 
@@ -25235,15 +25271,31 @@ function _yfRenderList(rows) {
   box.innerHTML = '<div class="yf-col"></div><div class="yf-col"></div>';
   const _yfCols = [box.children[0], box.children[1]];
   const _yfColH = [0, 0];
-  {
-    rows.forEach(ad => {
+  // ── INFINITE SCROLL: kartu dibuat per 12 saat daftar digulir mendekati bawah ──
+  const _YF_BATCH = 12;
+  const _yfGen = (window._yfListGen = (window._yfListGen || 0) + 1);
+  let _yfShown = 0;
+  const _yfMore = () => {
+    if (_yfGen !== window._yfListGen) return;
+    const end = Math.min(rows.length, _yfShown + _YF_BATCH);
+    rows.slice(_yfShown, end).forEach(_yfOne);
+    _yfShown = end;
+    // Belum bisa digulir (layar tinggi) tapi masih ada sisa → tambah lagi
+    if (_yfShown < rows.length && box.scrollHeight <= box.clientHeight + 50) setTimeout(_yfMore, 0);
+  };
+  box.onscroll = function () {
+    if (_yfGen !== window._yfListGen || _yfShown >= rows.length) return;
+    if (box.scrollTop + box.clientHeight > box.scrollHeight - 700) _yfMore();
+  };
+  function _yfOne(ad) {
+    {
       // Alamat kartu diambil dari yang seller tulis sendiri saat upload iklan (ads.location) —
       // BUKAN alamat toko umum. Kalau saat upload tidak diisi, tidak ditampilkan sama sekali.
       const alamat = ad.location || '';
       const cardHtml = `
       <div class="bg-[#f8fafc] rounded-2xl overflow-hidden cursor-pointer flex flex-col" onclick="openFoodDetail('${ad.id}')">
         <div class="relative w-full" style="aspect-ratio:1/1;background:#f3f4f6">
-          <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0" onerror="this.style.background='#eee'"/>
+          <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0" loading="lazy" decoding="async" onerror="this.style.background='#eee'"/>
         </div>
         <div class="p-2.5 flex flex-col gap-1 flex-1">
           <p class="text-[12.5px] font-medium text-slate-900 lc2" style="font-family:'Inter',sans-serif;line-height:1.5;letter-spacing:-.01em">${ad.title || ''}</p>
@@ -25275,8 +25327,9 @@ function _yfRenderList(rows) {
       const _ci = _yfColH[0] <= _yfColH[1] ? 0 : 1; // kolom terpendek
       _yfCols[_ci].insertAdjacentHTML('beforeend', cardHtml);
       _yfColH[_ci] = _yfCols[_ci].offsetHeight;      // ukur ulang tinggi kolom
-    });
+    }
   }
+  _yfMore();
 }
 
 // ── DETAIL + PESAN SEKARANG (Zero Gap & No Divider: Foto → Deskripsi → Ulasan → Info Penjual) ──
