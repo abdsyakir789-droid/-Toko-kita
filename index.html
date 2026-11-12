@@ -3295,13 +3295,13 @@ h3.text-sm.font-bold.text-gray-800 {
       <!-- Profile overlay row: Avatar + Name + Buttons inside cover -->
       <div class="profile-overlay-row">
         <!-- Avatar -->
-        <label for="profilePhotoInput" class="cursor-pointer group relative flex-shrink-0">
+        <div onclick="ymProfilePhotoMenu()" role="button" aria-label="Foto profil" class="cursor-pointer group relative flex-shrink-0">
           <div class="profile-avatar-circle" id="profileAvatar">U</div>
           <div class="absolute bottom-0 right-0 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
             <i class="fa-solid fa-camera text-primary" style="font-size:8px"></i>
           </div>
-        </label>
-        <input id="profilePhotoInput" type="file" accept="image/*" class="hidden" onchange="uploadProfilePhoto(this)"/>
+        </div>
+        <input id="profilePhotoInput" type="file" accept="image/*" class="hidden" onchange="uploadProfilePhoto(this).finally(()=>{this.value=''})"/>
 
         <!-- Name block -->
         <div class="profile-name-block-overlay">
@@ -3693,7 +3693,9 @@ h3.text-sm.font-bold.text-gray-800 {
       <!-- Profile row: Avatar + Name + Buttons — all inside cover -->
       <div class="store-profile-overlay">
         <!-- Avatar -->
-        <div class="store-avatar-circle" id="etalaseAvatar">P</div>
+        <!-- Ketuk foto profil toko → perbesar (hanya kalau ada foto) -->
+        <div class="store-avatar-circle" id="etalaseAvatar" style="cursor:pointer"
+          onclick="(function(el){var i=el.querySelector('img');var s=i&&i.getAttribute('src');if(s&&i.style.display!=='none'&&window.openImgLightboxUrls)window.openImgLightboxUrls([s],0);})(this)">P</div>
 
         <!-- Name & subtitle -->
         <div class="store-name-block-overlay">
@@ -9551,6 +9553,62 @@ function renderProfilePage() {
 }
 
 // ── Upload profile photo ───────────────────────────────────────
+// ── Menu foto profil: Lihat (perbesar) / Ganti / Hapus ──
+window.ymProfilePhotoMenu = function() {
+  const u = window._S && window._S.user;
+  if (!u) { showToast('Login dulu', 'red'); return; }
+  const inp = document.getElementById('profilePhotoInput');
+  if (!u.photoUrl) { if (inp) inp.click(); return; } // belum punya foto → langsung pilih foto
+  const old = document.getElementById('ymPhotoMenu'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = 'ymPhotoMenu';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center';
+  const b = (act, icon, label, color) => '<button type="button" data-act="' + act + '" style="width:100%;display:flex;align-items:center;gap:14px;padding:15px 18px;background:none;border:none;cursor:pointer;font-size:15px;font-weight:700;color:' + color + ';text-align:left"><i class="fa-solid ' + icon + '" style="width:20px;text-align:center"></i>' + label + '</button>';
+  ov.innerHTML = '<div style="width:100%;max-width:420px;background:#fff;border-radius:20px 20px 0 0;padding:8px 0 calc(10px + env(safe-area-inset-bottom));box-shadow:0 -10px 30px rgba(0,0,0,.15)">'
+    + '<div style="width:38px;height:4px;border-radius:2px;background:#e5e7eb;margin:4px auto 6px"></div>'
+    + b('lihat', 'fa-expand', 'Lihat foto', '#111827')
+    + b('ganti', 'fa-camera', 'Ganti foto', '#111827')
+    + b('hapus', 'fa-trash-can', 'Hapus foto', '#dc2626')
+    + '</div>';
+  ov.addEventListener('click', function(e) {
+    if (e.target === ov) { ov.remove(); return; }
+    const btn = e.target.closest('button[data-act]'); if (!btn) return;
+    ov.remove();
+    const a = btn.dataset.act;
+    if (a === 'lihat' && window.openImgLightboxUrls) window.openImgLightboxUrls([u.photoUrl], 0);
+    else if (a === 'ganti' && inp) inp.click();
+    else if (a === 'hapus') window.ymRemoveProfilePhoto();
+  });
+  document.body.appendChild(ov);
+};
+
+window.ymRemoveProfilePhoto = async function() {
+  const u = window._S && window._S.user; if (!u || !u.photoUrl) return;
+  if (!confirm('Hapus foto profil?\n\nAkunmu akan memakai ikon akun sebagai pengganti foto.')) return;
+  const oldUrl = u.photoUrl;
+  try {
+    const r = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(u.uid) + '&select=id,uid', {
+      method: 'PATCH', prefer: 'return=representation', body: JSON.stringify({ photo_url: '' })
+    });
+    const rows = r.ok ? await r.json().catch(() => []) : [];
+    if (!Array.isArray(rows) || !rows.length) throw new Error('perubahan tidak tersimpan');
+    // Foto penjual di iklan-iklannya ikut dikosongkan
+    window._supaFetch('/rest/v1/ads?seller_uid=eq.' + encodeURIComponent(u.uid), {
+      method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ seller_photo: '' })
+    }).catch(function(){});
+    // Akun Google: tandai supaya foto Google TIDAK dipasang otomatis lagi
+    try { if (window.supabase && window.supabase.auth) window.supabase.auth.updateUser({ data: { ym_photo_removed: true } }).catch(function(){}); } catch (e) {}
+    u.photoUrl = '';
+    if (window.invalidateProfileCache) window.invalidateProfileCache(u.uid);
+    renderUserState();
+    renderProfilePage();
+    if (window.deleteFromR2) window.deleteFromR2(oldUrl); // hanya file di server kita yang dihapus
+    showToast('Foto profil dihapus', 'green');
+  } catch (e) {
+    showToast('Gagal menghapus foto profil: ' + (e.message || e), 'red');
+  }
+};
+
 window.uploadProfilePhoto = async input => {
   const f=input.files[0]; if(!f) return;
   if(!window._S.user){showToast('Login dulu','red');return;}
@@ -13108,7 +13166,7 @@ window.openStoryViewer = async function(uid, name, photoUrl) {
   const nameEl   = document.getElementById('storyViewerName');
   if(avatarEl) avatarEl.innerHTML = photoUrl
     ? `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover">`
-    : `<span style="color:#fff;font-weight:900;font-size:14px">${(name||'?')[0].toUpperCase()}</span>`;
+    : window.ymAvatarFallback('', 'width:100%;height:100%');
   if(nameEl) nameEl.textContent = name || 'Toko';
 
   const modal = document.getElementById('storyViewerModal');
@@ -13509,7 +13567,7 @@ window.openStoryUpload = async function() {
     const nameEl   = document.getElementById('storyViewerName');
     if(avatarEl) avatarEl.innerHTML = _storyViewerData.photoUrl
       ? '<img src="' + _storyViewerData.photoUrl + '" style="width:100%;height:100%;object-fit:cover">'
-      : '<span style="color:#fff;font-weight:900;font-size:14px">' + (u.name||'S')[0].toUpperCase() + '</span>';
+      : window.ymAvatarFallback('', 'width:100%;height:100%');
     if(nameEl) nameEl.textContent = 'Cerita Anda';
 
     const addBtn = document.getElementById('storyViewerAddBtn');
@@ -20648,6 +20706,15 @@ window.requirePin = function(callback) {
     document.body.style.overflow = 'hidden';
   };
 
+  window.openImgLightboxUrls = function(urls, idx) {
+    _lbImgs = (urls || []).filter(function(x){ return typeof x === 'string' && /^https?:\/\//.test(x); });
+    if (!_lbImgs.length) return;
+    _lbIdx = idx || 0;
+    _renderLightbox();
+    document.getElementById('imgLightbox').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  };
+
   window.closeImgLightbox = function() {
     document.getElementById('imgLightbox').style.display = 'none';
     document.body.style.overflow = '';
@@ -20982,7 +21049,7 @@ window.requirePin = function(callback) {
       }
       // Foto profil dari Google (kalau belum punya foto)
       var pic = user.user_metadata && (user.user_metadata.avatar_url || user.user_metadata.picture);
-      if (!me.photo_url && pic && /^https:\/\//.test(pic)) {
+      if (!me.photo_url && pic && /^https:\/\//.test(pic) && !(user.user_metadata && user.user_metadata.ym_photo_removed)) {
         window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(me.uid), { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ photo_url: pic }) })
           .then(function () { if (window._S && window._S.user) { window._S.user.photoUrl = pic; try { renderUserState(); } catch (e) {} } }).catch(function () {});
       }
@@ -22769,7 +22836,7 @@ section > div[style*="box-shadow"] { box-shadow:none !important; }
         const avatar = s.avatar_url
           ? `<img src="${s.avatar_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
           : '';
-        const fallback = `<div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 ${s.avatar_url ? 'hidden' : ''}"><span class="text-emerald-600 font-bold text-sm">${(s.name||'?')[0].toUpperCase()}</span></div>`;
+        const fallback = window.ymAvatarFallback('w-10 h-10 rounded-full flex-shrink-0' + (s.avatar_url ? ' hidden' : ''));
         const badge = s.role === 'seller'
           ? `<span class="text-[10px] font-semibold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">Penjual</span>`
           : `<span class="text-[10px] font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">User</span>`;
