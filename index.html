@@ -24395,12 +24395,15 @@ async function _loadRiwayatPenjualan() {
       window._supaFetch('/rest/v1/food_sales_ledger?seller_id=eq.' + uid + '&order=order_created_at.desc&limit=500&select=*')
     ]);
     if (!res.ok) throw new Error(await res.text());
-    const orders = await res.json();
-    const foodOrders = foodRes.ok ? await foodRes.json() : [];
-    const ledger = ledgerRes.ok ? await ledgerRes.json() : [];
+    // Pendapatan = HANYA pesanan berstatus 'selesai'. Pesanan dibatalkan / masih menunggu / sedang
+    // diproses tidak dihitung (dulu ikut dihitung → total pendapatan jauh membengkak).
+    const _rwDone = x => String((x && x.status) || '').toLowerCase() === 'selesai';
+    const orders = ((await res.json()) || []).filter(_rwDone);
+    const foodOrders = (foodRes.ok ? await foodRes.json() : []).filter(_rwDone);
+    const ledger = (ledgerRes.ok ? await ledgerRes.json() : []).filter(_rwDone);
 
     if ((!Array.isArray(orders) || orders.length === 0) && (!Array.isArray(foodOrders) || foodOrders.length === 0) && (!Array.isArray(ledger) || ledger.length === 0)) {
-      body.innerHTML = '<div style="text-align:center;padding:40px 0;color:#9ca3af;font-size:13px">Belum ada transaksi masuk</div>';
+      body.innerHTML = '<div style="text-align:center;padding:40px 0;color:#9ca3af;font-size:13px">Belum ada pesanan selesai</div>';
       if (footer) footer.style.display = 'none';
       return;
     }
@@ -24442,16 +24445,29 @@ async function _loadRiwayatPenjualan() {
     orders.forEach(o => {
       const buyerName = buyerMap[o.buyer_id] || 'Pembeli';
       const items = Array.isArray(o.items) && o.items.length ? o.items : [{ name: o.ad_title || 'Produk', price: o.total || 0, qty: 1 }];
-      items.forEach(it => {
-        const itemTotal = (it.price != null && it.qty != null) ? (it.price * it.qty) : (o.total || 0);
-        const _lbl = String(it.variant || '').trim() || _rwShort(it.name || it.variant_name || o.ad_title || 'Produk');
+      // Harga per item tersimpan sebagai teks (priceStr, mis. "LE 1,000") — dulu tak terbaca, sehingga
+      // SETIAP varian diberi total seluruh pesanan (total pendapatan jadi membengkak).
+      const _rwNum = v => { if (typeof v === 'number') return v; const m = String(v == null ? '' : v).replace(/[^0-9.]/g, ''); return m ? Number(m) : NaN; };
+      const _lblOf = it => String(it.variant || '').trim() || _rwShort(it.name || it.variant_name || o.ad_title || 'Produk');
+      const _sub = items.map(it => { const p = it.price != null ? Number(it.price) : _rwNum(it.priceStr); return (isFinite(p) && p > 0) ? p * (Number(it.qty) || 1) : null; });
+      if (items.length === 1 || _sub.some(x => x == null)) {
+        // Satu item, atau harga per item tak diketahui → SATU baris dengan total pesanan (tidak dobel)
         rows.push({
-          terjual: _rwHtml([_lbl + ' ×' + (it.qty || 1)]),
+          terjual: _rwHtml(items.map(it => _lblOf(it) + ' ×' + (it.qty || 1))),
           pembeli: _rwEsc(buyerName),
-          total: itemTotal,
+          total: items.length === 1 && _sub[0] != null && !o.total ? _sub[0] : (Number(o.total) || 0),
           created_at: o.created_at
         });
-      });
+      } else {
+        items.forEach((it, i) => {
+          rows.push({
+            terjual: _rwHtml([_lblOf(it) + ' ×' + (it.qty || 1)]),
+            pembeli: _rwEsc(buyerName),
+            total: _sub[i],
+            created_at: o.created_at
+          });
+        });
+      }
     });
     (Array.isArray(foodOrders) ? foodOrders : []).forEach(o => {
       let _fl = o.variant ? _rwFoodLines(o.variant) : [];
@@ -24459,10 +24475,13 @@ async function _loadRiwayatPenjualan() {
         const _av = _rwAdVar[String(o.ad_id || '')];
         _fl = [(_av || _rwShort(o.ad_title || 'Menu YallaFood')) + ' ×' + (o.qty || 1)];
       }
+      // Pendapatan penjual = harga menu saja; ongkir adalah hak kurir
+      const _fTot = (o.price != null && Number(o.price) > 0) ? Number(o.price) * (Number(o.qty) || 1)
+        : Math.max(0, (Number(o.total) || 0) - (Number(o.ongkir) || 0));
       rows.push({
         terjual: _rwHtml(_fl),
         pembeli: _rwEsc(o.buyer_name || 'Pembeli'),
-        total: o.total || 0,
+        total: _fTot,
         created_at: o.created_at
       });
     });
@@ -28408,7 +28427,9 @@ async function _yfNotifyActiveCouriers(order) {
     const payload = targets.map(c => ({
       to_uid: c.uid, user_id: c.uid, type: 'yallafood_kurir',
       message: 'Ada pesanan deliveri menunggu diambil, cek sekarang sebelum keduluan yang lain!',
-      sender_name: 'YallaFood', is_read: false, created_at: now
+      sender_name: 'YallaFood', is_read: false, created_at: now,
+      // Penanda pesanan → notif ini otomatis terhapus begitu pesanan diambil kurir / dibatalkan
+      ...(order && order.id ? { link_url: '/?go=yfkurir&fo=' + order.id } : {})
     }));
     if (!payload.length) return;
     await window._supaFetch('/rest/v1/notifications', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify(payload) });
