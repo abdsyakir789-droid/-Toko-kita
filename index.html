@@ -25316,7 +25316,7 @@ function _yfBuyerAddressBlock(o) {
           <div ${mapAttr}>
             <i class="fa-solid fa-location-dot" style="color:${color};font-size:13px;margin-top:2px;flex-shrink:0"></i>
             <p style="font-size:12px;font-weight:600;color:${color};line-height:1.5;margin:0;word-break:break-word;min-width:0">Alamat Pembeli: ${_sadEscHtml(o.buyer_address)}</p>
-          </div>${_yfBuyerWaBtn(o)}
+          </div>
         </div>`;
 }
 
@@ -25328,14 +25328,16 @@ function _yfBuyerWaBtn(o) {
   if (!me || !o || o.courier_id !== me) return '';
   if (['diterima', 'dimasak', 'dijemput', 'menuju'].indexOf(o.status) < 0) return '';
   return `
+          <div style="display:flex;gap:6px;margin-top:8px">
           <button type="button" onclick="event.stopPropagation();_yfOpenBuyerWa('${String(o.id).replace(/[^0-9a-f-]/gi, '')}')"
-            style="margin-top:8px;display:inline-flex;align-items:center;gap:7px;background:#DCFCE7;color:#15803D;border:none;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
-            <i class="fa-brands fa-whatsapp" style="font-size:16px"></i>WhatsApp Pembeli
+            style="flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:#DCFCE7;color:#15803D;border:none;border-radius:10px;padding:8px 6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">
+            <i class="fa-brands fa-whatsapp" style="font-size:16px"></i>WA Pembeli
           </button>
           <button type="button" onclick="event.stopPropagation();_yfOpenSellerWa('${String(o.id).replace(/[^0-9a-f-]/gi, '')}')"
-            style="margin-top:8px;margin-left:6px;display:inline-flex;align-items:center;gap:7px;background:#FEF3C7;color:#B45309;border:none;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
-            <i class="fa-brands fa-whatsapp" style="font-size:16px"></i>WhatsApp Mat'am
-          </button>`;
+            style="flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:#FEF3C7;color:#B45309;border:none;border-radius:10px;padding:8px 6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">
+            <i class="fa-brands fa-whatsapp" style="font-size:16px"></i>WA Mat'am
+          </button>
+          </div>`;
 }
 window._yfOpenSellerWa = async function (orderId) {
   try {
@@ -25383,7 +25385,9 @@ function _yfMatamAddressBlock(o, shopMap) {
   const s = (shopMap && shopMap[o.seller_id]) || null;
   const alamat = (s && s.alamat) || '';
   const text = alamat || o.seller_name || (s && s.nama) || '';
-  if (!text) return '';
+  // Tombol WhatsApp Pembeli & Mat'am (khusus kurir pesanan ini) ditaruh di bawah alamat Mat'am
+  const waBtns = _yfBuyerWaBtn(o);
+  if (!text) return waBtns ? `<div style="background:#f9fafb;border-radius:10px;padding:2px 10px 8px;margin-top:-6px;margin-bottom:8px">${waBtns}</div>` : '';
   const hasLoc = s && s.lat != null && s.lng != null;
   const color = hasLoc ? '#059669' : '#111827';
   const attr = hasLoc
@@ -25394,7 +25398,7 @@ function _yfMatamAddressBlock(o, shopMap) {
           <div ${attr}>
             <i class="fa-solid fa-location-dot" style="color:${color};font-size:13px;margin-top:2px;flex-shrink:0"></i>
             <p style="font-size:12px;font-weight:600;color:${color};line-height:1.5;margin:0;word-break:break-word;min-width:0">Alamat Mat'am: ${_sadEscHtml(text)}</p>
-          </div>
+          </div>${waBtns}
         </div>`;
 }
 
