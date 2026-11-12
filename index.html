@@ -11399,7 +11399,7 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
           ${_canReply ? `<div class="chat-reply-icon" style="${me?'left:4px':'right:4px'}">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
           </div>` : ''}
-          <div class="flex flex-col ${me?'items-end':'items-start'} max-w-[75%] chat-msg-swipeable${_canReply?' reply-eligible':''}" data-msg-id="${_msgId}" data-msg-text="${_msgText.slice(0,80)}" data-msg-sender="${_msgSender}" data-can-delete="${_canDelete?'1':'0'}">
+          <div class="flex flex-col ${me?'items-end':'items-start'} max-w-[75%] chat-msg-swipeable${_canReply?' reply-eligible':''}" data-msg-id="${_msgId}" data-msg-text="${_msgText.slice(0,80).replace(/"/g,'&quot;')}" data-copy="${_canReply ? window._ymAttr(m.text||'') : ''}" data-msg-sender="${_msgSender}" data-can-delete="${_canDelete?'1':'0'}">
             ${isAdCard && adCardData ? `
             <div style="background:#fff;border-radius:14px;border:1.5px solid #e5e7eb;overflow:hidden;max-width:260px;box-shadow:0 2px 8px rgba(0,0,0,.07);cursor:pointer" onclick="openAdFromChat('${adCardData.adId||''}')" >
               <div style="display:flex;align-items:center;gap:0" onclick="openAdFromChat('${adCardData.adId||''}');event.stopPropagation()">
@@ -11985,6 +11985,8 @@ window.deleteChatMessage = async function(msgId) {
 // Dipasang terpisah dari swipe-to-reply agar tidak saling mengganggu —
 // timer dibatalkan begitu terdeteksi gerakan geser (swipe/scroll).
 window._attachLongPressDelete = function() {
+  // Digantikan menu tekan-lama Salin/Hapus (window._ymAttachMsgMenu) — hapus kini lewat menu.
+  if (window._ymAttachMsgMenu) return;
   const container = document.getElementById('chatMessages');
   if(!container || container._longPressDeleteBound) return;
   container._longPressDeleteBound = true;
@@ -18789,11 +18791,11 @@ async function ycLoadMessages(force) {
       return `
         <div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};gap:2px">
           ${_ycSafeImg(t.image_url) ? `<img src="${_ycSafeImg(t.image_url)}" style="max-width:200px;border-radius:12px;margin-bottom:4px"/>` : ''}
-          ${(t.message && !(t.image_url && t.message==='📷 Foto')) ? `<div style="background:${isMe?'#10B981':'#fff'};color:${isMe?'#fff':'#111827'};padding:9px 13px;border-radius:${isMe?'16px 4px 16px 16px':'4px 16px 16px 16px'};font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.message)}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>` : ''}
+          ${(t.message && !(t.image_url && t.message==='📷 Foto')) ? `<div data-copy="${window._ymAttr(t.message)}" style="background:${isMe?'#10B981':'#fff'};color:${isMe?'#fff':'#111827'};padding:9px 13px;border-radius:${isMe?'16px 4px 16px 16px':'4px 16px 16px 16px'};font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.message)}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>` : ''}
           ${t.admin_reply ? `
           <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;margin-top:4px">
             <p style="font-size:10px;color:rgba(255,255,255,.6);margin:0 0 2px 4px">${t.replier==='bot' ? '🤖 YallaBot' : 'YallaCare Admin'}</p>
-            <div style="background:${t.replier==='bot'?'#ecfdf5':'#fff'};color:#111827;padding:9px 13px;border-radius:4px 16px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.admin_reply)}${time?`<span class="msg-time-inline-left">${time}</span>`:''}</div>
+            <div data-copy="${window._ymAttr(t.admin_reply)}" style="background:${t.replier==='bot'?'#ecfdf5':'#fff'};color:#111827;padding:9px 13px;border-radius:4px 16px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.admin_reply)}${time?`<span class="msg-time-inline-left">${time}</span>`:''}</div>
           </div>` : ''}
         </div>`;
     }).join('');
@@ -19274,18 +19276,18 @@ function renderYcAdminChat(userId) {
       // Baris balasan admin murni
       return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
         <p style="font-size:10px;color:rgba(255,255,255,.6);margin:0 0 2px 0">${t.replier==='bot'?'🤖 YallaBot':'Admin'}</p>
-        <div style="background:#10B981;color:#fff;padding:9px 13px;border-radius:16px 4px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.admin_reply)}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>
+        <div data-copy="${window._ymAttr(t.admin_reply)}" style="background:#10B981;color:#fff;padding:9px 13px;border-radius:16px 4px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.admin_reply)}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>
       </div>`;
     }
     return `
       <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
         ${_ycSafeImg(t.image_url) ? `<img src="${_ycSafeImg(t.image_url)}" style="max-width:200px;border-radius:12px;margin-bottom:4px"/>` : ''}
-        ${(t.message && !(t.image_url && t.message==='📷 Foto')) ? `<div style="background:#fff;color:#111827;padding:9px 13px;border-radius:4px 16px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.message)}${time?`<span class="msg-time-inline-left">${time}</span>`:''}</div>` : ''}
+        ${(t.message && !(t.image_url && t.message==='📷 Foto')) ? `<div data-copy="${window._ymAttr(t.message)}" style="background:#fff;color:#111827;padding:9px 13px;border-radius:4px 16px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.message)}${time?`<span class="msg-time-inline-left">${time}</span>`:''}</div>` : ''}
       </div>
       ${t.admin_reply ? `
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
         <p style="font-size:10px;color:rgba(255,255,255,.6);margin:0 0 2px 0">${t.replier==='bot'?'🤖 YallaBot':'Admin'}</p>
-        <div style="background:#10B981;color:#fff;padding:9px 13px;border-radius:16px 4px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.admin_reply)}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>
+        <div data-copy="${window._ymAttr(t.admin_reply)}" style="background:#10B981;color:#fff;padding:9px 13px;border-radius:16px 4px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.admin_reply)}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>
       </div>` : ''}`;
   }).join('');
   box.scrollTop = box.scrollHeight;
@@ -27966,7 +27968,7 @@ async function _yfChatLoadMessages() {
       const mine = m.sender_uid === uid;
       return `<div style="display:flex;justify-content:${mine ? 'flex-end' : 'flex-start'}">
         <div style="max-width:75%;padding:8px 12px;border-radius:14px;background:${mine ? '#10B981' : '#fff'};color:${mine ? '#fff' : '#111827'};border:${mine ? 'none' : '1px solid #f3f4f6'}">
-          <p style="font-size:13px;margin:0;word-break:break-word">${(m.text || '').replace(/</g,'&lt;')}${mine ? window._ymTick2Html(m) : ''}</p>
+          <p data-copy="${window._ymAttr(m.text || '')}" style="font-size:13px;margin:0;word-break:break-word">${(m.text || '').replace(/</g,'&lt;')}${mine ? window._ymTick2Html(m) : ''}</p>
         </div>
       </div>`;
     }).join('');
@@ -29619,7 +29621,7 @@ async function _ykChatLoadMessages() {
       const mine = m.sender_uid === uid;
       const txt = (m.text || '').replace(/</g, '&lt;');
       return '<div style="display:flex;justify-content:' + (mine ? 'flex-end' : 'flex-start') + '">'
-        + '<div style="max-width:78%;padding:8px 12px;border-radius:16px;font-size:13px;line-height:1.4;word-break:break-word;white-space:pre-wrap;'
+        + '<div data-copy="' + window._ymAttr(m.text || '') + '" style="max-width:78%;padding:8px 12px;border-radius:16px;font-size:13px;line-height:1.4;word-break:break-word;white-space:pre-wrap;'
         + (mine ? 'background:#10B981;color:#fff;border-bottom-right-radius:4px' : 'background:#fff;color:#111827;border:1px solid #f0f0f0;border-bottom-left-radius:4px') + '">' + txt + (mine ? window._ymTick2Html(m) : '') + '</div></div>';
     }).join('');
     box.scrollTop = box.scrollHeight;
@@ -33061,6 +33063,101 @@ document.addEventListener('DOMContentLoaded', () => {
       return _prevLogout.apply(this, arguments);
     };
   }
+})();
+</script>
+
+<script>
+// ═══ MENU PESAN: tekan lama (HP) / klik kanan (desktop) → Salin / Hapus ═══
+// Dipakai chat YallaMart, YallaCare (user & admin), YallaFood, YallaKurir.
+// Teks yang disalin diambil dari atribut data-copy di gelembung pesan.
+(function(){
+  window._ymAttr = function(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+
+  window._ymCopyText = async function(t){
+    let ok = false;
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(t); ok = true; } } catch (e) {}
+    if (!ok) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = t; ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:-1000px;left:0;opacity:0';
+        document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, t.length);
+        ok = document.execCommand('copy'); ta.remove();
+      } catch (e) {}
+    }
+    if (typeof showToast === 'function') showToast(ok ? 'Pesan disalin' : 'Gagal menyalin pesan', ok ? 'green' : 'red');
+  };
+
+  function closeMenu(){ const m = document.getElementById('ymMsgMenu'); if (m) m.remove(); }
+  window._ymShowMsgMenu = function(opts){
+    closeMenu();
+    if (!opts || (!opts.text && !opts.onDelete)) return;
+    const ov = document.createElement('div');
+    ov.id = 'ymMsgMenu';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center';
+    const btn = (icon, label, color) => '<button type="button" data-act="' + label + '" style="width:100%;display:flex;align-items:center;gap:14px;padding:15px 18px;background:none;border:none;cursor:pointer;font-size:15px;font-weight:700;color:' + color + ';text-align:left"><i class="fa-solid ' + icon + '" style="width:20px;text-align:center"></i>' + label + '</button>';
+    ov.innerHTML = '<div style="width:100%;max-width:420px;background:#fff;border-radius:20px 20px 0 0;padding:8px 0 calc(10px + env(safe-area-inset-bottom));box-shadow:0 -10px 30px rgba(0,0,0,.15)">'
+      + '<div style="width:38px;height:4px;border-radius:2px;background:#e5e7eb;margin:4px auto 6px"></div>'
+      + (opts.text ? btn('fa-copy', 'Salin', '#111827') : '')
+      + (opts.onDelete ? btn('fa-trash-can', 'Hapus', '#dc2626') : '')
+      + '</div>';
+    ov.addEventListener('click', function(e){
+      const b = e.target.closest('button[data-act]');
+      if (e.target === ov) { closeMenu(); return; }
+      if (!b) return;
+      closeMenu();
+      if (b.dataset.act === 'Salin') window._ymCopyText(opts.text);
+      else if (b.dataset.act === 'Hapus' && opts.onDelete) opts.onDelete();
+    });
+    document.body.appendChild(ov);
+  };
+
+  // getOpts(target) → {text, onDelete} | null
+  window._ymAttachMsgMenu = function(container, getOpts){
+    if (!container || container._ymMsgMenuBound) return;
+    container._ymMsgMenuBound = true;
+    let timer = null, sx = 0, sy = 0, fired = false;
+    const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    container.addEventListener('touchstart', function(e){
+      clear(); fired = false;
+      const o = getOpts(e.target); if (!o) return;
+      const t = e.touches[0]; sx = t.clientX; sy = t.clientY;
+      timer = setTimeout(function(){ timer = null; fired = true; if (navigator.vibrate) navigator.vibrate(30); window._ymShowMsgMenu(o); }, 500);
+    }, { passive: true });
+    container.addEventListener('touchmove', function(e){
+      if (!timer) return;
+      const t = e.touches[0];
+      if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) clear();
+    }, { passive: true });
+    container.addEventListener('touchend', function(e){ clear(); if (fired && e.cancelable) e.preventDefault(); }, { passive: false });
+    container.addEventListener('touchcancel', clear, { passive: true });
+    // Desktop: klik kanan
+    container.addEventListener('contextmenu', function(e){
+      const o = getOpts(e.target); if (!o) return;
+      e.preventDefault(); window._ymShowMsgMenu(o);
+    });
+  };
+
+  const byCopy = function(target){
+    const el = target && target.closest && target.closest('[data-copy]');
+    const t = el ? el.getAttribute('data-copy') : '';
+    return t ? { text: t } : null;
+  };
+  function bindAll(){
+    // YallaMart: Salin (teks) + Hapus (pesan sendiri) — menggantikan "tekan lama = langsung hapus"
+    window._ymAttachMsgMenu(document.getElementById('chatMessages'), function(target){
+      const b = target && target.closest && target.closest('.chat-msg-swipeable');
+      if (!b) return null;
+      const text = b.getAttribute('data-copy') || '';
+      const canDel = b.dataset.canDelete === '1' && b.dataset.msgId;
+      if (!text && !canDel) return null;
+      return { text: text, onDelete: canDel ? function(){ window.deleteChatMessage(b.dataset.msgId); } : null };
+    });
+    ['ycChatMessages', 'ycAdminChatMessages', 'yfChatMessages', 'ykChatMessages'].forEach(function(id){
+      window._ymAttachMsgMenu(document.getElementById(id), byCopy);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindAll); else bindAll();
 })();
 </script>
 </body>
