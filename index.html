@@ -24352,6 +24352,24 @@ async function _loadRiwayatPenjualan() {
       } catch (e) { console.warn('[riwayatPenjualan] gagal ambil nama pembeli:', e.message); }
     }
 
+    // ── Kolom "Terjual" menampilkan NAMA VARIAN (satu baris per varian + jumlah),
+    // bukan caption iklan. Caption hanya dipakai (dipendekkan) kalau varian tak diketahui.
+    const _rwEsc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const _rwShort = t => { const l = String(t || '').split('\n')[0]; return (window._ymShortTitle ? window._ymShortTitle(l, 40) : l.slice(0, 40)); };
+    const _rwHtml = arr => arr.map(x => '<div style="line-height:1.45">' + _rwEsc(x) + '</div>').join('');
+    // Teks varian pesanan YallaFood: "nama (ukuran) x 2<TAB>LE 20" per baris → "nama (ukuran) ×2"
+    const _rwFoodLines = txt => String(txt || '').split('\n').map(l => l.split('\t')[0].trim()).filter(Boolean).map(l => l.replace(/ x (\d+)$/, ' ×$1'));
+    // Pesanan YallaFood lama tanpa catatan varian → ambil nama varian dari iklannya (kalau iklan masih ada)
+    let _rwAdVar = {};
+    try {
+      const _ids = [...new Set((Array.isArray(foodOrders) ? foodOrders : []).filter(o => !o.variant && o.ad_id).map(o => String(o.ad_id)))]
+        .filter(id => /^[0-9a-f-]{36}$/i.test(id));
+      if (_ids.length) {
+        const _ar = await window._supaFetch('/rest/v1/ads?id=in.(' + _ids.join(',') + ')&select=id,var_name,size');
+        if (_ar.ok) (await _ar.json()).forEach(a => { if (a && a.var_name) _rwAdVar[String(a.id)] = a.var_name + (a.size ? ' (' + a.size + ')' : ''); });
+      }
+    } catch (e) { console.warn('[riwayatPenjualan] gagal ambil varian iklan:', e.message); }
+
     // Pecah setiap order jadi baris per item (varian barang)
     const rows = [];
     orders.forEach(o => {
@@ -24359,18 +24377,24 @@ async function _loadRiwayatPenjualan() {
       const items = Array.isArray(o.items) && o.items.length ? o.items : [{ name: o.ad_title || 'Produk', price: o.total || 0, qty: 1 }];
       items.forEach(it => {
         const itemTotal = (it.price != null && it.qty != null) ? (it.price * it.qty) : (o.total || 0);
+        const _lbl = String(it.variant || '').trim() || _rwShort(it.name || it.variant_name || o.ad_title || 'Produk');
         rows.push({
-          terjual: it.name || it.variant_name || o.ad_title || 'Produk',
-          pembeli: buyerName,
+          terjual: _rwHtml([_lbl + ' ×' + (it.qty || 1)]),
+          pembeli: _rwEsc(buyerName),
           total: itemTotal,
           created_at: o.created_at
         });
       });
     });
     (Array.isArray(foodOrders) ? foodOrders : []).forEach(o => {
+      let _fl = o.variant ? _rwFoodLines(o.variant) : [];
+      if (!_fl.length) {
+        const _av = _rwAdVar[String(o.ad_id || '')];
+        _fl = [(_av || _rwShort(o.ad_title || 'Menu YallaFood')) + ' ×' + (o.qty || 1)];
+      }
       rows.push({
-        terjual: o.ad_title || 'Menu YallaFood',
-        pembeli: o.buyer_name || 'Pembeli',
+        terjual: _rwHtml(_fl),
+        pembeli: _rwEsc(o.buyer_name || 'Pembeli'),
         total: o.total || 0,
         created_at: o.created_at
       });
@@ -24378,8 +24402,8 @@ async function _loadRiwayatPenjualan() {
     // Order YallaFood yang sudah dihapus permanen — income-nya tetap dari buku besar ledger.
     (Array.isArray(ledger) ? ledger : []).forEach(l => {
       rows.push({
-        terjual: l.ad_title || 'Menu YallaFood',
-        pembeli: l.buyer_name || 'Pembeli',
+        terjual: _rwHtml([_rwShort(l.ad_title || 'Menu YallaFood')]),
+        pembeli: _rwEsc(l.buyer_name || 'Pembeli'),
         total: l.total || 0,
         created_at: l.order_created_at || l.deleted_at
       });
@@ -26054,7 +26078,10 @@ async function _yfComputeAndShowSummary(ad, buyerLat, buyerLng) {
     totalQty = window._yfState.qty || 1;
     const unitPrice = _yfActivePrice();
     subtotal = unitPrice * totalQty;
-    itemLines = null;
+    // Menu satu varian (mis. "Original"): tetap catat nama variannya di pesanan,
+    // supaya Riwayat Penjualan & kartu pesanan menampilkan varian, bukan caption iklan.
+    const _yfVn = String((ad && ad.var_name) || '').trim();
+    itemLines = _yfVn ? `${_yfVn}${ad.size ? ' (' + ad.size + ')' : ''} x ${totalQty}\t${_yfFmtPrice(subtotal)}` : null;
     summaryRowsHtml = `<div class="flex justify-between"><span>${ad.title} x${totalQty}</span><span>${_yfFmtPrice(subtotal)}</span></div>`;
   }
   const total = subtotal + ongkir;
