@@ -7608,6 +7608,9 @@ function injectReviewBadges(containerEl) {
   });
 }
 
+// Isi ulasan (nama, komentar, judul) ditampilkan sebagai TEKS — cegah kode tersembunyi di ulasan
+window._rvEsc = function(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
+window._rvImg = function(u){ u = String(u || ''); return /^https?:\/\//i.test(u) ? window._rvEsc(u) : ''; };
 function _renderReviewItem(r) {
   const stars = [1,2,3,4,5].map(i=>`<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="${i<=r.rating?'#f59e0b':'#e5e7eb'}" stroke="${i<=r.rating?'#f59e0b':'#e5e7eb'}" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`).join('');
   const date = r.created_at ? new Date(r.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '';
@@ -7615,18 +7618,18 @@ function _renderReviewItem(r) {
   return `
     <div style="padding:10px 0">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        ${r.buyer_photo
-          ? `<img src="${r.buyer_photo}" loading="lazy" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.outerHTML=window.ymAvatarFallback('','width:32px;height:32px;flex-shrink:0')">`
+        ${window._rvImg(r.buyer_photo)
+          ? `<img src="${window._rvImg(r.buyer_photo)}" loading="lazy" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.outerHTML=window.ymAvatarFallback('','width:32px;height:32px;flex-shrink:0')">`
           : window.ymAvatarFallback('', 'width:32px;height:32px;flex-shrink:0')}
         <div style="flex:1;min-width:0">
-          <p data-buyer-uid="${r.buyer_uid||''}" style="font-size:12px;font-weight:600;color:#111827;margin:0">${r.buyer_name||'Pembeli'}</p>
+          <p data-buyer-uid="${window._rvEsc(r.buyer_uid||'')}" style="font-size:12px;font-weight:600;color:#111827;margin:0">${window._rvEsc(r.buyer_name||'Pembeli')}</p>
           <div style="display:flex;align-items:center;gap:4px">
             <div style="display:flex;gap:1px">${stars}</div>
             <span style="font-size:10px;color:#9ca3af">${date}</span>
           </div>
         </div>
       </div>
-      ${r.comment ? `<p style="font-size:13px;color:#374151;margin:0;line-height:1.5;padding-left:40px">${r.comment}</p>` : ''}
+      ${r.comment ? `<p style="font-size:13px;color:#374151;margin:0;line-height:1.5;padding-left:40px">${window._rvEsc(r.comment)}</p>` : ''}
     </div>`;
 }
 
@@ -7839,7 +7842,9 @@ window.openReviewFullScreen = async function(adId, adTitle, adImg, sellerUid) {
 
     // Render: pesanan belum diulas dulu, lalu ulasan sudah ditulis
     const pendingOrders = orders.filter(o => {
-      const _xid = o.ad_id||((o.items&&o.items[0]&&o.items[0].id)||'');
+      // ID item keranjang berbentuk "<adId>__<varian>" → ambil adId saja, supaya 1 produk = 1 ulasan
+      // (tidak terpecah per varian & tetap tampil di halaman produk).
+      const _xid = String(o.ad_id||((o.items&&o.items[0]&&o.items[0].id)||'')).split('__')[0];
       if(!_xid) return true;
       const _rv = reviewMap[_xid];
       if(!_rv) return true; // belum pernah diulas sama sekali
@@ -7851,7 +7856,7 @@ window.openReviewFullScreen = async function(adId, adTitle, adImg, sellerUid) {
     if(pendingOrders.length) {
       html += `<p style="font-size:12px;font-weight:700;color:#9ca3af;margin:0 0 4px;text-transform:uppercase;letter-spacing:.05em">Menunggu Ulasan</p>`;
       for(const o of pendingOrders) {
-        const _adId = o.ad_id||((o.items&&o.items[0]&&o.items[0].id)||'');
+        const _adId = String(o.ad_id||((o.items&&o.items[0]&&o.items[0].id)||'')).split('__')[0];
         const ad = (window._S.fbAds||[]).find(a=>a.id===_adId) || {};
         const img = o.ad_img || ad.imgUrl || ad.img || (o.items&&o.items[0]&&o.items[0].img)||'';
         const title = o.ad_title || ad.title || ad.name || (o.items&&o.items[0]&&o.items[0].name)||'Produk';
@@ -7873,14 +7878,14 @@ window.openReviewFullScreen = async function(adId, adTitle, adImg, sellerUid) {
         const timeStr = r.created_at ? new Date(r.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '';
         html += `<div style="background:#f9fafb;border-radius:16px;padding:14px">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-            ${r.ad_img ? `<img src="${r.ad_img}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0">` : ''}
+            ${window._rvImg(r.ad_img) ? `<img src="${window._rvImg(r.ad_img)}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0">` : ''}
             <div style="flex:1;min-width:0">
-              <p style="font-size:12px;font-weight:600;color:#374151;margin:0 0 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${r.ad_title||'Produk'}</p>
+              <p style="font-size:12px;font-weight:600;color:#374151;margin:0 0 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${window._rvEsc(r.ad_title||'Produk')}</p>
               <div style="display:flex;gap:2px">${stars}</div>
             </div>
             <span style="font-size:10px;color:#9ca3af;flex-shrink:0">${timeStr}</span>
           </div>
-          ${r.comment ? `<p style="font-size:13px;color:#374151;margin:0;line-height:1.5">${r.comment}</p>` : ''}
+          ${r.comment ? `<p style="font-size:13px;color:#374151;margin:0;line-height:1.5">${window._rvEsc(r.comment)}</p>` : ''}
         </div>`;
       }
     }
@@ -7922,9 +7927,9 @@ window.openReviewWrite = function(adId, adTitle, adImg, sellerUid, type) {
 
   // Tampilkan info produk
   document.getElementById('reviewWriteProduct').innerHTML = `
-    ${adImg ? `<img src="${adImg}" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0">` : ''}
+    ${window._rvImg(adImg) ? `<img src="${window._rvImg(adImg)}" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0">` : ''}
     <div style="flex:1;min-width:0">
-      <p style="font-size:13px;font-weight:700;color:#111827;margin:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${adTitle}</p>
+      <p style="font-size:13px;font-weight:700;color:#111827;margin:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${window._rvEsc(adTitle)}</p>
     </div>`;
 
   document.getElementById('reviewWriteScreen').style.display = 'flex';
@@ -17269,7 +17274,7 @@ async function loadShopsAdminData() {
 
   try {
     const order = window._shopsAdminSort === 'desc' ? 'created_at.desc' : 'created_at.asc';
-    const res = await window._supaFetch('/rest/v1/shops?select=id,user_id,nama_toko,email,wa_number,created_at,is_active,alamat,nasionalitas&order=' + order);
+    const res = await window._supaFetch('/rest/v1/shops?select=id,user_id,nama_toko,email,created_at,is_active,alamat,nasionalitas&order=' + order);
     if (!res.ok) throw new Error(await res.text());
     const shops = await res.json();
 
@@ -17285,13 +17290,20 @@ async function loadShopsAdminData() {
       }
     }
 
+    // Nomor WA TOKO (terpisah dari nomor akun) — hanya bisa dibaca admin lewat fungsi
+    let shopWaMap = {};
+    try {
+      const wRes = await window._supaFetch('/rest/v1/rpc/admin_shops_wa', { method: 'POST', body: '{}' });
+      if (wRes.ok) (await wRes.json()).forEach(r => { shopWaMap[r.user_id] = r.wa_number; });
+    } catch (e) {}
     window._shopsAdminData = shops.map(s => {
       const u = ownerMap[s.user_id] || {};
+      s = Object.assign({}, s, { wa_number: shopWaMap[s.user_id] || '' });
       return {
         ...s,
         owner_name: u.name || '—',
         email:      u.email || s.email || '',       // live dari users, fallback snapshot shops
-        wa_number:  u.phone || s.wa_number || ''     // live dari users, fallback snapshot shops
+        wa_number:  s.wa_number || u.phone || ''     // nomor WA toko; fallback nomor akun
       };
     });
     renderShopsAdminList();
@@ -17432,7 +17444,7 @@ window.toggleShopBlock = async function(shopId, currentlyActive) {
     // return=representation + verifikasi baris: kalau 0 baris (mis. RLS admin
     // belum ada / gagal senyap), JANGAN anggap sukses. Dulu return=minimal bikin
     // PATCH 0-baris tetap "sukses" → tombol balik ke Blokir saat re-fetch.
-    const res = await window._supaFetch('/rest/v1/shops?id=eq.' + shopId, {
+    const res = await window._supaFetch('/rest/v1/shops?id=eq.' + shopId + '&select=id,user_id,nama_toko,alamat,nasionalitas,email,is_active,created_at,jam_operasional,alamat_updated_at,lat,lng', {
       method: 'PATCH',
       prefer: 'return=representation',
       body: JSON.stringify({ is_active: willActivate })
@@ -19726,6 +19738,16 @@ function updateYcBadge(count) {
         onfocus="this.style.borderColor='#10B981';this.style.boxShadow='0 0 0 3px rgba(16,185,129,.1)'"
         onblur="this.style.borderColor='#e5e7eb';this.style.boxShadow='none'"></textarea>
     </div>
+    <!-- Nomor WhatsApp pengiriman (wajib, +kode negara) — hanya bisa dilihat kurir pesananmu -->
+    <div>
+      <p style="font-size:12px;font-weight:600;color:#374151;margin:0 0 8px">Nomor WhatsApp <span style="color:#DC2626">*</span></p>
+      <div style="display:flex;align-items:center;gap:10px;border:1.5px solid #e5e7eb;border-radius:14px;padding:0 14px;height:50px;background:#fff" id="alamatSayaWaBox">
+        <i class="fa-brands fa-whatsapp" style="color:#16A34A;font-size:18px"></i>
+        <input id="alamatSayaWa" type="tel" inputmode="tel" maxlength="20" placeholder="+20 1xx xxx xxxx  atau  +62 8xx xxxx xxxx"
+          style="flex:1;border:none;outline:none;background:transparent;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;font-weight:500;min-width:0"/>
+      </div>
+      <p style="font-size:11px;color:#6b7280;margin:6px 2px 0;line-height:1.45">Wajib diawali kode negara (misal +20 atau +62). Nomor ini hanya bisa dilihat kurir YallaFood yang mengantar pesananmu, untuk dihubungi kalau ada kendala pengiriman.</p>
+    </div>
     <!-- Tombol Simpan + Edit -->
     <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
       <button id="alamatSayaBtn" onclick="saveAlamatSaya()"
@@ -19985,8 +20007,12 @@ window.openAlamatSaya = async function() {
   var btn = document.getElementById('alamatSayaBtn');
   var editBtn = document.getElementById('alamatSayaEditBtn');
 
+  var waInput = document.getElementById('alamatSayaWa');
+  var waBox = document.getElementById('alamatSayaWaBox');
   // Default: state kosong/baru — aktifkan form
   input.readOnly = false; input.style.background = '#fff';
+  if(waInput){ waInput.readOnly = false; waInput.value = ''; }
+  if(waBox) waBox.style.background = '#fff';
   btn.disabled = false; btn.textContent = 'Simpan';
   btn.style.background = 'linear-gradient(135deg,#10B981,#059669)';
   btn.style.cursor = 'pointer'; btn.style.opacity = '1';
@@ -19996,10 +20022,15 @@ window.openAlamatSaya = async function() {
     var res = await window._supaFetch('/rest/v1/rpc/get_my_profile', { method: 'POST', body: '{}' });
     var data = await res.json();
     var existing = data && data[0] && data[0].address;
+    var existingWa = data && data[0] && data[0].delivery_wa;
     input.value = existing || '';
-    // Jika sudah ada alamat di DB → langsung set ke state "Tersimpan"
-    if(existing){
+    // Nomor WA: pakai yang tersimpan; kalau belum ada, isi saran dari nomor akun (01… → +20…)
+    if(waInput) waInput.value = existingWa || window._ymNormWa((data && data[0] && data[0].phone) || '') || '';
+    // Jika alamat DAN nomor WA sudah tersimpan → langsung set ke state "Tersimpan"
+    if(existing && existingWa){
       input.readOnly = true; input.style.background = '#f9fafb';
+      if(waInput) waInput.readOnly = true;
+      if(waBox) waBox.style.background = '#f9fafb';
       btn.disabled = true; btn.textContent = 'Tersimpan';
       btn.style.background = '#d1d5db'; btn.style.cursor = 'not-allowed'; btn.style.opacity = '0.7';
       if(editBtn) editBtn.style.display = 'flex';
@@ -20070,11 +20101,20 @@ window.saveAlamatSaya = async function() {
   var input = document.getElementById('alamatSayaInput');
   var alamat = (input.value||'').trim();
   if(!alamat){ showToast('Alamat tidak boleh kosong','red'); return; }
+  // Nomor WA wajib, diawali kode negara (+20 / +62 / …)
+  var waInput = document.getElementById('alamatSayaWa');
+  var waRaw = String((waInput && waInput.value) || '').replace(/[\s\-().]/g, '');
+  if(!waRaw){ showToast('Nomor WhatsApp wajib diisi','red'); if(waInput) waInput.focus(); return; }
+  if(!/^\+[1-9]\d{7,14}$/.test(waRaw)){ showToast('Nomor WhatsApp harus diawali kode negara, misal +20 atau +62','red'); if(waInput) waInput.focus(); return; }
 
   var btn = document.getElementById('alamatSayaBtn');
   var editBtn = document.getElementById('alamatSayaEditBtn');
   btn.disabled = true; btn.textContent = 'Menyimpan...';
   try {
+    var waRes = await window._supaFetch('/rest/v1/rpc/set_my_delivery_wa', { method: 'POST', body: JSON.stringify({ p_wa: waRaw }) });
+    if(!waRes.ok){ var waErr = await waRes.text(); throw new Error(waErr.indexOf('WA_FORMAT') >= 0 ? 'Format nomor WhatsApp salah' : 'Gagal menyimpan nomor WhatsApp'); }
+    if(waInput){ waInput.value = waRaw; waInput.readOnly = true; }
+    var waBox = document.getElementById('alamatSayaWaBox'); if(waBox) waBox.style.background = '#f9fafb';
     var res = await window._supaFetch('/rest/v1/users?uid=eq.'+u.uid, {
       method: 'PATCH',
       headers: {'Prefer': 'return=minimal'},
@@ -20090,6 +20130,8 @@ window.saveAlamatSaya = async function() {
   } catch(e) {
     showToast('Gagal: '+(e.message||String(e)||'Error tidak diketahui'),'red');
     btn.disabled = false; btn.textContent = 'Simpan';
+    if(waInput) waInput.readOnly = false;
+    var _waBoxE = document.getElementById('alamatSayaWaBox'); if(_waBoxE) _waBoxE.style.background = '#fff';
   }
 };
 
@@ -20103,7 +20145,19 @@ window.editAlamatSaya = function() {
   btn.style.background = 'linear-gradient(135deg,#10B981,#059669)';
   btn.style.cursor = 'pointer'; btn.style.opacity = '1';
   if(editBtn) editBtn.style.display = 'none';
+  var waInput = document.getElementById('alamatSayaWa'); if(waInput) waInput.readOnly = false;
+  var waBox = document.getElementById('alamatSayaWaBox'); if(waBox) waBox.style.background = '#fff';
   input.focus();
+};
+
+// Nomor WA → format internasional (+kode negara). 01xxxxxxxxx (Mesir) → +20…; selain itu wajib diawali '+'.
+window._ymNormWa = function(p) {
+  var s = String(p || '').replace(/[\s\-().]/g, '');
+  if (/^\+[1-9]\d{7,14}$/.test(s)) return s;
+  var d = s.replace(/\D/g, '');
+  if (/^01\d{9}$/.test(d)) return '+20' + d.slice(1);
+  if (/^201\d{9}$/.test(d)) return '+' + d;
+  return '';
 };
 
 
@@ -22316,54 +22370,10 @@ window.updateOrderStatus = async function(newStatus, chatId, buyerId, msgId, own
       }).catch(function(){});
     }
 
-    // Jika status selesai → increment sold di tabel ads
+    // Status selesai → 'Terjual' bertambah & STOK berkurang otomatis oleh trigger DB
+    // (increment_sold_on_selesai → ym_apply_sale). Dulu aplikasi juga menambah 'Terjual'
+    // sendiri → terhitung DUA KALI. Sekarang cukup bersihkan cache supaya angka baru tampil.
     if(newStatus === 'selesai') {
-      try {
-        // Coba ambil order via msg_id dulu, fallback ke chat_id jika gagal
-        var _oUrl = msgId
-          ? '/rest/v1/orders?msg_id=eq.'+encodeURIComponent(String(msgId))+'&select=ad_id,product_id,qty'
-          : '/rest/v1/orders?chat_id=eq.'+encodeURIComponent(chatId)+'&buyer_id=eq.'+encodeURIComponent(buyerId)+'&select=ad_id,product_id,qty';
-        var _oRes = await window._supaFetch(_oUrl);
-        var _orders = _oRes.ok ? await _oRes.json() : [];
-
-        // Fallback: jika msg_id tidak return hasil, coba via chat_id
-        if((!_orders || !_orders.length) && msgId && chatId) {
-          var _oRes2 = await window._supaFetch(
-            '/rest/v1/orders?chat_id=eq.'+encodeURIComponent(chatId)+'&buyer_id=eq.'+encodeURIComponent(buyerId)+'&select=ad_id,product_id,qty'
-          );
-          _orders = _oRes2.ok ? await _oRes2.json() : [];
-        }
-
-        console.log('[sold increment] orders found:', _orders);
-
-        for(var _o of (_orders||[])) {
-          var _adId = _o.ad_id || _o.product_id;
-          if(!_adId) { console.warn('[sold increment] no ad_id in order', _o); continue; }
-          var _qty = parseInt(_o.qty)||1;
-
-          // Ambil nilai sold saat ini (null-safe)
-          var _adRes = await window._supaFetch('/rest/v1/ads?id=eq.'+_adId+'&select=id,sold');
-          if(!_adRes.ok) { console.warn('[sold increment] gagal fetch ads'); continue; }
-          var _adData = await _adRes.json();
-          if(!_adData || !_adData.length) { console.warn('[sold increment] ads tidak ditemukan:', _adId); continue; }
-          var _curSold = parseInt(_adData[0].sold)||0;
-          var _newSold = _curSold + _qty;
-
-          console.log('[sold increment] ad:', _adId, 'sold:', _curSold, 'plus qty', _qty, 'equals', _newSold);
-
-          var _patchRes = await window._supaFetch('/rest/v1/ads?id=eq.'+_adId, {
-            method: 'PATCH',
-            prefer: 'return=minimal',
-            body: JSON.stringify({ sold: _newSold })
-          });
-          if(!_patchRes.ok) {
-            var _pErr = await _patchRes.text();
-            console.warn('[sold increment] PATCH gagal:', _pErr);
-          } else {
-            console.log('[sold increment] berhasil update sold =', _newSold);
-          }
-        }
-      } catch(_se) { console.warn('[sold increment] error:', _se.message); }
       // Trigger DB sudah nambah sold & kurangi stok. Hapus cache ads (IndexedDB + KV)
       // supaya Terjual/Stok di Beranda ikut sinkron — sama seperti pesanan YallaFood
       // yang selesai (lihat yfAdvanceOrderStatus), tidak nunggu TTL cache 10 menit habis.
@@ -23788,6 +23798,18 @@ window.clearRecentlyViewed = async function() {
               <div style="text-align:right;margin-top:4px;"><span id="dtEditAlamatCounter" style="font-size:10.5px;color:#9ca3af;font-weight:600;">0/80</span></div>
             </div>
 
+            <!-- Nomor WhatsApp toko (editable, wajib +kode negara) -->
+            <div class="dt-field">
+              <div class="dt-label">Nomor WhatsApp Toko <span class="req">*</span></div>
+              <p style="font-size:10.5px;color:#9ca3af;font-weight:500;margin:-3px 0 7px;line-height:1.4;">Wajib diawali kode negara (misal +20 atau +62). Hanya kurir YallaFood pesanan tokomu yang bisa menghubunginya.</p>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input id="dtEditWa" class="dt-input" type="tel" inputmode="tel" maxlength="20" placeholder="+20 1xx xxx xxxx" style="flex:1;min-width:0"
+                  onfocus="this.style.borderColor='#10B981';this.style.boxShadow='0 0 0 3px rgba(16,185,129,.12)'"
+                  onblur="this.style.borderColor='#e5e7eb';this.style.boxShadow='none'"/>
+                <button type="button" id="dtEditWaBtn" onclick="saveShopWa()" style="flex-shrink:0;height:44px;padding:0 14px;border:none;border-radius:12px;background:#10B981;color:#fff;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit">Simpan</button>
+              </div>
+            </div>
+
           </div>
           <button id="dtEditCancelBtn" onclick="closeEditDataToko()" type="button" style="width:100%;background:#fff;color:#6b7280;border:1.5px solid #e5e7eb;border-radius:14px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans', sans-serif;margin-bottom:8px;">
             Batal
@@ -23876,9 +23898,13 @@ window.clearRecentlyViewed = async function() {
           <div class="dt-field">
             <div class="dt-label">
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.38 2 2 0 0 1 3.62 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.84a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-              Nomor WhatsApp <span class="opt">otomatis</span>
+              Nomor WhatsApp Toko <span class="req">*</span>
             </div>
-            <div class="dt-readonly-row">
+            <p style="font-size:10.5px;color:#9ca3af;font-weight:500;margin:-3px 0 7px;line-height:1.4;">Wajib diawali kode negara (misal +20 atau +62). Hanya kurir YallaFood yang mengambil pesanan di tokomu yang bisa menghubungi nomor ini.</p>
+            <input id="dtWaInput" class="dt-input" type="tel" inputmode="tel" maxlength="20" placeholder="+20 1xx xxx xxxx"
+              onfocus="this.style.borderColor='#10B981';this.style.boxShadow='0 0 0 3px rgba(16,185,129,.12)'"
+              onblur="this.style.borderColor='#e5e7eb';this.style.boxShadow='none'"/>
+            <div class="dt-readonly-row" style="display:none">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.38 2 2 0 0 1 3.62 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.84a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
               <div>
                 <div class="dt-readonly-val" id="dtWaDisplay">—</div>
@@ -23921,6 +23947,7 @@ window.openDaftarToko = async function() {
   // Pre-fill dari profil
   document.getElementById('dtEmail').value       = u.email || '';
   document.getElementById('dtWa').value          = u.phone || '';
+  { const _wi = document.getElementById('dtWaInput'); if (_wi) _wi.value = (window._ymNormWa ? window._ymNormWa(u.phone || '') : '') || ''; }
   document.getElementById('dtNamaToko').value    = u.name  || '';
   document.getElementById('dtEmailDisplay').textContent = u.email || '—';
   document.getElementById('dtWaDisplay').textContent    = u.phone || '—';
@@ -23928,7 +23955,7 @@ window.openDaftarToko = async function() {
 
   // Cek apakah sudah punya toko
   try {
-    const res = await window._supaFetch('/rest/v1/shops?user_id=eq.' + u.uid + '&select=*&limit=1');
+    const res = await window._supaFetch('/rest/v1/shops?user_id=eq.' + u.uid + '&select=id,user_id,nama_toko,alamat,nasionalitas,email,is_active,created_at,jam_operasional,alamat_updated_at,lat,lng&limit=1');
     if (res.ok) {
       const rows = await res.json();
       if (rows && rows.length > 0) {
@@ -23966,7 +23993,7 @@ window.openEditDataToko = async function() {
     const u = window._S && window._S.user;
     if (!u) { showToast('Login dulu', 'red'); return; }
     try {
-      const res = await window._supaFetch('/rest/v1/shops?user_id=eq.' + u.uid + '&select=*&limit=1');
+      const res = await window._supaFetch('/rest/v1/shops?user_id=eq.' + u.uid + '&select=id,user_id,nama_toko,alamat,nasionalitas,email,is_active,created_at,jam_operasional,alamat_updated_at,lat,lng&limit=1');
       if (res.ok) {
         const rows = await res.json();
         if (rows && rows.length > 0) {
@@ -23982,6 +24009,14 @@ window.openEditDataToko = async function() {
   document.getElementById('dtEditNamaTokoVal').textContent     = shop.nama_toko || '—';
   document.getElementById('dtEditNasionalitasVal').textContent = shop.nasionalitas || '—';
   document.getElementById('dtEditAlamat').value                = shop.alamat || '';
+  { const _ew = document.getElementById('dtEditWa');
+    if (_ew) {
+      _ew.value = '';
+      window._supaFetch('/rest/v1/rpc/get_my_shop_wa', { method: 'POST', body: '{}' })
+        .then(r => r.ok ? r.json() : null)
+        .then(w => { if (_ew && !_ew.value) _ew.value = (window._ymNormWa ? window._ymNormWa(w || '') : '') || (w || ''); })
+        .catch(function () {});
+    } }
   window._updateAlamatCounter('dtEditAlamat','dtEditAlamatCounter');
 
   // Cek cooldown 14 hari untuk tombol Perbarui Alamat
@@ -24074,6 +24109,28 @@ window.updateDataToko = async function() {
   }
 };
 
+// Simpan nomor WA toko (Edit Toko) — terpisah dari pembaruan alamat
+window.saveShopWa = async function() {
+  const u = window._S && window._S.user; if (!u) { showToast('Login dulu', 'red'); return; }
+  const inp = document.getElementById('dtEditWa');
+  const wa = String((inp && inp.value) || '').replace(/[\s\-().]/g, '');
+  if (!wa) { showToast('Nomor WhatsApp toko wajib diisi', 'red'); return; }
+  if (!/^\+[1-9]\d{7,14}$/.test(wa)) { showToast('Nomor WhatsApp toko harus diawali kode negara, misal +20 atau +62', 'red'); return; }
+  const btn = document.getElementById('dtEditWaBtn'); if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  try {
+    const r = await window._supaFetch('/rest/v1/shops?user_id=eq.' + encodeURIComponent(u.uid) + '&select=id', {
+      method: 'PATCH', prefer: 'return=representation', body: JSON.stringify({ wa_number: wa })
+    });
+    const rows = r.ok ? await r.json().catch(() => []) : [];
+    if (!rows.length) throw new Error('tidak tersimpan');
+    if (inp) inp.value = wa;
+    if (window._shopCache) window._shopCache.wa_number = wa;
+    showToast('✅ Nomor WhatsApp toko disimpan', 'green');
+  } catch (e) {
+    showToast('Gagal menyimpan nomor WhatsApp toko', 'red');
+  } finally { if (btn) { btn.disabled = false; btn.textContent = 'Simpan'; } }
+};
+
 window.closeDaftarToko = function() {
   const ov = document.getElementById('daftarTokoOverlay');
   ov.style.opacity = '0';
@@ -24097,6 +24154,9 @@ window.submitDaftarToko = async function() {
   if (!namaToko)     { showToast('Nama toko wajib diisi', 'red'); return; }
   if (!alamat)       { showToast('Alamat toko wajib diisi', 'red'); return; }
   if (!nasionalitas) { showToast('Pilih kewarganegaraan', 'red'); return; }
+  const _dtWa = String((document.getElementById('dtWaInput') || {}).value || '').replace(/[\s\-().]/g, '');
+  if (!_dtWa) { showToast('Nomor WhatsApp toko wajib diisi', 'red'); return; }
+  if (!/^\+[1-9]\d{7,14}$/.test(_dtWa)) { showToast('Nomor WhatsApp toko harus diawali kode negara, misal +20 atau +62', 'red'); return; }
 
   const btn = document.getElementById('dtSubmitBtn');
   btn.disabled = true;
@@ -24109,12 +24169,12 @@ window.submitDaftarToko = async function() {
       alamat:       alamat,
       nasionalitas: nasionalitas,
       email:        u.email || '',
-      wa_number:    u.phone || '',
+      wa_number:    _dtWa,
       created_at:   new Date().toISOString(),
       is_active:    true
     };
 
-    const res = await window._supaFetch('/rest/v1/shops', {
+    const res = await window._supaFetch('/rest/v1/shops?select=id,user_id,nama_toko,alamat,nasionalitas,email,is_active,created_at,jam_operasional,alamat_updated_at,lat,lng', {
       method: 'POST',
       prefer: 'return=representation',
       body: JSON.stringify(payload)
@@ -25256,9 +25316,49 @@ function _yfBuyerAddressBlock(o) {
           <div ${mapAttr}>
             <i class="fa-solid fa-location-dot" style="color:${color};font-size:13px;margin-top:2px;flex-shrink:0"></i>
             <p style="font-size:12px;font-weight:600;color:${color};line-height:1.5;margin:0;word-break:break-word;min-width:0">Alamat Pembeli: ${_sadEscHtml(o.buyer_address)}</p>
-          </div>
+          </div>${_yfBuyerWaBtn(o)}
         </div>`;
 }
+
+// Tombol WhatsApp pembeli — HANYA untuk kurir yang mengambil pesanan ini & selama pesanan berjalan.
+// Nomornya tidak ada di data kartu; diambil saat ditekan lewat fungsi DB yf_get_buyer_wa
+// (database ikut memeriksa: kurir pesanan itu + status diterima/dimasak/dijemput/menuju).
+function _yfBuyerWaBtn(o) {
+  const me = window._S && window._S.user && window._S.user.uid;
+  if (!me || !o || o.courier_id !== me) return '';
+  if (['diterima', 'dimasak', 'dijemput', 'menuju'].indexOf(o.status) < 0) return '';
+  return `
+          <button type="button" onclick="event.stopPropagation();_yfOpenBuyerWa('${String(o.id).replace(/[^0-9a-f-]/gi, '')}')"
+            style="margin-top:8px;display:inline-flex;align-items:center;gap:7px;background:#DCFCE7;color:#15803D;border:none;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+            <i class="fa-brands fa-whatsapp" style="font-size:16px"></i>WhatsApp Pembeli
+          </button>
+          <button type="button" onclick="event.stopPropagation();_yfOpenSellerWa('${String(o.id).replace(/[^0-9a-f-]/gi, '')}')"
+            style="margin-top:8px;margin-left:6px;display:inline-flex;align-items:center;gap:7px;background:#FEF3C7;color:#B45309;border:none;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+            <i class="fa-brands fa-whatsapp" style="font-size:16px"></i>WhatsApp Mat'am
+          </button>`;
+}
+window._yfOpenSellerWa = async function (orderId) {
+  try {
+    const r = await window._supaFetch('/rest/v1/rpc/yf_get_seller_wa', { method: 'POST', body: JSON.stringify({ p_order: orderId }) });
+    const wa = r.ok ? await r.json() : null;
+    const digits = String(wa || '').replace(/\D/g, '');
+    if (!digits) { showToast("Nomor WhatsApp Mat'am belum tersedia", 'red'); return; }
+    window.open('https://wa.me/' + digits, '_blank', 'noopener');
+  } catch (e) {
+    showToast('Gagal membuka WhatsApp, coba lagi', 'red');
+  }
+};
+window._yfOpenBuyerWa = async function (orderId) {
+  try {
+    const r = await window._supaFetch('/rest/v1/rpc/yf_get_buyer_wa', { method: 'POST', body: JSON.stringify({ p_order: orderId }) });
+    const wa = r.ok ? await r.json() : null;
+    const digits = String(wa || '').replace(/\D/g, '');
+    if (!digits) { showToast('Nomor WhatsApp pembeli belum tersedia', 'red'); return; }
+    window.open('https://wa.me/' + digits, '_blank', 'noopener');
+  } catch (e) {
+    showToast('Gagal membuka WhatsApp, coba lagi', 'red');
+  }
+};
 
 // Ambil lokasi mat'am (resto) untuk sejumlah seller_id sekaligus — satu query ke tabel
 // shops (public read, sama seperti fitur mat'am terdekat). Balikin map: seller_id → {alamat,lat,lng,nama}.
@@ -25845,10 +25945,10 @@ async function _yfLoadFoodReviews(adId) {
       return `
       <div>
         <div class="flex items-center gap-2">
-          <p class="text-xs font-semibold text-gray-700">${rv.buyer_name || 'Pembeli'}</p>
+          <p class="text-xs font-semibold text-gray-700">${window._rvEsc(rv.buyer_name || 'Pembeli')}</p>
           <div class="flex gap-0.5">${stars}</div>
         </div>
-        ${rv.comment ? `<p class="text-xs text-gray-500 mt-1">${rv.comment}</p>` : ''}
+        ${rv.comment ? `<p class="text-xs text-gray-500 mt-1">${window._rvEsc(rv.comment)}</p>` : ''}
       </div>`;
     }).join('') + `</div>`;
     // Default: tampil 1 ulasan. Kalau ada >=2 ulasan → tombol "Lihat Semua" (pojok
@@ -26190,6 +26290,12 @@ window.yfSubmitFoodOrder = async function() {
     _buyerAddress = (_addrData && _addrData[0] && _addrData[0].address || '').trim();
     if (!_buyerAddress) {
       showAddressWarningToast();
+      setTimeout(function () { openAlamatSaya(); }, 1000);
+      return;
+    }
+    // Nomor WhatsApp pengiriman wajib (cadangan kalau kurir perlu menghubungi pembeli)
+    if (!String((_addrData && _addrData[0] && _addrData[0].delivery_wa) || '').trim()) {
+      showToast('Lengkapi nomor WhatsApp di Alamat Saya dulu ya', 'red');
       setTimeout(function () { openAlamatSaya(); }, 1000);
       return;
     }
