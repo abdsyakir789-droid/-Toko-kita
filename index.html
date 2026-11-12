@@ -18665,6 +18665,10 @@ document.getElementById('editIsYallaFood')?.addEventListener('change', function(
 <script>
 // ── YallaCare User — Chat Interface ──
 let _ycImgFile = null;
+// Tampilkan isi pesan/nama sebagai TEKS biasa (bukan kode HTML) — mencegah kode tersembunyi
+// di pesan YallaCare ikut berjalan di layar admin/user.
+function _ycEsc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function _ycSafeImg(u){ u = String(u || ''); return /^https:\/\//i.test(u) ? _ycEsc(u) : ''; }
 
 let _ycUserChannel = null;
 
@@ -18784,12 +18788,12 @@ async function ycLoadMessages(force) {
       const time = t.created_at ? new Date(t.created_at).toLocaleTimeString('id',{hour:'2-digit',minute:'2-digit'}) : '';
       return `
         <div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};gap:2px">
-          ${t.image_url ? `<img src="${t.image_url}" style="max-width:200px;border-radius:12px;margin-bottom:4px"/>` : ''}
-          ${t.message ? `<div style="background:${isMe?'#10B981':'#fff'};color:${isMe?'#fff':'#111827'};padding:9px 13px;border-radius:${isMe?'16px 4px 16px 16px':'4px 16px 16px 16px'};font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${t.message}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>` : ''}
+          ${_ycSafeImg(t.image_url) ? `<img src="${_ycSafeImg(t.image_url)}" style="max-width:200px;border-radius:12px;margin-bottom:4px"/>` : ''}
+          ${(t.message && !(t.image_url && t.message==='📷 Foto')) ? `<div style="background:${isMe?'#10B981':'#fff'};color:${isMe?'#fff':'#111827'};padding:9px 13px;border-radius:${isMe?'16px 4px 16px 16px':'4px 16px 16px 16px'};font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.message)}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>` : ''}
           ${t.admin_reply ? `
           <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;margin-top:4px">
             <p style="font-size:10px;color:rgba(255,255,255,.6);margin:0 0 2px 4px">${t.replier==='bot' ? '🤖 YallaBot' : 'YallaCare Admin'}</p>
-            <div style="background:${t.replier==='bot'?'#ecfdf5':'#fff'};color:#111827;padding:9px 13px;border-radius:4px 16px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${t.admin_reply}${time?`<span class="msg-time-inline-left">${time}</span>`:''}</div>
+            <div style="background:${t.replier==='bot'?'#ecfdf5':'#fff'};color:#111827;padding:9px 13px;border-radius:4px 16px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.admin_reply)}${time?`<span class="msg-time-inline-left">${time}</span>`:''}</div>
           </div>` : ''}
         </div>`;
     }).join('');
@@ -18807,17 +18811,22 @@ window.ycSendChat = async function() {
   input.style.height = 'auto';
   let imageUrl = null;
   if(_ycImgFile){
+    // Folder khusus 'yallacare' (dulu ikut folder 'ads' → ikut dibuatkan thumbnail iklan).
     try {
       showToast('Mengupload foto...','green');
-      const res = await uploadToR2(_ycImgFile, ()=>{});
+      const res = await window.uploadToR2(_ycImgFile, null, 'yallacare');
       imageUrl = res?.secure_url || null;
       if(!imageUrl) showToast('Foto gagal upload','red');
-    } catch(e){ showToast('Error upload: '+e.message,'red'); }
+    } catch(e){
+      if((e.message||'').includes('EXPLICIT_CONTENT') && window.showExplicitContentModal) window.showExplicitContentModal();
+      else showToast('Foto gagal upload: '+e.message,'red');
+    }
     ycRemoveImage();
+    if(!imageUrl && !msg) return; // foto gagal & tanpa teks → jangan kirim pesan kosong
   }
   const r = await window._supaFetch('/rest/v1/yallacare_tickets',{
     method:'POST', prefer:'return=representation',
-    body: JSON.stringify({ user_id:u.uid, user_name:u.name||u.email||'', user_email:u.email||'', message:msg||'', image_url:imageUrl, status:'pending', created_at:new Date().toISOString() })
+    body: JSON.stringify({ user_id:u.uid, user_name:u.name||u.email||'', user_email:u.email||'', message:msg||(imageUrl?'📷 Foto':''), image_url:imageUrl, status:'pending', created_at:new Date().toISOString() })
   });
   if(!r.ok){ showToast('Gagal kirim pesan','red'); return; }
   // Notif layar HP ke admin (fire-and-forget): judul = nama akun pengirim
@@ -19211,25 +19220,25 @@ function renderYcUserList() {
     const date = t.created_at ? (typeof _yfTimeAgo === 'function' ? _yfTimeAgo(t.created_at) : new Date(t.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit'})) : '';
     const unread = countUnreplied(uid);
     const showBadge = unread > 0;
-    const safeName = name.replace(/'/g,'').replace(/"/g,'');
+    const safeName = _ycEsc(name.replace(/['"\\]/g,''));
     const photoUrl = _ycProfileCache[uid] || '';
     const avatarHtml = photoUrl
-      ? `<img src="${photoUrl}" alt="${initial}" loading="lazy"
+      ? `<img src="${_ycSafeImg(photoUrl)}" alt="${_ycEsc(initial)}" loading="lazy"
            style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0"
            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
          />${window.ymAvatarFallback('', 'width:48px;height:48px;flex-shrink:0;display:none')}`
       : window.ymAvatarFallback('', 'width:48px;height:48px;flex-shrink:0');
-    return `<div onclick="openYcAdminChat('${uid}','${safeName}')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #f3f4f6;cursor:pointer;background:${showBadge?'#f0fdf4':'#fff'}" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='${showBadge?'#f0fdf4':'#fff'}'">
+    return `<div onclick="openYcAdminChat('${_ycEsc(String(uid).replace(/['"\\]/g,''))}','${safeName}')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #f3f4f6;cursor:pointer;background:${showBadge?'#f0fdf4':'#fff'}" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='${showBadge?'#f0fdf4':'#fff'}'">
       <div style="position:relative;flex-shrink:0;display:flex;align-items:center;justify-content:center">${avatarHtml}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <p style="font-size:14px;font-weight:${showBadge?'800':'600'};color:#111827;margin:0">${name}</p>
+          <p style="font-size:14px;font-weight:${showBadge?'800':'600'};color:#111827;margin:0">${_ycEsc(name)}</p>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
             <p style="font-size:11px;color:#9ca3af;margin:0">${date}</p>
             ${showBadge ? `<div style="min-width:20px;height:20px;border-radius:10px;background:#10B981;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px">${unread>99?'99+':unread}</div>` : ''}
           </div>
         </div>
-        <p style="font-size:12px;color:${showBadge?'#111827':'#6b7280'};font-weight:${showBadge?'600':'400'};margin:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${preview}</p>
+        <p style="font-size:12px;color:${showBadge?'#111827':'#6b7280'};font-weight:${showBadge?'600':'400'};margin:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_ycEsc(preview)}</p>
       </div>
     </div>`;
   }).join('');
@@ -19248,7 +19257,7 @@ window.openYcAdminChat = async function(userId, userName) {
   updateYcBadge();
   renderYcUserList();
   const header = document.getElementById('ycAdminChatHeader');
-  if(header) header.innerHTML = `<p style="color:#fff;font-weight:900;font-size:16px;margin:0">${userName}</p><p style="color:rgba(255,255,255,.8);font-size:11px;margin:0">YallaCare</p>`;
+  if(header) header.innerHTML = `<p style="color:#fff;font-weight:900;font-size:16px;margin:0">${_ycEsc(userName)}</p><p style="color:rgba(255,255,255,.8);font-size:11px;margin:0">YallaCare</p>`;
   document.getElementById('ycAdminChatOverlay').style.display = 'flex';
   renderYcAdminChat(userId);
 };
@@ -19265,18 +19274,18 @@ function renderYcAdminChat(userId) {
       // Baris balasan admin murni
       return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
         <p style="font-size:10px;color:rgba(255,255,255,.6);margin:0 0 2px 0">${t.replier==='bot'?'🤖 YallaBot':'Admin'}</p>
-        <div style="background:#10B981;color:#fff;padding:9px 13px;border-radius:16px 4px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${t.admin_reply}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>
+        <div style="background:#10B981;color:#fff;padding:9px 13px;border-radius:16px 4px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.admin_reply)}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>
       </div>`;
     }
     return `
       <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
-        ${t.image_url ? `<img src="${t.image_url}" style="max-width:200px;border-radius:12px;margin-bottom:4px"/>` : ''}
-        ${t.message ? `<div style="background:#fff;color:#111827;padding:9px 13px;border-radius:4px 16px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${t.message}${time?`<span class="msg-time-inline-left">${time}</span>`:''}</div>` : ''}
+        ${_ycSafeImg(t.image_url) ? `<img src="${_ycSafeImg(t.image_url)}" style="max-width:200px;border-radius:12px;margin-bottom:4px"/>` : ''}
+        ${(t.message && !(t.image_url && t.message==='📷 Foto')) ? `<div style="background:#fff;color:#111827;padding:9px 13px;border-radius:4px 16px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.message)}${time?`<span class="msg-time-inline-left">${time}</span>`:''}</div>` : ''}
       </div>
       ${t.admin_reply ? `
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
         <p style="font-size:10px;color:rgba(255,255,255,.6);margin:0 0 2px 0">${t.replier==='bot'?'🤖 YallaBot':'Admin'}</p>
-        <div style="background:#10B981;color:#fff;padding:9px 13px;border-radius:16px 4px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${t.admin_reply}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>
+        <div style="background:#10B981;color:#fff;padding:9px 13px;border-radius:16px 4px 16px 16px;font-size:13px;max-width:80%;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)">${_ycEsc(t.admin_reply)}${time?`<span class="msg-time-inline">${time}</span>`:''}</div>
       </div>` : ''}`;
   }).join('');
   box.scrollTop = box.scrollHeight;
