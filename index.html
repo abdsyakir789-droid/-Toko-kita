@@ -11189,7 +11189,7 @@ function _ymRenderReports() {
   var el = document.getElementById('ymRepList');
   if (!list.length) { el.innerHTML = '<p style="text-align:center;color:#9ca3af;font-size:13px;padding:40px 20px">Tidak ada laporan di sini.</p>'; return; }
   var stLabel = { baru: ['Baru', '#fef2f2', '#dc2626'], ditinjau: ['Ditinjau', '#fffbeb', '#b45309'], selesai: ['Selesai', '#ecfdf5', '#047857'], diabaikan: ['Diabaikan', '#f3f4f6', '#6b7280'] };
-  var ctxLabel = { toko: 'dari halaman toko', chat: 'dari chat', sistem: 'otomatis oleh sistem' };
+  var ctxLabel = { toko: 'dari halaman toko', chat: 'dari chat', sistem: 'otomatis oleh sistem', kurir: 'kurir YallaFood (lacak kurir)' };
   var av = function (src) { return src ? '<img src="' + _ymEsc(src) + '" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:34px;height:34px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-user" style="color:#9ca3af;font-size:13px"></i></div>'; };
   el.innerHTML = list.map(function (x) {
     var st = stLabel[x.status] || stLabel.baru;
@@ -26442,9 +26442,10 @@ window._yfOpenKurirProfile = async function(kurirId, orderId, courierName, chatT
   // otomatis bertambah begitu status pesanan diubah jadi Selesai, tanpa perlu
   // counter terpisah yang bisa 'nyasar'/tidak sinkron.
   try {
-    const cRes = await window._supaFetch(`/rest/v1/food_orders?courier_id=eq.${encodeURIComponent(kurirId)}&status=eq.selesai&select=id`);
-    const cRows = cRes.ok ? await cRes.json() : [];
-    document.getElementById('yfKurirProfileDeliveries').textContent = String(cRows.length);
+    // Pakai fungsi DB (hanya jumlah) — pembeli tak boleh membaca pesanan orang lain, jadi hitung langsung selalu 0
+    const cRes = await window._supaFetch('/rest/v1/rpc/yf_courier_delivery_count', { method: 'POST', body: JSON.stringify({ p_uid: kurirId }) });
+    const cNum = cRes.ok ? Number(await cRes.json()) || 0 : 0;
+    document.getElementById('yfKurirProfileDeliveries').textContent = String(cNum);
   } catch (e) {}
 
   // Rating kurir: dihitung dari reviews (seller_uid dipakai sbg id kurir
@@ -26477,7 +26478,12 @@ function _yfSubscribeBuyerRealtime() {
   if (!uid || !window.supabase) return;
   if (_yfBuyerChannel) { try { window.supabase.removeChannel(_yfBuyerChannel); } catch (e) {} }
   _yfBuyerChannel = window.supabase.channel('food_orders_buyer_' + uid)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_orders', filter: `buyer_id=eq.${uid}` }, () => { _yfLoadTracking(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_orders', filter: `buyer_id=eq.${uid}` }, (p) => {
+      if (p && p.new && window._yfBuyerOrdersById && window._yfBuyerOrdersById[p.new.id]) Object.assign(window._yfBuyerOrdersById[p.new.id], { courier_lat: p.new.courier_lat, courier_lng: p.new.courier_lng, courier_loc_at: p.new.courier_loc_at });
+      if (window._yfTrackLastLoc && p && p.new) window._yfTrackLastLoc(p.new);
+      if (window._yfLocOnlyChange(p, window._yfBuyerSig || (window._yfBuyerSig = {}))) return;
+      _yfLoadTracking();
+    })
     .subscribe();
 }
 
@@ -26721,7 +26727,10 @@ function _yfSubscribeSellerRealtime() {
   if (!uid || !window.supabase) return;
   if (_yfSellerChannel) { try { window.supabase.removeChannel(_yfSellerChannel); } catch (e) {} }
   _yfSellerChannel = window.supabase.channel('food_orders_seller_' + uid)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_orders', filter: `seller_id=eq.${uid}` }, () => { _yfLoadKelolaPesanan(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_orders', filter: `seller_id=eq.${uid}` }, (p) => {
+      if (window._yfLocOnlyChange(p, window._yfSellerSig || (window._yfSellerSig = {}))) return;
+      _yfLoadKelolaPesanan();
+    })
     .subscribe();
 }
 </script>
@@ -32495,6 +32504,17 @@ document.addEventListener('DOMContentLoaded', () => {
   #yfTrackPanel .yf-tp-btn { width: 42px; height: 42px; border-radius: 50%; background: #fff; border: none; box-shadow: 0 2px 10px rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; cursor: pointer }
 </style>
 <script>
+// Update food_orders yang hanya mengubah posisi terakhir kurir (courier_lat/lng/loc_at)
+// tidak perlu memuat ulang daftar pesanan. sigMap menyimpan "sidik" baris tanpa kolom posisi.
+window._yfLocOnlyChange = function (payload, sigMap) {
+  try {
+    const n = payload && payload.new; if (!n || !n.id) return false;
+    const c = Object.assign({}, n); delete c.courier_lat; delete c.courier_lng; delete c.courier_loc_at; delete c.updated_at;
+    const sig = JSON.stringify(Object.keys(c).sort().map(k => [k, c[k]]));
+    const prev = sigMap[n.id]; sigMap[n.id] = sig;
+    return payload.eventType === 'UPDATE' && prev === sig;
+  } catch (e) { return false; }
+};
 (function () {
   // ── SISI KURIR: siarkan posisi untuk pesanan dijemput/menuju ──
   window._yfAutoShare = { watchId: null, channels: {}, last: null };
@@ -32503,7 +32523,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (a.watchId != null && navigator.geolocation) { try { navigator.geolocation.clearWatch(a.watchId); } catch (e) {} }
     a.watchId = null;
     Object.keys(a.channels).forEach(id => { try { window.supabase.removeChannel(a.channels[id].channel); } catch (e) {} });
-    a.channels = {}; a.last = null;
+    a.channels = {}; a.last = null; a.lastSave = null;
   };
   window._yfSyncAutoShare = function (activeOrderIds) {
     if (!window.supabase || !navigator.geolocation) return;
@@ -32532,6 +32552,12 @@ document.addEventListener('DOMContentLoaded', () => {
           if (a.last && _yfHaversineKm(a.last.lat, a.last.lng, lat, lng) * 1000 < 20 && (now - a.last.t) < 6000) return; // throttle
           a.last = { lat, lng, t: now };
           Object.keys(a.channels).forEach(id => { const c = a.channels[id]; if (c.subscribed) { try { c.channel.send({ type: 'broadcast', event: 'loc', payload: { lat, lng, t: now } }); } catch (e) {} } });
+          // Simpan juga POSISI TERAKHIR ke pesanan → pembeli tetap lihat motor walau kurir menutup aplikasi
+          if (!a.lastSave || (now - a.lastSave.t) > 30000 || _yfHaversineKm(a.lastSave.lat, a.lastSave.lng, lat, lng) * 1000 > 100) {
+            a.lastSave = { lat, lng, t: now };
+            const ids = Object.keys(a.channels);
+            if (ids.length) window._supaFetch('/rest/v1/rpc/yf_update_courier_loc', { method: 'POST', body: JSON.stringify({ p_order_ids: ids, p_lat: lat, p_lng: lng }) }).catch(function () {});
+          }
         },
         () => { /* izin lokasi ditolak — pembeli tetap lihat rute tanpa titik kurir */ },
         { enableHighAccuracy: true, maximumAge: 4000, timeout: 20000 }
@@ -32557,24 +32583,82 @@ document.addEventListener('DOMContentLoaded', () => {
     d.innerHTML =
       '<div id="yfTrackMap" style="position:absolute;inset:0;z-index:0;background:#e5e7eb"></div>' +
       '<button id="yfTrackRecenter" class="yf-tp-btn" onclick="_yfTrackRecenter()" title="Fokus ke kurir" style="display:none;position:absolute;top:max(14px,env(safe-area-inset-top,14px));right:14px;z-index:3"><i class="fa-solid fa-location-crosshairs" style="color:#2563EB;font-size:18px"></i></button>' +
-      '<div class="yf-tp-card">' +
-      '  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
-      '    <div style="width:38px;height:38px;border-radius:50%;background:#ECFDF5;color:#059669;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-motorcycle"></i></div>' +
+      '<div class="yf-tp-card" style="padding-top:20px">' +
+      // Info status & jarak — melayang di atas lembar putih
+      '  <div style="position:absolute;left:14px;right:14px;bottom:calc(100% + 10px);display:flex;align-items:center;gap:10px;background:#fff;border-radius:16px;padding:10px 12px;box-shadow:0 4px 18px rgba(0,0,0,.18)">' +
+      '    <div style="width:34px;height:34px;border-radius:50%;background:#ECFDF5;color:#059669;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-motorcycle"></i></div>' +
       '    <div style="flex:1;min-width:0">' +
-      '      <p id="yfTrackTitle" style="margin:0;font-weight:800;font-size:15px;color:#111827">Lacak Kurir</p>' +
-      '      <p id="yfTrackSub" style="margin:2px 0 0;font-size:12px;color:#6b7280">Menunggu posisi kurir…</p>' +
+      '      <p id="yfTrackTitle" style="margin:0;font-weight:800;font-size:13.5px;color:#111827">Lacak Kurir</p>' +
+      '      <p id="yfTrackSub" style="margin:1px 0 0;font-size:11.5px;color:#6b7280;line-height:1.35">Menunggu posisi kurir…</p>' +
       '    </div>' +
-      '    <button onclick="_yfCloseTrack()" aria-label="Tutup" style="width:34px;height:34px;border-radius:50%;border:none;background:#f3f4f6;color:#4b5563;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer"><i class="fa-solid fa-xmark"></i></button>' +
       '  </div>' +
-      '  <div style="font-size:11.5px;color:#374151;line-height:1.45;margin-bottom:12px">' +
-      '    <div style="display:flex;gap:7px;align-items:flex-start"><span style="width:10px;height:10px;border-radius:50%;background:#F59E0B;flex-shrink:0;margin-top:3px"></span><span id="yfTrackShop">Mat\'am</span></div>' +
-      '    <div style="display:flex;gap:7px;align-items:flex-start;margin-top:5px"><span style="width:10px;height:10px;border-radius:50%;background:#EF4444;flex-shrink:0;margin-top:3px"></span><span>Alamat kamu</span></div>' +
+      '  <span id="yfTrackShop" style="display:none"></span>' +
+      // Tombol tutup (kiri atas) & ⋮ laporkan (kanan atas)
+      '  <button onclick="_yfCloseTrack()" aria-label="Tutup" style="position:absolute;top:12px;left:12px;width:32px;height:32px;border-radius:50%;border:none;background:#f3f4f6;color:#4b5563;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fa-solid fa-xmark"></i></button>' +
+      '  <button id="yfTrackMoreBtn" onclick="_yfTrackMoreMenu(event)" aria-label="Lainnya" style="position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;border:none;background:#f3f4f6;color:#4b5563;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="fa-solid fa-ellipsis-vertical"></i></button>' +
+      '  <div id="yfTrackMoreMenu" style="display:none;position:absolute;top:48px;right:12px;z-index:5;background:#fff;border-radius:14px;box-shadow:0 8px 26px rgba(0,0,0,.18);overflow:hidden;min-width:180px">' +
+      '    <button onclick="_yfTrackReport()" style="width:100%;display:flex;align-items:center;gap:10px;padding:13px 16px;background:none;border:none;cursor:pointer;font-size:14px;font-weight:700;color:#dc2626;text-align:left"><i class="fa-solid fa-flag"></i>Laporkan kurir</button>' +
       '  </div>' +
-      '  <button id="yfTrackChatBtn" class="w-full text-sm font-bold text-white rounded-2xl py-3" style="position:relative;background:#10B981;border:none;cursor:pointer"><i class="fa-solid fa-comment-dots mr-1.5"></i>Chat Kurir<span id="yfTrackChatBadge" style="display:none;position:absolute;top:-7px;right:10px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;min-width:20px;height:20px;border-radius:999px;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fff;box-shadow:0 2px 6px rgba(239,68,68,.4)"></span></button>' +
+      // Profil kurir (sama seperti lembar Detail Profil Kurir)
+      '  <div style="display:flex;flex-direction:column;align-items:center">' +
+      '    <div id="yfTrackKurirAvatar" class="rounded-full ym-avatar-fb overflow-hidden flex-shrink-0" style="width:72px;height:72px"></div>' +
+      '    <h3 id="yfTrackKurirName" style="margin:10px 0 0;font-weight:800;font-size:16px;color:#111827;text-align:center">Kurir</h3>' +
+      '    <div class="stat-strip" style="margin-top:12px;max-width:320px;width:100%">' +
+      '      <div class="stat-item"><p class="stat-num colored" id="yfTrackKurirDeliveries">0</p><p class="stat-label">Pengantaran</p></div>' +
+      '      <div class="stat-item"><p class="stat-num"><i class="fa-solid fa-star text-amber-400" style="font-size:14px"></i> <span id="yfTrackKurirRating">0.0</span></p><p class="stat-label">Rating</p></div>' +
+      '      <div class="stat-item" id="yfTrackChatBtn" style="cursor:pointer"><p class="stat-num" style="position:relative;display:inline-block"><i class="fa-regular fa-comment-dots"></i><span id="yfTrackChatBadge" style="display:none;position:absolute;top:-9px;right:-14px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;border-radius:999px;align-items:center;justify-content:center;padding:0 4px;border:2px solid #fff"></span></p><p class="stat-label">Chat</p></div>' +
+      '    </div>' +
+      '  </div>' +
       '</div>';
     document.body.appendChild(d);
   }
   function fmtKm(km) { return km < 1 ? Math.round(km * 1000) + ' m' : km.toFixed(1) + ' km'; }
+  // ── Profil kurir di lembar putih (nama, foto, jumlah pengantaran, rating) ──
+  let _tpKurir = null;
+  async function loadKurirCard(kurirId, fallbackName, seq) {
+    const av = el('yfTrackKurirAvatar');
+    el('yfTrackKurirName').textContent = fallbackName || 'Kurir';
+    el('yfTrackKurirDeliveries').textContent = '0';
+    el('yfTrackKurirRating').textContent = '0.0';
+    window.ymSetAvatarFallback(av);
+    if (!kurirId) return;
+    try {
+      const uRes = await window._supaFetch('/rest/v1/users?uid=eq.' + encodeURIComponent(kurirId) + '&select=name,photo_url&limit=1');
+      const u = (uRes.ok ? await uRes.json() : [])[0];
+      if (seq !== _tpSeq) return;
+      if (u && u.name) { el('yfTrackKurirName').textContent = u.name; if (_tpKurir) _tpKurir.name = u.name; }
+      if (u && u.photo_url && /^https?:\/\//.test(u.photo_url)) {
+        av.innerHTML = '<img src="' + String(u.photo_url).replace(/"/g, '&quot;') + '" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>';
+        av.style.cursor = 'pointer';
+        av.onclick = function () { if (window.openImgLightboxUrls) window.openImgLightboxUrls([u.photo_url], 0); };
+      }
+    } catch (e) {}
+    try {
+      const cRes = await window._supaFetch('/rest/v1/rpc/yf_courier_delivery_count', { method: 'POST', body: JSON.stringify({ p_uid: kurirId }) });
+      const cNum = cRes.ok ? Number(await cRes.json()) || 0 : 0;
+      if (seq === _tpSeq) el('yfTrackKurirDeliveries').textContent = String(cNum);
+    } catch (e) {}
+    try {
+      const rRes = await window._supaFetch('/rest/v1/reviews?seller_uid=eq.' + encodeURIComponent(kurirId) + '&review_type=eq.kurir&select=rating');
+      const rRows = rRes.ok ? await rRes.json() : [];
+      const avg = rRows.length ? rRows.reduce((t, rv) => t + (rv.rating || 0), 0) / rRows.length : 0;
+      if (seq === _tpSeq) el('yfTrackKurirRating').textContent = (typeof fmtRating === 'function') ? fmtRating(avg) : avg.toFixed(1);
+    } catch (e) {}
+  }
+  window._yfTrackMoreMenu = function (ev) {
+    if (ev) ev.stopPropagation();
+    const m = el('yfTrackMoreMenu'); if (!m) return;
+    m.style.display = m.style.display === 'none' ? 'block' : 'none';
+  };
+  window._yfTrackReport = function () {
+    const m = el('yfTrackMoreMenu'); if (m) m.style.display = 'none';
+    if (!_tpKurir || !_tpKurir.uid || typeof window.ymReportUser !== 'function') return;
+    window.ymReportUser(_tpKurir.uid, _tpKurir.name, 'kurir');
+  };
+  document.addEventListener('click', function (e) {
+    const m = el('yfTrackMoreMenu');
+    if (m && m.style.display !== 'none' && !e.target.closest('#yfTrackMoreMenu') && !e.target.closest('#yfTrackMoreBtn')) m.style.display = 'none';
+  });
   function pinSpec(color, label, icon) {
     return {
       html: '<div style="display:flex;flex-direction:column;align-items:center">'
@@ -32606,6 +32690,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     _tpOrderId = orderId;
     window._yfTrackRefreshBadge();
+    _tpKurir = { uid: o.courier_id || null, name: String(o.courier_name || 'Kurir') };
+    el('yfTrackMoreBtn').style.display = o.courier_id ? 'flex' : 'none';
+    el('yfTrackMoreMenu').style.display = 'none';
+    loadKurirCard(o.courier_id, o.courier_name, seq);
 
     // Titik Mat'am (dari shops) & titik pembeli (buyer_lat/lng di pesanan)
     let shop = null;
@@ -32625,7 +32713,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pts = [];
     if (sLat != null) { map.addMarker([sLat, sLng], pinSpec('#F59E0B', "Mat'am", 'fa-utensils')); pts.push([sLat, sLng]); }
     if (bLat != null) { map.addMarker([bLat, bLng], pinSpec('#EF4444', 'Kamu', 'fa-house')); pts.push([bLat, bLng]); }
-    const fitAll = () => { if (pts.length) map.fitBounds(pts.concat(_tp && _tp.last ? [[_tp.last.lat, _tp.last.lng]] : []), { paddingTopLeft: [40, 70], paddingBottomRight: [40, 260], maxZoom: 17 }); };
+    const fitAll = () => { if (pts.length) map.fitBounds(pts.concat(_tp && _tp.last ? [[_tp.last.lat, _tp.last.lng]] : []), { paddingTopLeft: [40, 70], paddingBottomRight: [40, 330], maxZoom: 17 }); };
     fitAll();
     // Rute jalan Mat'am → pembeli (hijau)
     if (sLat != null && bLat != null) {
@@ -32644,20 +32732,23 @@ document.addEventListener('DOMContentLoaded', () => {
       html: '<div style="width:30px;height:30px;border-radius:50%;background:#10B981;border:2.5px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-motorcycle" style="color:#fff;font-size:14px"></i></div>',
       size: [30, 30], anchor: [15, 15], interactive: false, zIndex: 4
     };
-    if (!window.supabase) return;
     let firstFix = true;
-    _tp.channel = window.supabase.channel('yf_track_' + orderId, { config: { broadcast: { self: false } } })
-      .on('broadcast', { event: 'loc' }, (msg) => {
-        const p = msg && msg.payload;
-        if (!_tp || _tp.map !== map || !p) return;
-        const lat = +p.lat, lng = +p.lng;
+    // live=true: dari siaran HP kurir (realtime). live=false: posisi terakhir tersimpan (at = waktu).
+    const placeCourier = function (lat, lng, live, at) {
+        if (!_tp || _tp.map !== map) return;
         if (isNaN(lat) || isNaN(lng)) return;
+        if (live) _tp.liveAt = Date.now();
         _tp.last = { lat, lng };
         if (!_tp.dot) _tp.dot = map.addMarker([lat, lng], motor); else _tp.dot.setLatLng([lat, lng]);
         el('yfTrackRecenter').style.display = 'flex';
+        let ago = '';
+        if (!live && at) {
+          const m = Math.max(0, Math.round((Date.now() - new Date(at).getTime()) / 60000));
+          ago = 'Posisi terakhir kurir ' + (m < 1 ? 'baru saja' : m < 60 ? m + ' menit lalu' : Math.round(m / 60) + ' jam lalu') + ' · ';
+        }
         if (dest) {
           const km = _yfHaversineKm(lat, lng, dest.lat, dest.lng);
-          el('yfTrackSub').textContent = 'Kurir ' + fmtKm(km) + ' dari ' + dest.label;
+          el('yfTrackSub').textContent = ago + (ago ? '' : 'Kurir ') + fmtKm(km) + ' dari ' + dest.label;
           const o2 = _tp.lineOrigin;
           const moved = o2 ? _yfHaversineKm(o2.lat, o2.lng, lat, lng) * 1000 : Infinity;
           if (!_tp.line || moved > 250) {
@@ -32669,11 +32760,29 @@ document.addEventListener('DOMContentLoaded', () => {
             });
           }
         } else {
-          el('yfTrackSub').textContent = 'Posisi kurir diperbarui';
+          el('yfTrackSub').textContent = ago ? ago.replace(/ · $/, '') : 'Posisi kurir diperbarui';
         }
         if (firstFix) { firstFix = false; fitAll(); }
+    };
+    _tp.placeCourier = placeCourier;
+    // Posisi terakhir yang tersimpan (kalau kurir sedang menutup aplikasi)
+    if (o.courier_lat != null && o.courier_lng != null) placeCourier(+o.courier_lat, +o.courier_lng, false, o.courier_loc_at);
+    if (!window.supabase) return;
+    _tp.channel = window.supabase.channel('yf_track_' + orderId, { config: { broadcast: { self: false } } })
+      .on('broadcast', { event: 'loc' }, (msg) => {
+        const p = msg && msg.payload;
+        if (!p) return;
+        placeCourier(+p.lat, +p.lng, true);
       })
       .subscribe();
+  };
+
+  // Posisi terakhir baru masuk lewat realtime DB → perbarui motor (kalau siaran live sedang tidak jalan)
+  window._yfTrackLastLoc = function (row) {
+    if (!row || !_tp || _tp.orderId !== row.id || !_tp.placeCourier) return;
+    if (row.courier_lat == null || row.courier_lng == null) return;
+    if (_tp.liveAt && Date.now() - _tp.liveAt < 20000) return; // siaran live lebih baru
+    _tp.placeCourier(+row.courier_lat, +row.courier_lng, false, row.courier_loc_at);
   };
 
   // Badge pesan belum dibaca di tombol Chat Kurir panel — angka diambil dari hitungan
