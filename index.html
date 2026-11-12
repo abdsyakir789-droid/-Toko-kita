@@ -5429,10 +5429,24 @@ async function uploadToR2(file, onProgress, folder, opts) {
   const fd = new FormData();
   fd.append('file', blob, _fname);
   fd.append('folder', folder || 'ads'); // default folder: ads
+  // Foto CHAT: sertakan tiket login supaya worker tahu siapa pengirimnya
+  // (dipakai untuk hitungan pelanggaran foto vulgar). Folder lain tidak berubah.
+  let _chatTok = '';
+  if (folder === 'chats') {
+    try {
+      _chatTok = _ymStoredToken();
+      const _exp = _chatTok ? _ymJwtExp(_chatTok) : 0;
+      if (!_chatTok || (_exp && _exp * 1000 < Date.now() + 30000)) {
+        const _fresh = await _ymRefreshToken(!!_chatTok);
+        if (_fresh) _chatTok = _fresh;
+      }
+    } catch (e) {}
+  }
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', R2_WORKER_URL);
     xhr.setRequestHeader('X-Auth-Token', R2_AUTH_TOKEN);
+    if (_chatTok) xhr.setRequestHeader('X-User-Token', _chatTok);
     xhr.upload.onprogress = e => {
       if(e.lengthComputable && onProgress) onProgress(Math.round(e.loaded/e.total*100));
     };
@@ -5440,7 +5454,13 @@ async function uploadToR2(file, onProgress, folder, opts) {
       try {
         const r = JSON.parse(xhr.responseText);
         if(xhr.status === 200) resolve({ secure_url: r.url, public_id: r.key });
-        else reject(new Error(r.error || 'Upload ke R2 gagal'));
+        else {
+          const _err = new Error(r.error || 'Upload ke R2 gagal');
+          // Info hitungan pelanggaran foto vulgar (hanya diisi worker untuk foto chat)
+          _err.ymRemaining = (typeof r.remaining === 'number') ? r.remaining : null;
+          _err.ymSuspended = !!r.suspended;
+          reject(_err);
+        }
       } catch(e) { reject(new Error('Response tidak valid')); }
     };
     xhr.onerror = () => reject(new Error('Koneksi ke R2 gagal'));
@@ -6318,6 +6338,10 @@ window._FB = {
       let _errDetail = '';
       try { const _errJson = await _msgRes.json(); _errDetail = _errJson.message || _errJson.error || JSON.stringify(_errJson); } catch(e) {}
       if (String(_errDetail).indexOf('YM_BLOCKED') >= 0) throw new Error('Pesan tidak bisa dikirim ke pengguna ini');
+      if (String(_errDetail).indexOf('YM_CHAT_SUSPENDED') >= 0) {
+        if (window.showChatSuspendedModal) window.showChatSuspendedModal();
+        throw new Error('YM_CHAT_SUSPENDED: Chat akun kamu sedang diblokir');
+      }
       throw new Error('Gagal simpan pesan (HTTP ' + _msgRes.status + ')' + (_errDetail ? ': ' + _errDetail : ''));
     }
     trackEvent('send_message', { chat_id: chatId, message_type: type });
@@ -11106,7 +11130,7 @@ function _ymRenderReports() {
   var el = document.getElementById('ymRepList');
   if (!list.length) { el.innerHTML = '<p style="text-align:center;color:#9ca3af;font-size:13px;padding:40px 20px">Tidak ada laporan di sini.</p>'; return; }
   var stLabel = { baru: ['Baru', '#fef2f2', '#dc2626'], ditinjau: ['Ditinjau', '#fffbeb', '#b45309'], selesai: ['Selesai', '#ecfdf5', '#047857'], diabaikan: ['Diabaikan', '#f3f4f6', '#6b7280'] };
-  var ctxLabel = { toko: 'dari halaman toko', chat: 'dari chat' };
+  var ctxLabel = { toko: 'dari halaman toko', chat: 'dari chat', sistem: 'otomatis oleh sistem' };
   var av = function (src) { return src ? '<img src="' + _ymEsc(src) + '" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0">' : '<div style="width:34px;height:34px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-user" style="color:#9ca3af;font-size:13px"></i></div>'; };
   el.innerHTML = list.map(function (x) {
     var st = stLabel[x.status] || stLabel.baru;
@@ -11121,7 +11145,7 @@ function _ymRenderReports() {
       + '<div style="margin:10px 0;padding:10px 12px;background:#f8fafc;border-radius:12px"><p style="margin:0;font-size:13px;font-weight:800;color:#b91c1c">' + _ymEsc(x.reason) + '</p>'
       + (x.details ? '<p style="margin:4px 0 0;font-size:12.5px;color:#374151;line-height:1.5;white-space:pre-wrap">' + _ymEsc(x.details) + '</p>' : '') + '</div>'
       + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' + av(x.reporter_photo).replace('34px;height:34px', '24px;height:24px').replace('34px;height:34px', '24px;height:24px')
-      + '<p style="margin:0;font-size:12px;color:#6b7280">Pelapor: <b style="color:#374151">' + _ymEsc(x.reporter_name || 'Pengguna') + '</b></p></div>'
+      + '<p style="margin:0;font-size:12px;color:#6b7280">Pelapor: <b style="color:#374151">' + _ymEsc(x.reporter_uid === 'system' ? 'Sistem YallaMart' : (x.reporter_name || 'Pengguna')) + '</b></p></div>'
       + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
       + btn("_ymRepViewStore('" + x.reported_uid + "')", 'Lihat toko', '#fff', '#047857', '#10B981')
       + btn("_ymRepToggleBlock('" + x.reported_uid + "'," + (x.reported_blocked ? 'true' : 'false') + ")", x.reported_blocked ? 'Buka blokir akun' : 'Blokir akun', x.reported_blocked ? '#fff' : '#dc2626', x.reported_blocked ? '#dc2626' : '#fff', '#dc2626')
@@ -11643,7 +11667,14 @@ window.sendChatMsg = async () => {
           parent_sender: _reply.sender || ''
         })
       });
-      if(!_rRes.ok) throw new Error('Gagal kirim pesan (reply)');
+      if(!_rRes.ok) {
+        let _rErr = ''; try { _rErr = await _rRes.text(); } catch(_e) {}
+        if (_rErr.indexOf('YM_CHAT_SUSPENDED') >= 0) {
+          if (window.showChatSuspendedModal) window.showChatSuspendedModal();
+          throw new Error('YM_CHAT_SUSPENDED: Chat akun kamu sedang diblokir');
+        }
+        throw new Error('Gagal kirim pesan (reply)');
+      }
       // Update chats.last_message + unread agar badge & list sync
       try {
         const _chatId = window._S.activeChatId;
@@ -11676,7 +11707,9 @@ window.sendChatMsg = async () => {
     if(_barAfter) { _barAfter.style.display = 'none'; _barAfter.dataset.adId = ''; }
   } catch(e) {
     console.error('[sendChatMsg]', e.code, e.message);
-    if((e.message||'').includes('BLACKLISTED_CONTENT')) {
+    if((e.message||'').includes('YM_CHAT_SUSPENDED')) {
+      // modal "Akun kamu diblokir" sudah ditampilkan
+    } else if((e.message||'').includes('BLACKLISTED_CONTENT')) {
       showToast('Pesan mengandung kata yang tidak diperbolehkan','red');
     } else {
       showToast('Gagal kirim: '+(e.message||e.code),'red');
@@ -11728,7 +11761,8 @@ window.sendChatPhoto = async function(input) {
     const ld = document.getElementById('chatPhotoLoading');
     if(ld) ld.remove();
     console.error('[sendChatPhoto]', e.code, e.message);
-    if((e.message||'').includes('EXPLICIT_CONTENT')) { showExplicitContentModal(); }
+    if(e.ymSuspended || (e.message||'').includes('YM_CHAT_SUSPENDED')) { window.showChatSuspendedModal(); }
+    else if((e.message||'').includes('EXPLICIT_CONTENT')) { showExplicitContentModal({ remaining: e.ymRemaining }); }
     else { showToast('Gagal kirim foto: '+(e.message||'Error'),'red'); }
   }
 };
@@ -13342,6 +13376,7 @@ window.sendStoryReply = async function() {
     if(!_msgRes.ok) {
       let _errDetail = '';
       try { const _errJson = await _msgRes.json(); _errDetail = _errJson.message || _errJson.error || JSON.stringify(_errJson); } catch(e) {}
+      if (String(_errDetail).indexOf('YM_CHAT_SUSPENDED') >= 0 && window.showChatSuspendedModal) { window.showChatSuspendedModal(); return; }
       throw new Error(_errDetail || ('HTTP ' + _msgRes.status));
     }
 
@@ -15910,7 +15945,10 @@ window.showToast=(msg,type)=>{
 
 // ── Modal error reusable: dipakai saat API moderasi foto balikin status flagged ──
 // Dipanggil dari: Gagal Upload Iklan & Gagal Kirim Foto di Chat.
-window.showExplicitContentModal=function(){
+window.showExplicitContentModal=function(opts){
+  const _rem = opts && typeof opts.remaining === 'number' ? opts.remaining : null;
+  const _remHtml = _rem === null ? '' :
+    `<p style="font-size:13px;line-height:1.5;margin:-12px 0 20px;color:#991B1B;font-weight:600;">Sisa kesempatan minggu ini: ${_rem} kali. Kalau habis, chat &amp; transaksi akunmu akan diblokir.</p>`;
   const existing=document.getElementById('explicitContentModal');
   if(existing) existing.remove();
   const modal=document.createElement('div');
@@ -15925,7 +15963,35 @@ window.showExplicitContentModal=function(){
       </svg>
       <h3 style="font-size:17px;font-weight:700;margin:0 0 8px;">Terjadi kesalahan</h3>
       <p style="font-size:14px;line-height:1.5;margin:0 0 20px;">Maaf, foto anda melanggar pedoman komunitas kami.</p>
+      ${_remHtml}
       <button onclick="document.getElementById('explicitContentModal').remove()" style="background:#DC2626;color:#fff;border:none;border-radius:12px;padding:12px 20px;font-size:14px;font-weight:600;width:100%;cursor:pointer;">Pilih Foto Lain</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+};
+
+// Cek respons gagal kirim chat: kalau karena chat akun diblokir → tampilkan modal & return true.
+window._ymIsChatSuspendedRes = async function(res){
+  try { const t = await res.clone().text(); if (t.indexOf('YM_CHAT_SUSPENDED') >= 0) { window.showChatSuspendedModal(); return true; } } catch(e) {}
+  return false;
+};
+// ── Modal: chat & transaksi diblokir otomatis (3× foto vulgar dalam seminggu) ──
+// Muncul saat worker/DB menolak dengan suspended / YM_CHAT_SUSPENDED. YallaCare tetap terbuka.
+window.showChatSuspendedModal=function(){
+  const existing=document.getElementById('chatSuspendedModal');
+  if(existing) existing.remove();
+  const modal=document.createElement('div');
+  modal.id='chatSuspendedModal';
+  modal.style.cssText='position:fixed;inset:0;z-index:999998;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML=`
+    <div style="background:#fff;color:#1F2937;border-radius:16px;max-width:340px;width:100%;padding:28px 24px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.25);display:flex;flex-direction:column;align-items:center;">
+      <div style="width:56px;height:56px;border-radius:50%;background:#FEE2E2;display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
+        <i class="fa-solid fa-ban" style="color:#DC2626;font-size:24px;"></i>
+      </div>
+      <h3 style="font-size:17px;font-weight:700;margin:0 0 8px;">Akun kamu diblokir</h3>
+      <p style="font-size:14px;line-height:1.5;margin:0 0 20px;color:#4B5563;">Kamu mengirim foto yang melanggar pedoman komunitas sebanyak 3 kali minggu ini. Chat &amp; transaksi akunmu dibekukan. Hubungi admin lewat YallaCare untuk membuka blokir.</p>
+      <button onclick="document.getElementById('chatSuspendedModal').remove();if(window.openYallaCare)window.openYallaCare();" style="background:#10B981;color:#fff;border:none;border-radius:12px;padding:12px 20px;font-size:14px;font-weight:600;width:100%;cursor:pointer;margin-bottom:8px;">Hubungi YallaCare</button>
+      <button onclick="document.getElementById('chatSuspendedModal').remove()" style="background:#F3F4F6;color:#374151;border:none;border-radius:12px;padding:12px 20px;font-size:14px;font-weight:600;width:100%;cursor:pointer;">Tutup</button>
     </div>
   `;
   document.body.appendChild(modal);
@@ -17374,6 +17440,10 @@ window.toggleUserBlock = async function(uid, currentlyBlocked) {
     });
     const rows = r.ok ? await r.json().catch(() => []) : [];
     if (!r.ok || !rows.length) throw new Error('perubahan tidak tersimpan (izin ditolak / 0 baris)');
+    // Buka blokir → buka juga kunci CHAT (blokir otomatis foto vulgar) + hapus hitungan pelanggaran.
+    if (!willBlock) {
+      try { await window._supaFetch('/rest/v1/rpc/admin_unsuspend_chat', { method: 'POST', body: JSON.stringify({ p_uid: uid }) }); } catch (e) {}
+    }
     // Kopling: aktif/nonaktifkan toko user ini juga (kalau punya) — samakan dgn Dashboard Toko Baru.
     window._supaFetch('/rest/v1/shops?user_id=eq.' + encodeURIComponent(uid), {
       method: 'PATCH', prefer: 'return=minimal',
@@ -27843,7 +27913,7 @@ window.yfChatSend = async function() {
       method: 'POST', prefer: 'return=minimal',
       body: JSON.stringify({ room_id: window._yfChatState.roomId, sender_uid: user.uid, sender_name: user.name || '', text })
     });
-    if (!res.ok) throw new Error('Gagal mengirim pesan');
+    if (!res.ok) { if (await window._ymIsChatSuspendedRes(res)) return; throw new Error('Gagal mengirim pesan'); }
     // Push ke lawan bicara (muncul di layar walau app ditutup) — kirim SEBELUM reload
     // supaya tidak menambah delay. Fire-and-forget. url membawa data agar klik push
     // langsung membuka chat ini.
@@ -29490,7 +29560,7 @@ window.ykChatSend = async function() {
       method: 'POST', prefer: 'return=minimal',
       body: JSON.stringify({ order_id: st.orderId, sender_uid: user.uid, sender_name: user.name || '', text: text })
     });
-    if (!res.ok) { showToast('Gagal kirim pesan', 'red'); return; }
+    if (!res.ok) { if (await window._ymIsChatSuspendedRes(res)) return; showToast('Gagal kirim pesan', 'red'); return; }
     // Push ke lawan bicara (muncul di layar walau app ditutup) — kirim SEBELUM reload
     // supaya tidak menambah delay. Fire-and-forget. url membawa data agar klik push
     // langsung membuka chat ini.
