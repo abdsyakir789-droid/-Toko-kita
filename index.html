@@ -29605,12 +29605,14 @@ function _kbSubscribeCourierLoc(orderId, map, pickupLat, pickupLng) {
     html: '<div style="width:30px;height:30px;border-radius:50%;background:#10B981;border:2.5px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-motorcycle" style="color:#fff;font-size:14px"></i></div>',
     size: [30, 30], anchor: [15, 15], interactive: false, zIndex: 4
   };
+  const _kbGeo = {}; // penyaring lapis kedua di sisi penerima
   _kbTrackChannel = window.supabase.channel('yk_track_' + orderId, { config: { broadcast: { self: false } } })
     .on('broadcast', { event: 'loc' }, (msg) => {
       const payload = msg && msg.payload;
       if (window._kbCourierMap !== map || !payload) return;
       const lat = +payload.lat, lng = +payload.lng;
       if (isNaN(lat) || isNaN(lng)) return;
+      if (window._ymGeoFilter && !window._ymGeoFilter(_kbGeo, lat, lng, null)) return;
       _kbCourierLast = { lat, lng };
       if (!_kbCourierDot) _kbCourierDot = map.addMarker([lat, lng], meSpec);
       else _kbCourierDot.setLatLng([lat, lng]);
@@ -31284,7 +31286,7 @@ function _ykAutoShareStop() {
   if (a.watchId != null && navigator.geolocation) { try { navigator.geolocation.clearWatch(a.watchId); } catch (e) {} }
   a.watchId = null;
   Object.keys(a.channels).forEach(id => { try { window.supabase.removeChannel(a.channels[id].channel); } catch (e) {} });
-  a.channels = {}; a.last = null;
+  a.channels = {}; a.last = null; a.geo = null;
 }
 function _ykSyncAutoShare(activeOrderIds) {
   if (!window.supabase || !navigator.geolocation) return;
@@ -31308,6 +31310,7 @@ function _ykSyncAutoShare(activeOrderIds) {
     a.watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const lat = pos.coords.latitude, lng = pos.coords.longitude, now = Date.now();
+        if (window._ymGeoFilter && !window._ymGeoFilter(a.geo || (a.geo = {}), lat, lng, pos.coords.accuracy, now)) return; // titik tidak akurat / loncat
         if (a.last && _yfHaversineKm(a.last.lat, a.last.lng, lat, lng) * 1000 < 20 && (now - a.last.t) < 6000) return; // throttle
         a.last = { lat, lng, t: now };
         Object.keys(a.channels).forEach(id => { const c = a.channels[id]; if (c.subscribed) { try { c.channel.send({ type: 'broadcast', event: 'loc', payload: { lat, lng, t: now } }); } catch (e) {} } });
@@ -32504,6 +32507,34 @@ document.addEventListener('DOMContentLoaded', () => {
   #yfTrackPanel .yf-tp-btn { width: 42px; height: 42px; border-radius: 50%; background: #fff; border: none; box-shadow: 0 2px 10px rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; cursor: pointer }
 </style>
 <script>
+// ── Penyaring posisi kurir: buang titik tidak akurat & loncatan mustahil ──
+// HP kadang menebak lokasi dari Wi-Fi/menara seluler (meleset ratusan m–beberapa km)
+// sebelum GPS terkunci → titik kurir "loncat". st = objek status per sesi (diisi otomatis).
+// acc = akurasi dalam meter dari HP (boleh kosong). Mengembalikan true kalau titik boleh dipakai.
+window._ymGeoFilter = function (st, lat, lng, acc, now) {
+  if (!st || isNaN(lat) || isNaN(lng)) return false;
+  now = now || Date.now();
+  const hasAcc = typeof acc === 'number' && isFinite(acc) && acc > 0;
+  const last = st.last;
+  if (last) {
+    const lastRough = last.acc != null && last.acc > 100;
+    const better = hasAcc && last.acc != null && acc < last.acc;
+    // 1) Akurasi buruk (> ±100 m) diabaikan selama sudah ada posisi yang lebih baik
+    if (hasAcc && acc > 100 && !lastRough) return false;
+    // 2) Loncatan mustahil (> 150 m dengan kecepatan > 120 km/jam) — kecuali posisi lama memang kasar
+    //    dan posisi baru lebih akurat, atau posisi baru muncul konsisten 3x berturut-turut (berarti benar).
+    const dKm = _yfHaversineKm(last.lat, last.lng, lat, lng);
+    const dtH = Math.max((now - last.t) / 3600000, 1 / 3600);
+    if (dKm > 0.15 && dKm / dtH > 120 && !(lastRough && better)) {
+      if (st.pend && _yfHaversineKm(st.pend.lat, st.pend.lng, lat, lng) < 0.2) st.pend.n++;
+      else st.pend = { lat: lat, lng: lng, n: 1 };
+      if (st.pend.n < 3) return false;
+    }
+  }
+  st.pend = null;
+  st.last = { lat: lat, lng: lng, t: now, acc: hasAcc ? acc : null };
+  return true;
+};
 // Update food_orders yang hanya mengubah posisi terakhir kurir (courier_lat/lng/loc_at)
 // tidak perlu memuat ulang daftar pesanan. sigMap menyimpan "sidik" baris tanpa kolom posisi.
 window._yfLocOnlyChange = function (payload, sigMap) {
@@ -32523,7 +32554,7 @@ window._yfLocOnlyChange = function (payload, sigMap) {
     if (a.watchId != null && navigator.geolocation) { try { navigator.geolocation.clearWatch(a.watchId); } catch (e) {} }
     a.watchId = null;
     Object.keys(a.channels).forEach(id => { try { window.supabase.removeChannel(a.channels[id].channel); } catch (e) {} });
-    a.channels = {}; a.last = null; a.lastSave = null;
+    a.channels = {}; a.last = null; a.lastSave = null; a.geo = null;
   };
   window._yfSyncAutoShare = function (activeOrderIds) {
     if (!window.supabase || !navigator.geolocation) return;
@@ -32549,6 +32580,7 @@ window._yfLocOnlyChange = function (payload, sigMap) {
       a.watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const lat = pos.coords.latitude, lng = pos.coords.longitude, now = Date.now();
+          if (!window._ymGeoFilter(a.geo || (a.geo = {}), lat, lng, pos.coords.accuracy, now)) return; // titik tidak akurat / loncat
           if (a.last && _yfHaversineKm(a.last.lat, a.last.lng, lat, lng) * 1000 < 20 && (now - a.last.t) < 6000) return; // throttle
           a.last = { lat, lng, t: now };
           Object.keys(a.channels).forEach(id => { const c = a.channels[id]; if (c.subscribed) { try { c.channel.send({ type: 'broadcast', event: 'loc', payload: { lat, lng, t: now } }); } catch (e) {} } });
@@ -32613,6 +32645,19 @@ window._yfLocOnlyChange = function (payload, sigMap) {
     document.body.appendChild(d);
   }
   function fmtKm(km) { return km < 1 ? Math.round(km * 1000) + ' m' : km.toFixed(1) + ' km'; }
+  // Garis putus-putus: titik awal → awal rute jalan, dan akhir rute jalan → titik tujuan.
+  // Rute jalan dimulai/berakhir di jalan terdekat, jadi titik yang agak jauh dari jalan tetap tersambung.
+  function addConnectors(map, from, path, to, color) {
+    const out = [];
+    if (!map || !path || path.length < 2) return out;
+    [[from, path[0]], [to, path[path.length - 1]]].forEach(function (pr) {
+      const a = pr[0], b = pr[1];
+      if (!a || !b) return;
+      if (_yfHaversineKm(a[0], a[1], b[0], b[1]) * 1000 < 8) return; // sudah tepat di jalan
+      out.push(map.addPolyline([a, b], { color: color, weight: 3, opacity: .85, dashArray: '4,7' }));
+    });
+    return out;
+  }
   // ── Profil kurir di lembar putih (nama, foto, jumlah pengantaran, rating) ──
   let _tpKurir = null;
   async function loadKurirCard(kurirId, fallbackName, seq) {
@@ -32723,6 +32768,7 @@ window._yfLocOnlyChange = function (payload, sigMap) {
         if (!path) { route.setStyle({ opacity: .85, dashArray: null }); return; }
         try { route.remove(); } catch (e) {}
         route = map.addPolyline(path, { color: '#10B981', weight: 5, opacity: .9 });
+        addConnectors(map, [sLat, sLng], path, [bLat, bLng], '#10B981');
       });
     }
     setTimeout(() => { if (_tp && _tp.map === map) map.invalidateSize(); }, 400);
@@ -32747,8 +32793,8 @@ window._yfLocOnlyChange = function (payload, sigMap) {
           ago = 'Posisi terakhir kurir ' + (m < 1 ? 'baru saja' : m < 60 ? m + ' menit lalu' : Math.round(m / 60) + ' jam lalu') + ' · ';
         }
         if (dest) {
-          const km = _yfHaversineKm(lat, lng, dest.lat, dest.lng);
-          el('yfTrackSub').textContent = ago + (ago ? '' : 'Kurir ') + fmtKm(km) + ' dari ' + dest.label;
+          const km = bLat != null ? _yfHaversineKm(lat, lng, bLat, bLng) : _yfHaversineKm(lat, lng, dest.lat, dest.lng);
+          el('yfTrackSub').textContent = ago + (ago ? '' : 'Kurir ') + fmtKm(km) + ' dari ' + (bLat != null ? 'lokasimu' : dest.label);
           const o2 = _tp.lineOrigin;
           const moved = o2 ? _yfHaversineKm(o2.lat, o2.lng, lat, lng) * 1000 : Infinity;
           if (!_tp.line || moved > 250) {
@@ -32756,7 +32802,9 @@ window._yfLocOnlyChange = function (payload, sigMap) {
             _ykFetchRoadRoute(lat, lng, dest.lat, dest.lng).then(path => {
               if (!_tp || _tp.map !== map) return;
               if (_tp.line) { try { _tp.line.remove(); } catch (e) {} }
+              (_tp.lineConn || []).forEach(function (l) { try { l.remove(); } catch (e) {} });
               _tp.line = map.addPolyline(path || [[lat, lng], [dest.lat, dest.lng]], { color: '#2563EB', weight: 4, opacity: .85, dashArray: path ? null : '6,8' });
+              _tp.lineConn = path ? addConnectors(map, [lat, lng], path, [dest.lat, dest.lng], '#2563EB') : [];
             });
           }
         } else {
@@ -32772,6 +32820,7 @@ window._yfLocOnlyChange = function (payload, sigMap) {
       .on('broadcast', { event: 'loc' }, (msg) => {
         const p = msg && msg.payload;
         if (!p) return;
+        if (!window._ymGeoFilter(_tp.geo || (_tp.geo = {}), +p.lat, +p.lng, null)) return; // penyaring lapis kedua
         placeCourier(+p.lat, +p.lng, true);
       })
       .subscribe();
