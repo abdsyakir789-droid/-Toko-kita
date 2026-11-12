@@ -18820,6 +18820,19 @@ window.ycSendChat = async function() {
     body: JSON.stringify({ user_id:u.uid, user_name:u.name||u.email||'', user_email:u.email||'', message:msg||'', image_url:imageUrl, status:'pending', created_at:new Date().toISOString() })
   });
   if(!r.ok){ showToast('Gagal kirim pesan','red'); return; }
+  // Notif layar HP ke admin (fire-and-forget): judul = nama akun pengirim
+  (async function(){
+    try {
+      if (typeof window.sendPushToUser !== 'function') return;
+      const ar = await window._supaFetch('/rest/v1/rpc/get_admin_uids', { method: 'POST', body: '{}' });
+      const rows = ar.ok ? await ar.json() : [];
+      const admins = [...new Set((rows || []).map(x => typeof x === 'string' ? x : (x && (x.get_admin_uids || x.uid))).filter(Boolean))];
+      const _nm = u.name || u.email || 'Pengguna';
+      const _body = msg ? (msg.length > 120 ? msg.slice(0, 120) + '…' : msg) : '📷 Mengirim foto';
+      const _url = '/?go=ycadmin&uid=' + encodeURIComponent(u.uid) + '&nm=' + encodeURIComponent(_nm);
+      admins.filter(a => a !== u.uid).forEach(a => window.sendPushToUser(a, _nm, _body, _url).catch(function(){}));
+    } catch (e) {}
+  })();
   // Amankan parse: kalau body kosong (mis. server balas minimal), jangan sampai error
   // menghentikan fungsi sebelum render — pesan harus tetap tampil.
   let inserted = null;
@@ -19303,6 +19316,9 @@ window.ycAdminSendReply = async function() {
         renderYcUserList();
         if(_ycActiveUserId) renderYcAdminChat(_ycActiveUserId);
       }
+      if (anyTicket.user_id && typeof window.sendPushToUser === 'function') {
+        window.sendPushToUser(anyTicket.user_id, 'YallaCare', reply.length > 120 ? reply.slice(0, 120) + '…' : reply, '/?go=yallacare').catch(function(){});
+      }
       showToast('Pesan terkirim','green');
     } else { showToast('Gagal kirim balasan','red'); }
   } catch(e){ showToast('Gagal kirim balasan','red'); }
@@ -19363,7 +19379,7 @@ function updateYcBadge(count) {
 }
 // Perbarui badge YallaCare admin: saat login, tiap app kembali dibuka, dan tiap 60 detik (hanya admin, hanya saat layar aktif)
 (function(){
-  function _ycIsAdmin(){ const u = window._S && window._S.user; return !!(u && typeof isAdmin === 'function' && isAdmin(u.email)); }
+  function _ycIsAdmin(){ const e = String((window._S && window._S.user && window._S.user.email) || '').toLowerCase(); return !!e && e === String(window.ADMIN_EMAIL || '').toLowerCase(); }
   function _ycRefresh(){ if(_ycIsAdmin() && document.visibilityState === 'visible') window.loadYcInboxBadge(); }
   document.addEventListener('visibilitychange', _ycRefresh);
   setInterval(_ycRefresh, 60000);
@@ -21077,6 +21093,18 @@ window._routePushGo = function(params) {
   if (go === 'yfchat') {
     _routeWhenReady(() => typeof window.openYfChat === 'function', function() {
       window.openYfChat(params.get('fid'), params.get('th'), params.get('nm') || 'Chat');
+    });
+    return;
+  }
+  if (go === 'yallacare') {
+    _routeWhenReady(() => typeof window.openYallaCare === 'function', function() { window.openYallaCare(); });
+    return;
+  }
+  if (go === 'ycadmin') {
+    _routeWhenReady(() => typeof window.openAdminYallaCare === 'function' && typeof window.openYcAdminChat === 'function', async function() {
+      try { await window.openAdminYallaCare(); } catch (e) {}
+      const _uid = params.get('uid');
+      if (_uid) window.openYcAdminChat(_uid, params.get('nm') || 'Pengguna');
     });
     return;
   }
@@ -32935,6 +32963,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (chatId) return _vis('chatRoomOverlay') && window._S && window._S.activeChatId === chatId;
       if (go === 'yfchat') return _vis('yfChatModal') && window._yfOpenKey === (p.get('fid') + '|' + p.get('th'));
       if (go === 'ykchat') return _vis('ykChatOverlay') && window._ykChatState && String(window._ykChatState.orderId) === String(p.get('oid'));
+      if (go === 'yallacare') return _vis('yallaCareOverlay');
     } catch (e) {}
     return false;
   }
@@ -32999,4 +33028,31 @@ document.addEventListener('DOMContentLoaded', () => {
   window._ymRegisterNativePush = registerIfLoggedIn;
 
   // Login/logout memanggil renderUserState → ikut cek pendaftaran token
-  var _prevRender = window.r
+  var _prevRender = window.renderUserState;
+  if (typeof _prevRender === 'function') {
+    window.renderUserState = function () {
+      var r = _prevRender.apply(this, arguments);
+      setTimeout(registerIfLoggedIn, 1500);
+      return r;
+    };
+  }
+  // Sesi yang sudah login saat app dibuka
+  setTimeout(registerIfLoggedIn, 3000);
+
+  // Logout: lepas token perangkat ini dari akun yang keluar (sebelum sesi dibuang)
+  var _prevLogout = window.doLogout;
+  if (typeof _prevLogout === 'function') {
+    window.doLogout = function () {
+      try {
+        if (_token && uid() && window._supaFetch) {
+          window._supaFetch('/rest/v1/rpc/delete_fcm_token', { method: 'POST', body: JSON.stringify({ p_token: _token }) }).catch(function () {});
+        }
+      } catch (e) {}
+      _savedFor = null;
+      return _prevLogout.apply(this, arguments);
+    };
+  }
+})();
+</script>
+</body>
+</html>
