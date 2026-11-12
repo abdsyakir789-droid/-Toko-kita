@@ -15947,8 +15947,8 @@ window.showToast=(msg,type)=>{
 // Dipanggil dari: Gagal Upload Iklan & Gagal Kirim Foto di Chat.
 window.showExplicitContentModal=function(opts){
   const _rem = opts && typeof opts.remaining === 'number' ? opts.remaining : null;
-  const _remHtml = _rem === null ? '' :
-    `<p style="font-size:13px;line-height:1.5;margin:-12px 0 20px;color:#991B1B;font-weight:600;">Sisa kesempatan minggu ini: ${_rem} kali. Kalau habis, chat &amp; transaksi akunmu akan diblokir.</p>`;
+  // Foto chat: tambahkan peringatan sisa kesempatan. Upload lain (iklan, profil) tanpa kalimat ini.
+  const _remHtml = (_rem === null || _rem <= 0) ? '' : ` ${_rem} kali lagi melanggar, akunmu terblokir otomatis.`;
   const existing=document.getElementById('explicitContentModal');
   if(existing) existing.remove();
   const modal=document.createElement('div');
@@ -15962,8 +15962,7 @@ window.showExplicitContentModal=function(opts){
         <line x1="12" y1="16" x2="12.01" y2="16"></line>
       </svg>
       <h3 style="font-size:17px;font-weight:700;margin:0 0 8px;">Terjadi kesalahan</h3>
-      <p style="font-size:14px;line-height:1.5;margin:0 0 20px;">Maaf, foto anda melanggar pedoman komunitas kami.</p>
-      ${_remHtml}
+      <p style="font-size:14px;line-height:1.5;margin:0 0 20px;">Maaf, foto anda melanggar pedoman komunitas kami.${_remHtml}</p>
       <button onclick="document.getElementById('explicitContentModal').remove()" style="background:#DC2626;color:#fff;border:none;border-radius:12px;padding:12px 20px;font-size:14px;font-weight:600;width:100%;cursor:pointer;">Pilih Foto Lain</button>
     </div>
   `;
@@ -16841,6 +16840,16 @@ if ('serviceWorker' in navigator) {
       </button>
     </div>
 
+    <!-- Cari user (nama / email / alamat) -->
+    <div class="flex-shrink-0 bg-white px-4 md:px-5 pt-3 pb-2 border-b border-gray-100">
+      <div class="relative">
+        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+        <input id="usersAdminSearch" type="search" autocomplete="off" placeholder="Cari nama, email, atau alamat..."
+          oninput="window._uadQuery=this.value;renderUsersAdminList()"
+          class="w-full h-11 pl-10 pr-4 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-800 outline-none focus:border-indigo-400 focus:bg-white"/>
+      </div>
+    </div>
+
     <!-- Body -->
     <div class="overflow-y-auto flex-1 p-4 md:p-5">
 
@@ -17470,6 +17479,8 @@ window.openUsersAdminDashboard = async function() {
   ov.style.display = 'flex';
   requestAnimationFrame(() => { ov.style.opacity = '1'; });
   document.body.style.overflow = 'hidden';
+  window._uadQuery = '';
+  const _uadSearch = document.getElementById('usersAdminSearch'); if (_uadSearch) _uadSearch.value = '';
   await loadUsersAdminData();
   _subscribeUsersAdminRealtime();
 };
@@ -17522,11 +17533,25 @@ async function loadUsersAdminData() {
 }
 
 window.renderUsersAdminList = function() {
-  const data = window._usersAdminData || [];
+  const _all = window._usersAdminData || [];
+  // Filter pencarian (nama / email / alamat) — data asli tidak diubah
+  const _q = String(window._uadQuery || '').trim().toLowerCase();
+  const data = !_q ? _all : _all.filter(u =>
+    [u.name, u.email, u.address].some(v => String(v || '').toLowerCase().includes(_q)));
+  if (_q && _all.length && !data.length) {
+    const _tb = document.getElementById('usersAdminTableBody');
+    const _cl = document.getElementById('usersAdminCardList');
+    const _ce = document.getElementById('usersAdminCount');
+    if (_ce) _ce.textContent = '0 dari ' + _all.length + ' user';
+    const _msg = 'Tidak ada user yang cocok dengan "' + _uadEscHtml(_q) + '"';
+    if (_tb) _tb.innerHTML = '<tr><td colspan="4" class="text-center text-xs text-gray-400 py-10">' + _msg + '</td></tr>';
+    if (_cl) _cl.innerHTML = '<div class="text-center text-xs text-gray-400 py-10">' + _msg + '</div>';
+    return;
+  }
   const tableBody = document.getElementById('usersAdminTableBody');
   const cardList  = document.getElementById('usersAdminCardList');
   const countEl   = document.getElementById('usersAdminCount');
-  if (countEl) countEl.textContent = data.length + ' user terdaftar';
+  if (countEl) countEl.textContent = _q ? (data.length + ' dari ' + _all.length + ' user') : (data.length + ' user terdaftar');
 
   if (!data.length) {
     if (tableBody) tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-xs text-gray-400 py-10">Belum ada user terdaftar</td></tr>';
