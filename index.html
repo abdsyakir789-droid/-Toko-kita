@@ -8353,7 +8353,8 @@ window.renderUserState = () => {
   }
   // YallaCare Inbox — tampil di luar secret menu
   const ycInboxBtn = document.getElementById('adminYallaCareAction');
-  if(ycInboxBtn) { ycInboxBtn.style.display = admin ? 'flex' : 'none'; if(admin) loadYcInboxBadge(); }
+  if(ycInboxBtn) ycInboxBtn.style.display = admin ? 'flex' : 'none';
+  if(admin && window.loadYcInboxBadge) window.loadYcInboxBadge();
   // Tampilkan admin menu desktop
   const adminDeskMenu = document.getElementById('adminDesktopMenu');
   if(adminDeskMenu) adminDeskMenu.style.display = admin ? 'block' : 'none';
@@ -15948,7 +15949,8 @@ window.showToast=(msg,type)=>{
 window.showExplicitContentModal=function(opts){
   const _rem = opts && typeof opts.remaining === 'number' ? opts.remaining : null;
   // Foto chat: tambahkan peringatan sisa kesempatan. Upload lain (iklan, profil) tanpa kalimat ini.
-  const _remHtml = (_rem === null || _rem <= 0) ? '' : ` ${_rem} kali lagi melanggar, akunmu terblokir otomatis.`;
+  const _remHtml = (_rem === null || _rem <= 0) ? '' :
+    `<p style="font-size:14px;line-height:1.5;margin:-12px 0 20px;color:#DC2626;font-weight:700;">${_rem} kali lagi melanggar, akunmu terblokir otomatis.</p>`;
   const existing=document.getElementById('explicitContentModal');
   if(existing) existing.remove();
   const modal=document.createElement('div');
@@ -15962,7 +15964,8 @@ window.showExplicitContentModal=function(opts){
         <line x1="12" y1="16" x2="12.01" y2="16"></line>
       </svg>
       <h3 style="font-size:17px;font-weight:700;margin:0 0 8px;">Terjadi kesalahan</h3>
-      <p style="font-size:14px;line-height:1.5;margin:0 0 20px;">Maaf, foto anda melanggar pedoman komunitas kami.${_remHtml}</p>
+      <p style="font-size:14px;line-height:1.5;margin:0 0 20px;">Maaf, foto anda melanggar pedoman komunitas kami.</p>
+      ${_remHtml}
       <button onclick="document.getElementById('explicitContentModal').remove()" style="background:#DC2626;color:#fff;border:none;border-radius:12px;padding:12px 20px;font-size:14px;font-weight:600;width:100%;cursor:pointer;">Pilih Foto Lain</button>
     </div>
   `;
@@ -19347,11 +19350,25 @@ function updateYcBadge(count) {
     });
     count = Object.keys(byUser).length;
   }
-  const badge = document.getElementById('ycInboxBadge');
-  if(!badge) return;
-  if(count > 0) { badge.textContent = count > 99 ? '99+' : count; badge.style.display = 'flex'; }
-  else { badge.style.display = 'none'; }
+  // Badge di ikon YallaCare Inbox (Menu Developer) — dulu hanya mencari id 'ycInboxBadge' yang tidak ada
+  ['ycInboxBadge', 'ycInboxBadgeDesk'].forEach(function(id){
+    const badge = document.getElementById(id);
+    if(!badge) return;
+    if(count > 0) {
+      badge.textContent = count > 99 ? '99+' : count;
+      badge.style.display = 'flex';
+      badge.style.width = 'auto'; badge.style.minWidth = '16px'; badge.style.padding = '0 4px'; badge.style.borderRadius = '8px';
+    } else { badge.style.display = 'none'; }
+  });
 }
+// Perbarui badge YallaCare admin: saat login, tiap app kembali dibuka, dan tiap 60 detik (hanya admin, hanya saat layar aktif)
+(function(){
+  function _ycIsAdmin(){ const u = window._S && window._S.user; return !!(u && typeof isAdmin === 'function' && isAdmin(u.email)); }
+  function _ycRefresh(){ if(_ycIsAdmin() && document.visibilityState === 'visible') window.loadYcInboxBadge(); }
+  document.addEventListener('visibilitychange', _ycRefresh);
+  setInterval(_ycRefresh, 60000);
+  setTimeout(_ycRefresh, 4000);
+})();
 </script>
 
 <!-- ═══════════════════════════════════════════════
@@ -19510,7 +19527,8 @@ function updateYcBadge(count) {
     <div style="flex:1"></div>
 
     <!-- ── Tombol Keluar (asli, posisi bawah) — disembunyikan di desktop, sudah dipindah ke bawah item Notifikasi ── -->
-    <div class="md:hidden" style="background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 2px 16px rgba(239,68,68,0.07)">
+    <!-- flex-shrink:0 → tanpa ini kartu (overflow:hidden) bisa terjepit jadi tinggi 0 di HP layar pendek -->
+    <div class="md:hidden" style="background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 2px 16px rgba(239,68,68,0.07);flex-shrink:0">
       <button onclick="doLogout();closeSettings()"
         style="width:100%;padding:17px 16px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:14px;text-align:left">
         <div style="width:40px;height:40px;border-radius:13px;background:#fef2f2;display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -32981,31 +32999,4 @@ document.addEventListener('DOMContentLoaded', () => {
   window._ymRegisterNativePush = registerIfLoggedIn;
 
   // Login/logout memanggil renderUserState → ikut cek pendaftaran token
-  var _prevRender = window.renderUserState;
-  if (typeof _prevRender === 'function') {
-    window.renderUserState = function () {
-      var r = _prevRender.apply(this, arguments);
-      setTimeout(registerIfLoggedIn, 1500);
-      return r;
-    };
-  }
-  // Sesi yang sudah login saat app dibuka
-  setTimeout(registerIfLoggedIn, 3000);
-
-  // Logout: lepas token perangkat ini dari akun yang keluar (sebelum sesi dibuang)
-  var _prevLogout = window.doLogout;
-  if (typeof _prevLogout === 'function') {
-    window.doLogout = function () {
-      try {
-        if (_token && uid() && window._supaFetch) {
-          window._supaFetch('/rest/v1/rpc/delete_fcm_token', { method: 'POST', body: JSON.stringify({ p_token: _token }) }).catch(function () {});
-        }
-      } catch (e) {}
-      _savedFor = null;
-      return _prevLogout.apply(this, arguments);
-    };
-  }
-})();
-</script>
-</body>
-</html>
+  var _prevRender = window.r
