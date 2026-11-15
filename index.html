@@ -26934,22 +26934,28 @@ window.openDaftarKurir = async function() {
   window._kurirState.profile = profile;
 
   if (!profile) {
+    window._kurirRegLoc = null;
     body.innerHTML = `
-      <p class="text-sm text-gray-500 mb-4">Isi data berikut untuk mendaftar sebagai mitra pengantar makanan YallaFood. Akun kamu akan berstatus <b>Menunggu Verifikasi</b> sampai disetujui admin.</p>
+      <p class="text-sm mb-4" style="color:#374151">Isi data berikut untuk mendaftar sebagai mitra pengantar makanan YallaFood. Akun kamu akan berstatus <b>Menunggu Verifikasi</b> sampai disetujui admin.</p>
       <label class="text-xs font-semibold text-gray-600">Nama Lengkap</label>
       <input id="kurirRegName" type="text" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-3 text-sm" value="${user.name || ''}" placeholder="Nama lengkap"/>
       <label class="text-xs font-semibold text-gray-600">Daerah/Wilayah Siap Antar</label>
       <textarea id="kurirRegArea" rows="2" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-3 text-sm" placeholder="Contoh: Nadi Qomui, Hay Asher, sekitar Rehab"></textarea>
+      <label class="text-xs font-semibold text-gray-600">Alamat Tinggal di Mesir <span style="color:#DC2626">*</span></label>
+      <textarea id="kurirRegHome" rows="2" maxlength="200" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Contoh: Hay Asyir, Bawabat 3, Imarah 5, lantai 2"></textarea>
+      <p class="text-[11px] mt-1 mb-2" style="color:#4b5563">Hanya admin yang bisa melihat alamat ini.</p>
+      <button type="button" id="kurirRegLocBtn" onclick="_kurirRegGetLoc()" class="w-full text-sm font-bold rounded-xl py-2.5 mb-1" style="background:#ECFDF5;color:#047857;border:1.5px solid #A7F3D0"><i class="fa-solid fa-location-crosshairs mr-1.5"></i>Pakai lokasi saya sekarang <span style="color:#DC2626">*</span></button>
+      <p id="kurirRegLocStatus" class="text-[11px] mb-3" style="color:#4b5563">Tekan tombol ini saat kamu berada di tempat tinggalmu di Mesir.</p>
       <label class="text-xs font-semibold text-gray-600">Nomor WhatsApp <span style="color:#DC2626">*</span></label>
       <input id="kurirRegWa" type="tel" inputmode="tel" maxlength="20" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" value="${(window._ymNormWa && window._ymNormWa(user.phone || '')) || ''}" placeholder="+20 1xx xxx xxxx"/>
-      <p class="text-[11px] text-gray-400 mt-1 mb-3">Wajib diawali kode negara (misal +20 atau +62). Hanya admin yang bisa melihat nomor ini.</p>
+      <p class="text-[11px] mt-1 mb-3" style="color:#4b5563">Wajib diawali kode negara (misal +20 atau +62). Hanya admin yang bisa melihat nomor ini.</p>
       <label class="text-xs font-semibold text-gray-600">Foto Wajah <span style="color:#DC2626">*</span></label>
       <div class="flex items-center gap-3 mt-1 mb-1">
         <div id="kurirRegFacePrev" class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0"><i class="fa-solid fa-user text-gray-300 text-xl"></i></div>
         <label for="kurirRegFace" class="flex-1 text-center text-sm font-bold text-primary border border-primary rounded-xl py-2 cursor-pointer">Pilih / Ambil Foto Wajah</label>
         <input id="kurirRegFace" type="file" accept="image/*" capture="user" class="hidden" onchange="_kurirRegPreviewFace(this)"/>
       </div>
-      <p class="text-[11px] text-gray-400 mb-3">Foto wajah jelas (tanpa masker/kacamata hitam). Hanya admin yang bisa melihat foto ini.</p>
+      <p class="text-[11px] mb-3" style="color:#4b5563">Foto wajah jelas (tanpa masker/kacamata hitam). Hanya admin yang bisa melihat foto ini.</p>
       <label class="text-xs font-semibold text-gray-600">Pernah jadi kurir makanan sebelumnya? <span style="color:#DC2626">*</span></label>
       <div class="flex gap-2 mt-1 mb-2">
         <label class="flex-1 flex items-center justify-center gap-2 border border-gray-200 rounded-xl py-2 text-sm cursor-pointer"><input type="radio" name="kurirRegExp" value="ya" onchange="document.getElementById('kurirRegExpNote').style.display='block'"/> Pernah</label>
@@ -27002,6 +27008,30 @@ window.closeDaftarKurir = function() {
   document.body.style.overflow = '';
 };
 
+window._kurirRegLoc = null;
+// Batas kasar wilayah Mesir (lintang 22–31.7, bujur 24.7–36.9)
+function _kurirInEgypt(lat, lng) { return lat >= 21.9 && lat <= 31.8 && lng >= 24.6 && lng <= 37.0; }
+window._kurirRegGetLoc = function() {
+  const st = document.getElementById('kurirRegLocStatus');
+  const btn = document.getElementById('kurirRegLocBtn');
+  if (!navigator.geolocation) { showToast('GPS tidak tersedia di perangkat ini', 'red'); return; }
+  if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+  if (st) { st.textContent = 'Mengambil lokasi...'; st.style.color = '#4b5563'; }
+  navigator.geolocation.getCurrentPosition(function (pos) {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    const lat = pos.coords.latitude, lng = pos.coords.longitude;
+    if (!_kurirInEgypt(lat, lng)) {
+      window._kurirRegLoc = null;
+      if (st) { st.textContent = 'Lokasimu terdeteksi di luar Mesir. Pendaftaran kurir hanya untuk yang tinggal di Mesir.'; st.style.color = '#DC2626'; }
+      return;
+    }
+    window._kurirRegLoc = { lat: lat, lng: lng };
+    if (st) { st.textContent = '✓ Lokasi tersimpan (akurasi ±' + Math.round(pos.coords.accuracy || 0) + ' m)'; st.style.color = '#047857'; }
+  }, function () {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    if (st) { st.textContent = 'Gagal mengambil lokasi. Pastikan GPS aktif & izin lokasi diberikan, lalu coba lagi.'; st.style.color = '#DC2626'; }
+  }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+};
 window._kurirRegPreviewFace = function(input) {
   const f = input && input.files && input.files[0]; if (!f) return;
   const prev = document.getElementById('kurirRegFacePrev'); if (!prev) return;
@@ -27014,6 +27044,10 @@ window.submitDaftarKurir = async function() {
   const name = document.getElementById('kurirRegName').value.trim();
   const area = document.getElementById('kurirRegArea').value.trim();
   if (!name) { showToast('Nama wajib diisi', 'red'); return; }
+  const homeAddr = String((document.getElementById('kurirRegHome') || {}).value || '').trim().slice(0, 200);
+  if (!homeAddr) { showToast('Alamat tinggal di Mesir wajib diisi', 'red'); return; }
+  const homeLoc = window._kurirRegLoc;
+  if (!homeLoc) { showToast('Tekan "Pakai lokasi saya sekarang" dulu (harus di Mesir)', 'red'); return; }
   const wa = String((document.getElementById('kurirRegWa') || {}).value || '').replace(/[\s\-().]/g, '');
   if (!wa) { showToast('Nomor WhatsApp wajib diisi', 'red'); return; }
   if (!/^\+[1-9]\d{7,14}$/.test(wa)) { showToast('Nomor WhatsApp harus diawali kode negara, misal +20 atau +62', 'red'); return; }
@@ -27039,7 +27073,7 @@ window.submitDaftarKurir = async function() {
     // 2) Data lamaran (privat: hanya pemilik & admin)
     const ar = await window._supaFetch('/rest/v1/courier_applications?on_conflict=uid', {
       method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
-      body: JSON.stringify({ uid: user.uid, wa: wa, face_url: faceUrl, experienced: experienced, experience_note: expNote || null, updated_at: new Date().toISOString() })
+      body: JSON.stringify({ uid: user.uid, wa: wa, face_url: faceUrl, experienced: experienced, experience_note: expNote || null, home_address: homeAddr, home_lat: homeLoc.lat, home_lng: homeLoc.lng, updated_at: new Date().toISOString() })
     });
     if (!ar.ok) throw new Error('data lamaran tidak tersimpan');
     const res = await window._supaFetch('/rest/v1/courier_profiles', {
@@ -27390,7 +27424,7 @@ window.loadKurirAdminUI = async function() {
     // Data lamaran privat (WA, foto wajah, pengalaman) — hanya admin yang bisa membaca
     const _caMap = {};
     try {
-      const ca = await window._supaFetch('/rest/v1/courier_applications?select=uid,wa,face_url,experienced,experience_note');
+      const ca = await window._supaFetch('/rest/v1/courier_applications?select=uid,wa,face_url,experienced,experience_note,home_address,home_lat,home_lng');
       (ca.ok ? await ca.json() : []).forEach(x => { _caMap[x.uid] = x; });
     } catch (e) {}
     const _caEsc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -27403,6 +27437,10 @@ window.loadKurirAdminUI = async function() {
         + (face ? '<img src="' + face + '" onclick="window.openImgLightboxUrls&&window.openImgLightboxUrls([this.getAttribute(\'src\')],0)" class="w-14 h-14 rounded-full object-cover flex-shrink-0 cursor-pointer" style="border:2px solid #e5e7eb"/>' : '')
         + '<div class="min-w-0 text-xs text-gray-600 leading-relaxed">'
         + (waDigits ? '<a href="https://wa.me/' + waDigits + '" target="_blank" rel="noopener" class="font-bold" style="color:#15803D"><i class="fa-brands fa-whatsapp"></i> ' + _caEsc(a.wa) + '</a><br/>' : '')
+        + (a.home_address ? '<i class="fa-solid fa-house" style="color:#6b7280"></i> ' + _caEsc(a.home_address) + '<br/>' : '')
+        + ((a.home_lat != null && a.home_lng != null && isFinite(+a.home_lat) && isFinite(+a.home_lng))
+            ? '<a href="https://www.google.com/maps?q=' + (+a.home_lat) + ',' + (+a.home_lng) + '" target="_blank" rel="noopener" class="font-bold" style="color:#2563EB"><i class="fa-solid fa-location-dot"></i> Lihat di Google Maps</a><br/>'
+            : '')
         + 'Pengalaman kurir: <b>' + (a.experienced ? 'Pernah' : 'Belum pernah') + '</b>'
         + (a.experienced && a.experience_note ? ' — ' + _caEsc(a.experience_note) : '')
         + '</div></div>';
