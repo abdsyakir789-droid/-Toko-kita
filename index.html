@@ -16866,6 +16866,8 @@ if ('serviceWorker' in navigator) {
           <p class="text-sm font-black text-gray-800 mb-1">🛵 Approval Mitra Kurir YallaFood</p>
           <p class="text-[11px] text-gray-500">Setujui atau tolak pendaftaran mitra kurir. Notifikasi pesanan hanya aktif untuk kurir berstatus Aktif.</p>
         </div>
+        <!-- Kurir Teratas (diisi ymRenderKurirTop) -->
+        <div id="kurirTopBox"></div>
         <div id="kurirAdminList"><p class="text-center text-gray-400 text-sm py-8">Memuat...</p></div>
       </div>
 
@@ -27559,6 +27561,7 @@ window.loadKurirAdminUI = async function() {
       </div>
     `).join('');
     if (window.ymRefreshKurirPendingBadge) window.ymRefreshKurirPendingBadge();
+    if (window.ymRenderKurirTop) window.ymRenderKurirTop(rows);
   } catch (e) {
     box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat data kurir.</p>';
   }
@@ -33748,7 +33751,7 @@ window._yfLocOnlyChange = function (payload, sigMap) {
   window._ymPoBadge = function(p){
     if(!window._ymIsPO(p)) return '';
     var left = p.siapTaushil ? 64 : 0;
-    return '<span style="position:absolute;bottom:0;left:' + left + 'px;z-index:3;pointer-events:none;height:29px;display:flex;align-items:center;padding:0 9px;background:#F97316;color:#fff;font-family:Inter,sans-serif;font-size:11px;font-weight:800;font-style:italic;letter-spacing:-.01em;border-radius:0 9px 0 0">Pre-order</span>';
+    return '<span style="position:absolute;bottom:0;left:' + left + 'px;z-index:3;pointer-events:none;height:29px;display:flex;align-items:center;padding:0 9px;background:#EC4899;color:#fff;font-family:Inter,sans-serif;font-size:11px;font-weight:800;font-style:italic;letter-spacing:-.01em;border-radius:0 9px 0 0">Pre-order</span>';
   };
 
   // ── Form Pasang / Edit Iklan (prefix 'ad' atau 'editAd') ──
@@ -34010,6 +34013,66 @@ window._yfLocOnlyChange = function (payload, sigMap) {
       else if(tries > 40) clearInterval(t);
     }, 500);
   })();
+
+  // ── Kurir Teratas (Panel Admin › Kurir YallaFood) ──
+  // Peringkat dari buku besar courier_delivery_ledger: jumlah antar (utama), lalu pendapatan.
+  // Periode "Bulan ini" dihitung pakai zona waktu Kairo.
+  window._ymKurirTopPeriod = 'month';
+  window._ymKurirTopRows = [];
+  function _cairoYM(d){
+    try{ return new Date(d).toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit' }).slice(0, 7); }catch(e){ return ''; }
+  }
+  function _escT(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  window.ymRenderKurirTop = async function(courierRows){
+    var box = document.getElementById('kurirTopBox'); if(!box) return;
+    if(courierRows) window._ymKurirTopRows = courierRows;
+    var led = [];
+    try{
+      var r = await window._supaFetch('/rest/v1/courier_delivery_ledger?select=courier_id,courier_name,ongkir,completed_at');
+      led = r.ok ? await r.json() : [];
+    }catch(e){}
+    var period = window._ymKurirTopPeriod;
+    var nowYM = _cairoYM(Date.now());
+    var names = {};
+    (window._ymKurirTopRows || []).forEach(function(c){ names[c.uid] = c.name; });
+    var agg = {};
+    (led || []).forEach(function(x){
+      if(period === 'month' && _cairoYM(x.completed_at) !== nowYM) return;
+      var k = x.courier_id; if(!k) return;
+      if(!agg[k]) agg[k] = { uid: k, name: names[k] || x.courier_name || 'Kurir', count: 0, sum: 0 };
+      agg[k].count += 1;
+      agg[k].sum += Number(x.ongkir || 0);
+    });
+    var list = Object.keys(agg).map(function(k){ return agg[k]; })
+      .sort(function(a, b){ return (b.count - a.count) || (b.sum - a.sum); })
+      .slice(0, 5);
+    var monthLabel = '';
+    try{ monthLabel = new Date().toLocaleDateString('id-ID', { timeZone: 'Africa/Cairo', month: 'long', year: 'numeric' }); }catch(e){}
+    var fmt = function(n){ return 'LE ' + Number(n || 0).toLocaleString('en-EG'); };
+    var medal = ['🥇', '🥈', '🥉'];
+    var pill = function(val, label){
+      var on = period === val;
+      return '<button onclick="window._ymKurirTopPeriod=\'' + val + '\';window.ymRenderKurirTop()" style="padding:5px 12px;border-radius:999px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid ' + (on ? '#10B981' : '#e5e7eb') + ';background:' + (on ? '#10B981' : '#fff') + ';color:' + (on ? '#fff' : '#6b7280') + '">' + label + '</button>';
+    };
+    var rowsHtml = list.length ? list.map(function(c, i){
+      var top = i === 0;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;margin-top:6px;background:' + (top ? '#FEF3C7' : '#f9fafb') + ';border:1px solid ' + (top ? '#FDE68A' : '#f1f5f9') + '">'
+        + '<div style="width:28px;text-align:center;font-size:' + (i < 3 ? '20px' : '13px') + ';font-weight:800;color:#6b7280;flex-shrink:0">' + (i < 3 ? medal[i] : (i + 1)) + '</div>'
+        + '<div style="flex:1;min-width:0"><p style="margin:0;font-size:13px;font-weight:800;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _escT(c.name) + '</p>'
+        + (top ? '<p style="margin:0;font-size:10px;font-weight:700;color:#B45309">Calon penerima hadiah</p>' : '') + '</div>'
+        + '<div style="text-align:right;flex-shrink:0"><p style="margin:0;font-size:13px;font-weight:800;color:#111827">' + c.count + ' <span style="font-size:10px;font-weight:600;color:#9ca3af">antar</span></p>'
+        + '<p style="margin:0;font-size:11px;font-weight:700;color:#10B981">' + fmt(c.sum) + '</p></div>'
+      + '</div>';
+    }).join('') : '<p style="margin:10px 0 2px;text-align:center;font-size:12px;color:#9ca3af">Belum ada pengantaran selesai ' + (period === 'month' ? 'bulan ini' : '') + '.</p>';
+    box.innerHTML = '<div class="bg-white rounded-2xl p-4 mb-4 border border-gray-100">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      +   '<div><p class="text-sm font-black text-gray-800" style="margin:0">🏆 Kurir Teratas</p>'
+      +   '<p class="text-[11px] text-gray-500" style="margin:2px 0 0">' + (period === 'month' ? 'Periode ' + _escT(monthLabel) : 'Sepanjang waktu') + ' · urut jumlah pengantaran, lalu pendapatan</p></div>'
+      +   '<div style="display:flex;gap:6px">' + pill('month', 'Bulan ini') + pill('all', 'Semua waktu') + '</div>'
+      + '</div>'
+      + rowsHtml
+      + '</div>';
+  };
 
   // ── Badge admin: jumlah pendaftar kurir yang menunggu persetujuan ──
   function _isAdm(){
