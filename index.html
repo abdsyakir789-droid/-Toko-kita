@@ -4675,6 +4675,36 @@ h3.text-sm.font-bold.text-gray-800 {
         <i class="fa-solid fa-truck-fast text-primary text-base opacity-70"></i>
       </div>
 
+      <!-- ✅ Pre-order (PO) -->
+      <div class="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 mb-3.5">
+        <div class="flex items-center gap-3 cursor-pointer" onclick="window._ymPoToggle('ad')">
+          <div class="relative flex-shrink-0">
+            <input type="checkbox" id="adIsPO" class="sr-only"/>
+            <div id="adPOBox" class="w-5 h-5 rounded-md border-2 border-gray-300 flex items-center justify-center transition-all bg-white">
+              <i id="adPOCheck" class="fa-solid fa-check text-white text-[10px] hidden"></i>
+            </div>
+          </div>
+          <div class="flex-1">
+            <p class="text-sm font-bold text-gray-800">Jual sebagai Pre-order</p>
+            <p class="text-[10px] text-gray-500 mt-0.5">Barang dibuat setelah ada pesanan</p>
+          </div>
+          <i class="fa-solid fa-clock text-orange-500 text-base opacity-70"></i>
+        </div>
+        <div id="adPOFields" style="display:none" class="mt-3">
+          <div class="flex gap-2">
+            <div class="flex-1 min-w-0">
+              <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Siap dalam (hari) *</label>
+              <input id="adPODays" type="number" min="1" max="60" placeholder="2" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white"/>
+            </div>
+            <div class="flex-1 min-w-0">
+              <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Kuota pesanan *</label>
+              <input id="adPOQuota" type="number" min="1" placeholder="20" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white"/>
+            </div>
+          </div>
+          <p class="text-[10px] text-orange-700 mt-2 leading-snug">Kuota = jumlah barang maksimal yang bisa dipesan sekaligus. Slot terbuka lagi setelah pesanan diantar/selesai. Stok tidak perlu diisi.</p>
+        </div>
+      </div>
+
       <!-- ✅ Checkbox Jual via YallaFood -->
       <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 cursor-pointer mb-3.5" onclick="document.getElementById('isYallaFood').click()">
         <div class="relative flex-shrink-0">
@@ -4790,6 +4820,8 @@ h3.text-sm.font-bold.text-gray-800 {
           <span id="detailSold" style="font-weight:600;color:#374151"></span>
         </div>
       </div>
+      <!-- Info Pre-order (diisi oleh _ymPoFillDetail, tersembunyi utk produk biasa) -->
+      <div id="detailPoInfo" style="display:none"></div>
     </div>
 
     <!-- Description -->
@@ -6159,7 +6191,7 @@ window._FB = {
   },
 
   // ── Post Ad ───────────────────────────────────────────────────
-  async postAd(title, price, cat, desc, siapTaushil, file, location, variants, size, varName, isYallaFood, stock) {
+  async postAd(title, price, cat, desc, siapTaushil, file, location, variants, size, varName, isYallaFood, stock, po) {
     const wrap=document.getElementById('uploadProgressWrap');
     const bar=document.getElementById('uploadBar');
     const pct=document.getElementById('uploadPct');
@@ -6185,6 +6217,7 @@ window._FB = {
           size: size||'',
           var_name: varName||'',
           stock: (stock !== undefined && stock !== null && stock !== '') ? Number(stock) : null,
+          ...(po ? { is_preorder: true, po_days: po.days, po_quota: po.quota } : {}),
           likes:0, dislikes:0, liked_by:[], disliked_by:[],
           seller_name:window._S.user.name, seller_uid:window._S.user.uid,
           seller_email:window._S.user.email, seller_photo:window._S.user.photoUrl||'',
@@ -6248,34 +6281,21 @@ window._FB = {
 
   async toggleLike(adId, type) {
     if(!window._S.user){showToast('Login dulu','red');return;}
-    const uid=window._S.user.uid;
     const ad=window._S.fbAds.find(a=>a.id===adId); if(!ad) return;
-    const liked=(ad.liked_by||ad.likedBy||[]).includes(uid);
-    const disliked=(ad.disliked_by||ad.dislikedBy||[]).includes(uid);
-    // Use RPC for atomic array+counter update via Supabase
-    if(type==='like'){
-      const newLikedBy = liked
-        ? (ad.liked_by||[]).filter(x=>x!==uid)
-        : [...(ad.liked_by||[]), uid];
-      const newDislikedBy = (!liked && disliked) ? (ad.disliked_by||[]).filter(x=>x!==uid) : (ad.disliked_by||[]);
-      await supabase.from('ads').update({
-        likes: newLikedBy.length,
-        liked_by: newLikedBy,
-        dislikes: newDislikedBy.length,
-        disliked_by: newDislikedBy
-      }).eq('id', adId);
-    } else {
-      const newDislikedBy = disliked
-        ? (ad.disliked_by||[]).filter(x=>x!==uid)
-        : [...(ad.disliked_by||[]), uid];
-      const newLikedBy = (!disliked && liked) ? (ad.liked_by||[]).filter(x=>x!==uid) : (ad.liked_by||[]);
-      await supabase.from('ads').update({
-        dislikes: newDislikedBy.length,
-        disliked_by: newDislikedBy,
-        likes: newLikedBy.length,
-        liked_by: newLikedBy
-      }).eq('id', adId);
-    }
+    // Like/dislike lewat RPC SECURITY DEFINER (atomik, uid diambil server dari JWT).
+    // PATCH langsung ke ads tidak lagi diizinkan untuk iklan milik orang lain.
+    try {
+      const r = await window._supaFetch('/rest/v1/rpc/ym_toggle_ad_reaction', {
+        method: 'POST', body: JSON.stringify({ p_ad: adId, p_type: type === 'dislike' ? 'dislike' : 'like' })
+      });
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      ad.likes = j.likes; ad.dislikes = j.dislikes;
+      ad.liked_by = ad.likedBy = j.liked_by || [];
+      ad.disliked_by = ad.dislikedBy = j.disliked_by || [];
+      const lc = document.getElementById('likeCount'); if(lc) lc.textContent = j.likes;
+      const dc = document.getElementById('dislikeCount'); if(dc) dc.textContent = j.dislikes;
+    } catch(e) { showToast('Gagal menyimpan reaksi', 'red'); }
     // Supabase realtime channel akan refresh otomatis
   },
 
@@ -7079,6 +7099,7 @@ async function _writeAllCaches(ads) {
       disc: a.disc || 0,
       badge: a.badge || '',
       siapTaushil: a.siapTaushil || false,
+      is_preorder: !!a.is_preorder, po_days: a.po_days || null,
       sellerName: a.sellerName || '',
       location: a.location || a.loc || '',
       is_sponsored: a.is_sponsored || false
@@ -9879,6 +9900,7 @@ window.renderProducts = () => {
           onerror="this.onerror=null;this.src=window._YM_PH"/>
         ${p.badge?`<span class="absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm ${badgeCls}" style="z-index:2">${p.badge}</span>`:''}
         ${p.siapTaushil?`<img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1781317917/file_00000000665871f4ae0c02ec23ea4b84-removebg-preview_fqwvyq.png" style="position:absolute;bottom:0;left:0;width:65px;height:auto;z-index:3;pointer-events:none" alt="Ready Taushil"/>`:''}
+        ${window._ymPoBadge?window._ymPoBadge(p):''}
         <div class="absolute inset-0 bg-gradient-to-t from-black/15 to-transparent pointer-events-none" style="z-index:1"></div>
 
         <!-- Share Icon — pojok kanan atas, untuk semua -->
@@ -10410,6 +10432,7 @@ window.openDetail = async id => {
           sellerUid: d.seller_uid, sellerName: d.seller_name,
           sellerEmail: d.seller_email, sellerPhoto: d.seller_photo,
           location: d.location, siapTaushil: d.siap_taushil,
+          is_preorder: !!d.is_preorder, po_days: d.po_days||null, po_quota: d.po_quota||null,
           variants: d.variants||[],
           size: d.size||'',
           varName: d.var_name||'',
@@ -10727,6 +10750,7 @@ function _miniAdCard(p, highlightSeller) {
           onerror="this.onerror=null;this.src=window._YM_PH"/>
         ${p.badge?`<span class="absolute top-1.5 left-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400 text-white shadow-sm">${p.badge}</span>`:''}
         ${p.siapTaushil?`<img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1781317917/file_00000000665871f4ae0c02ec23ea4b84-removebg-preview_fqwvyq.png" style="position:absolute;bottom:0;left:0;width:65px;height:auto;z-index:3;pointer-events:none" alt="Ready Taushil"/>`:''}
+        ${window._ymPoBadge?window._ymPoBadge(p):''}
       </div>
       <div class="p-2 flex flex-col gap-0.5">
         <p style="font-family:'Inter',sans-serif;font-size:11px;font-weight:500;color:#1e293b;line-height:1.45;letter-spacing:-.01em" class="lc2">${name}</p>
@@ -11502,6 +11526,7 @@ async function openChatRoom(adId, sellerId, sellerName, sellerPhoto, adTitle, ad
                 <span style="font-size:11px;font-weight:700;color:#374151">Total</span>
                 <span style="font-size:14px;font-weight:900;color:#10B981">${orderData.totalStr||''}</span>
               </div>
+              ${window._ymPoOrderBlock ? window._ymPoOrderBlock(orderData, m) : ''}
               ${window._isOrderOwner(orderData.sellerUid) ? `
               <div style="padding:8px 12px 10px;border-top:1px solid #f1f5f9;display:flex;flex-direction:column;gap:6px">
                 <p style="font-size:10px;font-weight:700;color:#9ca3af;margin-bottom:2px">Update Status Pesanan:</p>
@@ -14477,6 +14502,7 @@ window.openSellerFromFollowing = async function(uid, name, photoUrl) {
       sellerUid: d.seller_uid, sellerName: d.seller_name || name,
       sellerEmail: d.seller_email || '', sellerPhoto: d.seller_photo || photoUrl,
       location: d.location, siapTaushil: d.siap_taushil,
+      is_preorder: !!d.is_preorder, po_days: d.po_days||null, po_quota: d.po_quota||null,
       rating: d.rating_score !== undefined ? Number(d.rating_score) : (d.rating ? Number(d.rating) : 0), rating_count: d.rating_count||0, sold: d.sold||0, disc: d.disc||0,
       likes: d.likes||0, dislikes: d.dislikes||0,
       likedBy: d.liked_by||[], dislikedBy: d.disliked_by||[]
@@ -14756,6 +14782,7 @@ window.cartRenderSuggestions=function(){
         <img src="${a.imgUrl||a.img||''}" loading="lazy" style="width:100%;height:100%;object-fit:cover"
           onerror="this.onerror=null;this.src=window._YM_PH"/>
         ${a.siapTaushil?`<img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1781317917/file_00000000665871f4ae0c02ec23ea4b84-removebg-preview_fqwvyq.png" style="position:absolute;bottom:0;left:0;width:65px;height:auto;z-index:3;pointer-events:none" alt="Ready Taushil"/>`:''}
+        ${window._ymPoBadge?window._ymPoBadge(a):''}
       </div>
       <div style="padding:8px">
         <p style="font-size:11px;font-weight:600;color:#1f2937;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.35;margin-bottom:3px">${a.title||a.name||''}</p>
@@ -15492,6 +15519,7 @@ window.closePostModal=()=>{
   // Reset form fields
   const cb=document.getElementById('siapTaushil'); if(cb){cb.checked=false;updateTaushilStyle(cb);}
   const yfcb=document.getElementById('isYallaFood'); if(yfcb){yfcb.checked=false;updateYallaFoodCheckStyle(yfcb);}
+  if(window._ymPoSet) window._ymPoSet('ad', null);
   const loc=document.getElementById('adLocation'); if(loc) loc.value='';
   const title=document.getElementById('adTitle'); if(title) title.value='';
   const price=document.getElementById('adPrice'); if(price) price.value='';
@@ -15618,9 +15646,11 @@ window.submitAd=async()=>{
   if(desc.length>800){showToast('Deskripsi maksimal 800 karakter','red');return;}
   const varNameCheck=document.getElementById('adVarName')?document.getElementById('adVarName').value.trim():'';
   if(!varNameCheck){showToast('Nama Varian wajib diisi','red');document.getElementById('adVarName').focus();return;}
+  const _po=window._ymPoRead?window._ymPoRead('ad'):null;
+  if(_po&&_po.error){showToast(_po.error,'red');return;}
   const stockCheck=document.getElementById('adStock')?document.getElementById('adStock').value.trim():'';
-  if(!stockCheck){showToast('Stok wajib diisi','red');document.getElementById('adStock').focus();return;}
-  const missingVarStock=window._varianStockMissing ? window._varianStockMissing(window._varianData) : null;
+  if(!stockCheck&&!_po){showToast('Stok wajib diisi','red');document.getElementById('adStock').focus();return;}
+  const missingVarStock=(!_po&&window._varianStockMissing) ? window._varianStockMissing(window._varianData) : null;
   if(missingVarStock){showToast('Stok untuk varian "'+missingVarStock+'" wajib diisi','red');return;}
 
   // ── Cek blacklist kata terlarang sebelum upload ──
@@ -15680,7 +15710,7 @@ window.submitAd=async()=>{
     const size=document.getElementById('adSize')?document.getElementById('adSize').value.trim():'';
     const varName=document.getElementById('adVarName')?document.getElementById('adVarName').value.trim():'';
     const stock=document.getElementById('adStock')?document.getElementById('adStock').value.trim():'';
-    await window._FB.postAd(title,price,cat,desc,siapTaushil,file,location,variants,size,varName,isYallaFood,stock);
+    await window._FB.postAd(title,price,cat,desc,siapTaushil,file,location,variants,size,varName,isYallaFood,_po?'':stock,_po);
   }
   catch(e){
     if((e.message||'').includes('EXPLICIT_CONTENT')) { showExplicitContentModal(); }
@@ -15893,7 +15923,8 @@ window.billboardClick = async function(idx) {
         sellerUid: d.seller_uid, sellerName: d.seller_name,
         sellerPhoto: d.seller_photo, location: d.location,
         siapTaushil: d.siap_taushil, rating: d.rating_score !== undefined ? Number(d.rating_score) : (d.rating ? Number(d.rating) : 0), rating_count: d.rating_count||0,
-        sold: d.sold||0, disc: d.disc||0, is_sponsored: d.is_sponsored
+        sold: d.sold||0, disc: d.disc||0, is_sponsored: d.is_sponsored,
+        is_preorder: !!d.is_preorder, po_days: d.po_days||null, po_quota: d.po_quota||null
       };
       if(!window._S.fbAds) window._S.fbAds = [];
       window._S.fbAds.push(ad);
@@ -18172,6 +18203,36 @@ window.removeVerification = async function() {
         <i class="fa-solid fa-truck-fast text-primary text-base opacity-70"></i>
       </div>
 
+      <!-- ✅ Pre-order (PO) -->
+      <div class="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 mb-3.5">
+        <div class="flex items-center gap-3 cursor-pointer" onclick="window._ymPoToggle('editAd')">
+          <div class="relative flex-shrink-0">
+            <input type="checkbox" id="editAdIsPO" class="sr-only"/>
+            <div id="editAdPOBox" class="w-5 h-5 rounded-md border-2 border-gray-300 flex items-center justify-center transition-all bg-white">
+              <i id="editAdPOCheck" class="fa-solid fa-check text-white text-[10px] hidden"></i>
+            </div>
+          </div>
+          <div class="flex-1">
+            <p class="text-sm font-bold text-gray-800">Jual sebagai Pre-order</p>
+            <p class="text-[10px] text-gray-500 mt-0.5">Barang dibuat setelah ada pesanan</p>
+          </div>
+          <i class="fa-solid fa-clock text-orange-500 text-base opacity-70"></i>
+        </div>
+        <div id="editAdPOFields" style="display:none" class="mt-3">
+          <div class="flex gap-2">
+            <div class="flex-1 min-w-0">
+              <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Siap dalam (hari) *</label>
+              <input id="editAdPODays" type="number" min="1" max="60" placeholder="2" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white"/>
+            </div>
+            <div class="flex-1 min-w-0">
+              <label class="text-xs font-semibold text-gray-600 mb-1.5 block">Kuota pesanan *</label>
+              <input id="editAdPOQuota" type="number" min="1" placeholder="20" class="inp w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white"/>
+            </div>
+          </div>
+          <p class="text-[10px] text-orange-700 mt-2 leading-snug">Kuota = jumlah barang maksimal yang bisa dipesan sekaligus. Slot terbuka lagi setelah pesanan diantar/selesai. Stok tidak perlu diisi.</p>
+        </div>
+      </div>
+
       <!-- ✅ Checkbox Jual via YallaFood -->
       <div class="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 cursor-pointer mb-3.5" onclick="document.getElementById('editIsYallaFood').click()">
         <div class="relative flex-shrink-0">
@@ -18245,6 +18306,8 @@ window.openEditAd = function(adId) {
   document.getElementById('editYallaFoodBox').style.borderColor = isYallaFood ? '#F59E0B' : '';
   document.getElementById('editYallaFoodCheck').classList.toggle('hidden', !isYallaFood);
 
+  if(window._ymPoSet) window._ymPoSet('editAd', window._ymIsPO && window._ymIsPO(ad) ? { days: ad.po_days, quota: ad.po_quota } : null);
+
   // Preview foto lama
   const prev = document.getElementById('editPhotoPreview');
   if(_editAdOldImgUrl) {
@@ -18308,9 +18371,11 @@ window.submitEditAd = async function() {
   if(!price) { showToast('Harga wajib diisi','red'); return; }
   if(!cat) { showToast('Kategori wajib dipilih','red'); return; }
   if(desc.length>800) { showToast('Deskripsi maksimal 800 karakter','red'); return; }
+  const _poEdit = window._ymPoRead ? window._ymPoRead('editAd') : null;
+  if(_poEdit && _poEdit.error) { showToast(_poEdit.error,'red'); return; }
   const editStockCheck = document.getElementById('editAdStock') ? document.getElementById('editAdStock').value.trim() : '';
-  if(!editStockCheck) { showToast('Stok wajib diisi','red'); document.getElementById('editAdStock').focus(); return; }
-  const missingVarStockEdit = window._varianStockMissing ? window._varianStockMissing(window._editVarianData) : null;
+  if(!editStockCheck && !_poEdit) { showToast('Stok wajib diisi','red'); document.getElementById('editAdStock').focus(); return; }
+  const missingVarStockEdit = (!_poEdit && window._varianStockMissing) ? window._varianStockMissing(window._editVarianData) : null;
   if(missingVarStockEdit) { showToast('Stok untuk varian "'+missingVarStockEdit+'" wajib diisi','red'); return; }
 
   // ── Cek blacklist kata terlarang sebelum simpan ──
@@ -18368,8 +18433,11 @@ window.submitEditAd = async function() {
         img_public_id: imgPublicId,
         size: size,
         var_name: varName,
-        stock: (stockVal !== '') ? Number(stockVal) : null,
-        variants: variants
+        stock: (stockVal !== '' && !_poEdit) ? Number(stockVal) : null,
+        variants: variants,
+        is_preorder: !!_poEdit,
+        po_days: _poEdit ? _poEdit.days : null,
+        po_quota: _poEdit ? _poEdit.quota : null
       })
     });
 
@@ -22199,6 +22267,12 @@ window.checkoutToChat = async function(){
     // Jika gagal cek, tetap lanjut (fail-open)
   }
 
+  // [PRE-ORDER] Pengingat + cek sisa kuota untuk item PO (produk biasa tidak terpengaruh)
+  if(window._ymPoCheckoutGuard){
+    var _poOk = await window._ymPoCheckoutGuard(groups);
+    if(!_poOk) return;
+  }
+
   for(var gi = 0; gi < groups.length; gi++){
     var grp = groups[gi];
     var p = grp.mainAd;
@@ -22229,6 +22303,8 @@ window.checkoutToChat = async function(){
         };
       })
     };
+    // [PRE-ORDER] tandai item PO (field tambahan, hanya ada kalau produknya PO)
+    if(window._ymPoTagItems) window._ymPoTagItems(orderPayload.items);
 
     try {
       // Pastikan chat dengan toko ini ada (tanpa membuka UI berkali-kali)
@@ -33628,6 +33704,215 @@ window._yfLocOnlyChange = function (payload, sigMap) {
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindAll); else bindAll();
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════
+     PRE-ORDER (PO)
+     Semua logika PO ada di blok ini. Sifatnya TAMBAHAN:
+     fitur lain hanya memanggil helper di bawah lewat
+     pengecekan `window._ymPo... ?` sehingga kalau blok ini
+     tidak ada, semuanya tetap jalan seperti sebelumnya.
+     DB: ads.is_preorder / po_days / po_quota + RPC ym_po_remaining
+═══════════════════════════════════════════════════ -->
+<script>
+(function(){
+  function $(id){ return document.getElementById(id); }
+  function esc(t){ return window._escHtml ? window._escHtml(t) : String(t==null?'':t).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+  window._ymIsPO = function(a){ return !!(a && (a.is_preorder === true || a.isPreorder === true)); };
+  function _days(a){ var d = parseInt(a && (a.po_days || a.poDays), 10); return d > 0 ? d : null; }
+  function _findAd(id){
+    var base = String(id || '').split('__')[0];
+    if(!base) return null;
+    try{
+      var list = (typeof getAllAds === 'function') ? getAllAds() : ((window._S && window._S.fbAds) || []);
+      return (list || []).find(function(a){ return String(a.id || '') === base; }) || null;
+    }catch(e){ return null; }
+  }
+
+  // ── Badge "Pre-order" di kiri bawah foto (di kanan badge Ready Taushil) ──
+  window._ymPoBadge = function(p){
+    if(!window._ymIsPO(p)) return '';
+    var left = p.siapTaushil ? 64 : 0;
+    return '<span style="position:absolute;bottom:0;left:' + left + 'px;z-index:3;pointer-events:none;height:29px;display:flex;align-items:center;padding:0 9px;background:#F97316;color:#fff;font-family:Inter,sans-serif;font-size:11px;font-weight:800;font-style:italic;letter-spacing:-.01em;border-radius:0 9px 0 0">Pre-order</span>';
+  };
+
+  // ── Form Pasang / Edit Iklan (prefix 'ad' atau 'editAd') ──
+  function _setUI(pre, on){
+    var cb = $(pre + 'IsPO'); if(!cb) return;
+    cb.checked = !!on;
+    var box = $(pre + 'POBox'), chk = $(pre + 'POCheck'), f = $(pre + 'POFields');
+    if(box){ box.style.background = on ? '#F97316' : ''; box.style.borderColor = on ? '#F97316' : ''; }
+    if(chk) chk.classList.toggle('hidden', !on);
+    if(f) f.style.display = on ? 'block' : 'none';
+    // Stok tidak dipakai untuk PO → sembunyikan kolomnya (kuota yang dipakai)
+    var st = $(pre + 'Stock');
+    if(st && st.parentElement) st.parentElement.style.display = on ? 'none' : '';
+  }
+  window._ymPoToggle = function(pre){ var cb = $(pre + 'IsPO'); if(cb) _setUI(pre, !cb.checked); };
+  window._ymPoSet = function(pre, val){
+    _setUI(pre, !!val);
+    var d = $(pre + 'PODays'), q = $(pre + 'POQuota');
+    if(d) d.value = (val && val.days) ? val.days : '';
+    if(q) q.value = (val && val.quota) ? val.quota : '';
+  };
+  window._ymPoRead = function(pre){
+    var cb = $(pre + 'IsPO');
+    if(!cb || !cb.checked) return null;
+    var d = parseInt(($(pre + 'PODays') || {}).value, 10);
+    var q = parseInt(($(pre + 'POQuota') || {}).value, 10);
+    if(!(d >= 1 && d <= 60)) return { error: 'Isi estimasi siap pre-order (1–60 hari)' };
+    if(!(q >= 1)) return { error: 'Isi kuota pre-order (minimal 1)' };
+    return { days: d, quota: q };
+  };
+
+  // ── Sisa kuota dari server (null = bukan PO, undefined = gagal cek) ──
+  window._ymPoRemaining = async function(adId){
+    try{
+      var r = await window._supaFetch('/rest/v1/rpc/ym_po_remaining', { method: 'POST', body: JSON.stringify({ p_ad: adId }) });
+      if(!r.ok) return undefined;
+      var v = await r.json();
+      return (v === null || v === undefined) ? null : Number(v);
+    }catch(e){ return undefined; }
+  };
+
+  // ── Halaman detail produk ──
+  window._ymPoFillDetail = async function(id){
+    var box = $('detailPoInfo'); if(!box) return;
+    var act = window._S && window._S.activeAdData;
+    var a = window._ymIsPO(act) && String(act.id) === String(id) ? act : _findAd(id);
+    if(!window._ymIsPO(a)){ box.style.display = 'none'; box.innerHTML = ''; box.dataset.adId = ''; return; }
+    var d = _days(a);
+    box.dataset.adId = String(a.id);
+    box.innerHTML =
+      '<div style="margin-top:10px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:10px 12px;font-family:Inter,sans-serif">' +
+        '<p style="font-size:12px;font-weight:800;color:#C2410C;margin:0 0 3px"><i class="fa-solid fa-clock" style="margin-right:5px"></i>Produk Pre-order</p>' +
+        '<p style="font-size:11.5px;color:#9A3412;margin:0">Dibuat setelah dipesan' + (d ? ' · siap ± <b>' + d + ' hari</b>' : '') + '</p>' +
+        '<p id="detailPoQuota" style="font-size:11px;color:#9A3412;margin:3px 0 0"></p>' +
+      '</div>';
+    box.style.display = 'block';
+    var rem = await window._ymPoRemaining(a.id);
+    var q = $('detailPoQuota');
+    if(!q || box.dataset.adId !== String(a.id)) return; // user sudah buka produk lain
+    if(typeof rem === 'number') q.innerHTML = rem > 0 ? 'Sisa kuota: <b>' + rem + '</b>' : '<b style="color:#DC2626">Kuota sedang penuh</b> · coba lagi nanti';
+  };
+  var _poPrevOpenDetail = window.openDetail;
+  if(typeof _poPrevOpenDetail === 'function'){
+    window.openDetail = async function(id){
+      var r = await _poPrevOpenDetail.apply(this, arguments);
+      try{ window._ymPoFillDetail(id); }catch(e){}
+      return r;
+    };
+  }
+
+  // ── Checkout: cek kuota + pengingat ──
+  function _confirmPO(days, names){
+    return new Promise(function(resolve){
+      var ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+      ov.innerHTML =
+        '<div style="background:#fff;border-radius:18px;max-width:340px;width:100%;padding:18px;font-family:Inter,sans-serif;box-shadow:0 10px 40px rgba(0,0,0,.2)">' +
+          '<div style="width:42px;height:42px;border-radius:12px;background:#FFF7ED;display:flex;align-items:center;justify-content:center;margin-bottom:10px"><i class="fa-solid fa-clock" style="color:#F97316;font-size:18px"></i></div>' +
+          '<p style="font-size:15px;font-weight:800;color:#111827;margin:0 0 6px">Pesanan pre-order</p>' +
+          '<p style="font-size:12.5px;color:#4B5563;line-height:1.55;margin:0 0 4px">' + esc(names.join(', ')) + ' dibuat setelah kamu pesan' + (days ? ', perkiraan siap <b>± ' + days + ' hari</b>' : '') + '.</p>' +
+          '<p style="font-size:12.5px;color:#4B5563;line-height:1.55;margin:0 0 14px">Kamu akan dikabari penjual saat pesanan siap diambil.</p>' +
+          '<div style="display:flex;gap:8px">' +
+            '<button data-po="0" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #E5E7EB;background:#fff;font-size:13px;font-weight:700;color:#374151;cursor:pointer">Batal</button>' +
+            '<button data-po="1" style="flex:1;padding:10px;border-radius:12px;border:none;background:#10B981;font-size:13px;font-weight:700;color:#fff;cursor:pointer">Lanjut pesan</button>' +
+          '</div>' +
+        '</div>';
+      ov.addEventListener('click', function(e){
+        var b = e.target.closest ? e.target.closest('[data-po]') : null;
+        if(b){ ov.remove(); resolve(b.getAttribute('data-po') === '1'); }
+        else if(e.target === ov){ ov.remove(); resolve(false); }
+      });
+      document.body.appendChild(ov);
+    });
+  }
+  window._ymPoCheckoutGuard = async function(groups){
+    var need = {}, names = {}, maxDays = 0;
+    (groups || []).forEach(function(g){
+      (g.items || []).forEach(function(i){
+        var a = _findAd(i.cartKey || i.id);
+        if(!window._ymIsPO(a)) return;
+        need[a.id] = (need[a.id] || 0) + (parseInt(i.qty, 10) || 1);
+        names[a.id] = a.title || i.title || 'Produk';
+        maxDays = Math.max(maxDays, _days(a) || 0);
+      });
+    });
+    var ids = Object.keys(need);
+    if(!ids.length) return true; // tidak ada item PO → checkout normal
+    for(var k = 0; k < ids.length; k++){
+      var rem = await window._ymPoRemaining(ids[k]);
+      if(typeof rem === 'number' && need[ids[k]] > rem){
+        showToast(rem <= 0 ? 'Kuota pre-order "' + names[ids[k]] + '" sedang penuh' : 'Kuota pre-order "' + names[ids[k]] + '" tinggal ' + rem, 'red');
+        return false;
+      }
+    }
+    return await _confirmPO(maxDays, ids.map(function(id){ return names[id]; }));
+  };
+  window._ymPoTagItems = function(items){
+    (items || []).forEach(function(it){
+      var a = _findAd(it.id);
+      if(window._ymIsPO(a)) it.po = { days: _days(a) };
+    });
+  };
+
+  // ── Bubble pesanan di chat: label PO + tombol "siap diambil" (penjual) ──
+  window._ymPoOrderBlock = function(orderData, m){
+    var po = ((orderData && orderData.items) || []).filter(function(i){ return i && i.po; });
+    if(!po.length) return '';
+    var days = 0;
+    po.forEach(function(i){ days = Math.max(days, parseInt(i.po.days, 10) || 0); });
+    var html = '<div style="padding:7px 12px;background:#FFF7ED;border-top:1px solid #FED7AA;font-size:10.5px;font-weight:700;color:#C2410C"><i class="fa-solid fa-clock" style="font-size:10px;margin-right:4px"></i>Pre-order' + (days ? ' · siap ± ' + days + ' hari' : '') + '</div>';
+    var st = m && m.status;
+    if(m && m.id && window._isOrderOwner && window._isOrderOwner(orderData.sellerUid) && st !== 'selesai' && st !== 'dibatalkan'){
+      var sent = false;
+      try{ sent = localStorage.getItem('ym_po_ready_' + m.id) === '1'; }catch(e){}
+      var buyer = orderData.buyerUid || (window._S && window._S.activeChatBuyerId) || '';
+      var chat = (window._S && window._S.activeChatId) || '';
+      html += '<div style="padding:8px 12px 2px">' +
+        '<button id="ympo-ready-' + esc(m.id) + '" onclick="ymPoNotifyReady(\'' + esc(chat) + '\',\'' + esc(buyer) + '\',\'' + esc(m.id) + '\',\'' + esc(orderData.sellerUid || '') + '\')" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 10px;border-radius:20px;border:1.5px solid #F97316;background:' + (sent ? '#fff' : '#F97316') + ';color:' + (sent ? '#C2410C' : '#fff') + ';font-size:11px;font-weight:700;cursor:pointer">' +
+          '<i class="fa-solid fa-bell" style="font-size:10px"></i> <span>' + (sent ? 'Pembeli sudah dikabari · kirim ulang' : 'Kabari: pesanan siap diambil') + '</span>' +
+        '</button></div>';
+    }
+    return html;
+  };
+  window.ymPoNotifyReady = async function(chatId, buyerId, msgId, sellerUid){
+    if(!window._isOrderOwner || !window._isOrderOwner(sellerUid)){ showToast('Hanya penjual yang bisa mengabari pembeli', 'red'); return; }
+    if(!chatId || !buyerId){ showToast('Data pesanan tidak lengkap', 'red'); return; }
+    var btn = $('ympo-ready-' + msgId);
+    if(btn){ if(btn.dataset.busy) return; btn.dataset.busy = '1'; btn.style.opacity = '.6'; }
+    try{
+      var msg = 'Pesanan pre-order kamu sudah siap diambil ✅';
+      // sendChatMessage sudah mengirim push ke pembeli
+      await window._FB.sendChatMessage(chatId, msg + '. Silakan atur pengambilan/pengantaran di chat ini ya.', 'text', buyerId);
+      var me = window._S.user || {};
+      var sellerName = me.name || 'Penjual';
+      try{
+        await window._supaFetch('/rest/v1/notifications', {
+          method: 'POST', headers: { 'Prefer': 'return=minimal' },
+          body: JSON.stringify({
+            to_uid: buyerId, user_id: buyerId, type: 'order_status',
+            message: sellerName + ' — ' + msg,
+            sender_name: sellerName, sender_uid: me.uid, sender_photo: me.photoUrl || '',
+            is_read: false, created_at: new Date().toISOString()
+          })
+        });
+      }catch(e){ console.warn('[ymPoNotifyReady notif]', e.message); }
+      try{ localStorage.setItem('ym_po_ready_' + msgId, '1'); }catch(e){}
+      showToast('Pembeli sudah dikabari', 'green');
+      if(btn){
+        btn.style.background = '#fff'; btn.style.color = '#C2410C';
+        var sp = btn.querySelector('span'); if(sp) sp.textContent = 'Pembeli sudah dikabari · kirim ulang';
+      }
+    }catch(e){
+      showToast('Gagal mengabari: ' + (e.message || e), 'red');
+    }finally{
+      if(btn){ delete btn.dataset.busy; btn.style.opacity = ''; }
+    }
+  };
 })();
 </script>
 </body>
