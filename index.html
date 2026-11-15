@@ -3575,7 +3575,8 @@ h3.text-sm.font-bold.text-gray-800 {
       </div>
 
       <!-- 3. Panel Admin -->
-      <div onclick="openAdminPanel()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 flex-1 transition-all hover:shadow-md hover:-translate-y-0.5 text-center cursor-pointer group">
+      <div onclick="openAdminPanel()" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 flex-1 transition-all hover:shadow-md hover:-translate-y-0.5 text-center cursor-pointer group" style="position:relative">
+        <span id="ymKurirAdminTileBadge" style="display:none;position:absolute;top:8px;right:10px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;align-items:center;justify-content:center;line-height:1"></span>
         <div class="w-10 h-10 rounded-xl bg-indigo-50 group-hover:bg-indigo-100 flex items-center justify-center flex-shrink-0 transition-colors">
           <i class="fa-solid fa-shield-halved text-indigo-600"></i>
         </div>
@@ -8889,6 +8890,11 @@ function _runNotifCardDefault(card) {
   if (type === 'user_report') {
     closeNotifFullScreen();
     setTimeout(() => { if (window.openReportsAdmin) openReportsAdmin(); }, 150);
+    return;
+  }
+  if (type === 'kurir_daftar') {
+    closeNotifFullScreen();
+    setTimeout(() => { if (window._ymOpenKurirAdminTab) _ymOpenKurirAdminTab(); }, 150);
     return;
   }
   if (type === 'yallakurir_order') {
@@ -16727,7 +16733,7 @@ if ('serviceWorker' in navigator) {
         <button id="aptab-ads" onclick="switchApTab('ads')" class="ap-tab">Aktivasi Iklan</button>
         <button id="aptab-verify" onclick="switchApTab('verify')" class="ap-tab">Verifikasi User</button>
         <button id="aptab-title" onclick="switchApTab('title'); if(window.loadSponsorTitleAdminUI) loadSponsorTitleAdminUI();" class="ap-tab">📝 Judul Section</button>
-        <button id="aptab-kurir" onclick="switchApTab('kurir'); if(window.loadKurirAdminUI) loadKurirAdminUI();" class="ap-tab">🛵 Kurir YallaFood</button>
+        <button id="aptab-kurir" onclick="switchApTab('kurir'); if(window.loadKurirAdminUI) loadKurirAdminUI();" class="ap-tab">🛵 Kurir YallaFood<span id="ymKurirTabBadge" style="display:none;margin-left:5px;min-width:17px;height:17px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;align-items:center;justify-content:center;vertical-align:middle;line-height:1"></span></button>
         <button id="aptab-yallakurir" onclick="switchApTab('yallakurir'); if(window.loadYkAdminUI) loadYkAdminUI();" class="ap-tab">📦 YallaKurir</button>
       </div>
     </div>
@@ -27158,6 +27164,8 @@ window.submitDaftarKurir = async function() {
     });
     if (!res.ok) throw new Error('Gagal mendaftar');
     showToast('Pendaftaran terkirim, menunggu verifikasi admin!', 'green');
+    // Kabari admin (notif lonceng + push) — fire & forget, tidak menghambat pendaftaran
+    if (window._ymKurirNotifyAdminNew) window._ymKurirNotifyAdminNew(name, area);
     openDaftarKurir();
   } catch (e) {
     showToast('Gagal mendaftar: ' + e.message, 'red');
@@ -27550,6 +27558,7 @@ window.loadKurirAdminUI = async function() {
         </div>` : ''}
       </div>
     `).join('');
+    if (window.ymRefreshKurirPendingBadge) window.ymRefreshKurirPendingBadge();
   } catch (e) {
     box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat data kurir.</p>';
   }
@@ -27588,6 +27597,10 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
           method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({ is_active: !wantBlocked })
         });
       } catch (e) {}
+    }
+    // Pendaftaran DISETUJUI (bukan buka-blokir) → kabari user lewat notif lonceng + push
+    if (courierUid && newStatus === 'active' && prevStatus !== 'blocked' && window._ymKurirNotifyApproved) {
+      window._ymKurirNotifyApproved(courierUid);
     }
     const msg = { active: 'Kurir diaktifkan!', rejected: 'Kurir ditolak', blocked: 'Kurir diblokir' }[newStatus] || 'Status kurir diperbarui';
     showToast(msg, 'green');
@@ -33913,6 +33926,128 @@ window._yfLocOnlyChange = function (payload, sigMap) {
       if(btn){ delete btn.dataset.busy; btn.style.opacity = ''; }
     }
   };
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════
+     KURIR YALLAFOOD — notif "disetujui" ke user + badge
+     pendaftar baru untuk admin. Tambahan murni: dipanggil
+     dari kurirAdminSetStatus / loadKurirAdminUI lewat
+     pengecekan `window.xxx ?`.
+═══════════════════════════════════════════════════ -->
+<script>
+(function(){
+  // ── Notif ke user saat pendaftaran kurir disetujui ──
+  window._ymKurirNotifyApproved = async function(uid){
+    if(!uid) return;
+    var msg = 'Pendaftaran Anda sebagai kurir YallaFood telah disetujui. Ketuk untuk membuka dashboard kurir.';
+    try{
+      await window._supaFetch('/rest/v1/notifications', {
+        method: 'POST', headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          to_uid: uid, user_id: uid, type: 'yallafood_kurir',
+          message: msg, sender_name: 'YallaFood',
+          is_read: false, created_at: new Date().toISOString()
+        })
+      });
+    }catch(e){ console.warn('[kurir approved notif]', e.message); }
+    try{
+      if(typeof window.sendPushToUser === 'function') window.sendPushToUser(uid, 'YallaFood', 'Pendaftaran Anda sebagai kurir YallaFood telah disetujui 🎉', '/');
+    }catch(e){}
+  };
+
+  // ── Notif + push ke admin saat ada user baru mendaftar kurir ──
+  window._ymKurirNotifyAdminNew = async function(name, area){
+    var me = (window._S && window._S.user) || {};
+    if(!me.uid) return;
+    var uids = [];
+    try{
+      var r = await window._supaFetch('/rest/v1/rpc/get_admin_uids', { method: 'POST', body: '{}' });
+      var rows = r.ok ? await r.json() : [];
+      uids = (rows || []).map(function(x){ return typeof x === 'string' ? x : (x && (x.get_admin_uids || x.uid)); }).filter(Boolean);
+    }catch(e){}
+    var nm = String(name || me.name || 'Seseorang').slice(0, 60);
+    var msg = nm + ' mendaftar sebagai kurir YallaFood' + (area ? ' (daerah: ' + String(area).slice(0, 60) + ')' : '') + '. Ketuk untuk meninjau.';
+    for(var i = 0; i < uids.length; i++){
+      var adm = uids[i];
+      if(adm === me.uid) continue;
+      try{
+        await window._supaFetch('/rest/v1/notifications', {
+          method: 'POST', headers: { 'Prefer': 'return=minimal' },
+          body: JSON.stringify({
+            to_uid: adm, user_id: adm, type: 'kurir_daftar', message: msg,
+            sender_name: nm, sender_uid: me.uid, sender_photo: me.photoUrl || '',
+            is_read: false, created_at: new Date().toISOString()
+          })
+        });
+      }catch(e){ console.warn('[kurir daftar notif]', e.message); }
+      try{
+        if(typeof window.sendPushToUser === 'function') window.sendPushToUser(adm, 'Pendaftar kurir baru 🛵', nm + ' mendaftar sebagai kurir YallaFood', '/?ym_open=kurir_admin');
+      }catch(e){}
+    }
+  };
+
+  // Buka Panel Admin langsung di tab Kurir YallaFood (dari notif lonceng / push)
+  window._ymOpenKurirAdminTab = async function(){
+    var u = window._S && window._S.user;
+    if(!u || typeof isAdmin !== 'function' || !isAdmin(u.email)) return;
+    try{
+      if(typeof window.openAdminPanel === 'function') await window.openAdminPanel();
+      if(typeof window.switchApTab === 'function') window.switchApTab('kurir');
+      if(typeof window.loadKurirAdminUI === 'function') window.loadKurirAdminUI();
+    }catch(e){}
+  };
+  // Push diklik → app dibuka dengan ?ym_open=kurir_admin → tunggu login admin siap lalu buka tab
+  (function(){
+    var p; try{ p = new URLSearchParams(location.search).get('ym_open'); }catch(e){}
+    if(p !== 'kurir_admin') return;
+    try{ var url = new URL(location.href); url.searchParams.delete('ym_open'); history.replaceState(history.state, '', url.pathname + url.search + url.hash); }catch(e){}
+    var tries = 0;
+    var t = setInterval(function(){
+      tries++;
+      var u = window._S && window._S.user;
+      if(u && u.email){ clearInterval(t); window._ymOpenKurirAdminTab(); }
+      else if(tries > 40) clearInterval(t);
+    }, 500);
+  })();
+
+  // ── Badge admin: jumlah pendaftar kurir yang menunggu persetujuan ──
+  function _isAdm(){
+    var u = window._S && window._S.user;
+    return !!(u && typeof isAdmin === 'function' && isAdmin(u.email));
+  }
+  function _setBadge(id, n){
+    var b = document.getElementById(id); if(!b) return;
+    b.textContent = n > 99 ? '99+' : String(n);
+    b.style.display = n > 0 ? 'inline-flex' : 'none';
+  }
+  var _busy = false;
+  window.ymRefreshKurirPendingBadge = async function(){
+    if(!_isAdm()){ _setBadge('ymKurirAdminTileBadge', 0); _setBadge('ymKurirTabBadge', 0); return; }
+    if(_busy) return; _busy = true;
+    try{
+      var r = await window._supaFetch('/rest/v1/courier_profiles?status=eq.pending&select=id');
+      if(r.ok){
+        var rows = await r.json();
+        var n = Array.isArray(rows) ? rows.length : 0;
+        _setBadge('ymKurirAdminTileBadge', n);
+        _setBadge('ymKurirTabBadge', n);
+      }
+    }catch(e){}
+    finally{ _busy = false; }
+  };
+  // Cek saat app dibuka, saat kembali ke app, dan berkala tiap 60 detik (hanya admin yang fetch)
+  document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible') window.ymRefreshKurirPendingBadge(); });
+  [3000, 8000].forEach(function(ms){ setTimeout(function(){ window.ymRefreshKurirPendingBadge(); }, ms); });
+  setInterval(function(){ if(document.visibilityState === 'visible' && _isAdm()) window.ymRefreshKurirPendingBadge(); }, 60000);
+  var _prevOpenAdminPanel = window.openAdminPanel;
+  if(typeof _prevOpenAdminPanel === 'function'){
+    window.openAdminPanel = async function(){
+      var r = await _prevOpenAdminPanel.apply(this, arguments);
+      try{ window.ymRefreshKurirPendingBadge(); }catch(e){}
+      return r;
+    };
+  }
 })();
 </script>
 </body>
