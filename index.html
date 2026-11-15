@@ -26939,8 +26939,25 @@ window.openDaftarKurir = async function() {
       <label class="text-xs font-semibold text-gray-600">Nama Lengkap</label>
       <input id="kurirRegName" type="text" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-3 text-sm" value="${user.name || ''}" placeholder="Nama lengkap"/>
       <label class="text-xs font-semibold text-gray-600">Daerah/Wilayah Siap Antar</label>
-      <textarea id="kurirRegArea" rows="2" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-4 text-sm" placeholder="Contoh: Nadi Qomui, Hay Asher, sekitar Rehab"></textarea>
-      <button onclick="submitDaftarKurir()" class="w-full bg-primary text-white font-bold rounded-2xl py-3">Daftar Sekarang</button>
+      <textarea id="kurirRegArea" rows="2" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-3 text-sm" placeholder="Contoh: Nadi Qomui, Hay Asher, sekitar Rehab"></textarea>
+      <label class="text-xs font-semibold text-gray-600">Nomor WhatsApp <span style="color:#DC2626">*</span></label>
+      <input id="kurirRegWa" type="tel" inputmode="tel" maxlength="20" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" value="${(window._ymNormWa && window._ymNormWa(user.phone || '')) || ''}" placeholder="+20 1xx xxx xxxx"/>
+      <p class="text-[11px] text-gray-400 mt-1 mb-3">Wajib diawali kode negara (misal +20 atau +62). Hanya admin yang bisa melihat nomor ini.</p>
+      <label class="text-xs font-semibold text-gray-600">Foto Wajah <span style="color:#DC2626">*</span></label>
+      <div class="flex items-center gap-3 mt-1 mb-1">
+        <div id="kurirRegFacePrev" class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0"><i class="fa-solid fa-user text-gray-300 text-xl"></i></div>
+        <label for="kurirRegFace" class="flex-1 text-center text-sm font-bold text-primary border border-primary rounded-xl py-2 cursor-pointer">Pilih / Ambil Foto Wajah</label>
+        <input id="kurirRegFace" type="file" accept="image/*" capture="user" class="hidden" onchange="_kurirRegPreviewFace(this)"/>
+      </div>
+      <p class="text-[11px] text-gray-400 mb-3">Foto wajah jelas (tanpa masker/kacamata hitam). Hanya admin yang bisa melihat foto ini.</p>
+      <label class="text-xs font-semibold text-gray-600">Pernah jadi kurir makanan sebelumnya? <span style="color:#DC2626">*</span></label>
+      <div class="flex gap-2 mt-1 mb-2">
+        <label class="flex-1 flex items-center justify-center gap-2 border border-gray-200 rounded-xl py-2 text-sm cursor-pointer"><input type="radio" name="kurirRegExp" value="ya" onchange="document.getElementById('kurirRegExpNote').style.display='block'"/> Pernah</label>
+        <label class="flex-1 flex items-center justify-center gap-2 border border-gray-200 rounded-xl py-2 text-sm cursor-pointer"><input type="radio" name="kurirRegExp" value="tidak" onchange="document.getElementById('kurirRegExpNote').style.display='none'"/> Belum pernah</label>
+      </div>
+      <input id="kurirRegExpNote" type="text" maxlength="200" style="display:none" class="w-full border border-gray-200 rounded-xl px-3 py-2 mb-2 text-sm" placeholder="Di mana? (opsional, misal: Talabat, kurir pribadi)"/>
+      <div class="mb-4"></div>
+      <button id="kurirRegSubmitBtn" onclick="submitDaftarKurir()" class="w-full bg-primary text-white font-bold rounded-2xl py-3">Daftar Sekarang</button>
     `;
     return;
   }
@@ -26985,13 +27002,46 @@ window.closeDaftarKurir = function() {
   document.body.style.overflow = '';
 };
 
+window._kurirRegPreviewFace = function(input) {
+  const f = input && input.files && input.files[0]; if (!f) return;
+  const prev = document.getElementById('kurirRegFacePrev'); if (!prev) return;
+  const url = URL.createObjectURL(f);
+  prev.innerHTML = '<img src="' + url + '" class="w-full h-full object-cover"/>';
+};
 window.submitDaftarKurir = async function() {
   const user = window._S?.user;
   if (!user?.uid) { showToast('Login dulu', 'red'); return; }
   const name = document.getElementById('kurirRegName').value.trim();
   const area = document.getElementById('kurirRegArea').value.trim();
   if (!name) { showToast('Nama wajib diisi', 'red'); return; }
+  const wa = String((document.getElementById('kurirRegWa') || {}).value || '').replace(/[\s\-().]/g, '');
+  if (!wa) { showToast('Nomor WhatsApp wajib diisi', 'red'); return; }
+  if (!/^\+[1-9]\d{7,14}$/.test(wa)) { showToast('Nomor WhatsApp harus diawali kode negara, misal +20 atau +62', 'red'); return; }
+  const faceFile = (document.getElementById('kurirRegFace') || {}).files && document.getElementById('kurirRegFace').files[0];
+  if (!faceFile) { showToast('Foto wajah wajib diunggah', 'red'); return; }
+  const expEl = document.querySelector('input[name="kurirRegExp"]:checked');
+  if (!expEl) { showToast('Pilih: pernah atau belum pernah jadi kurir', 'red'); return; }
+  const experienced = expEl.value === 'ya';
+  const expNote = experienced ? String((document.getElementById('kurirRegExpNote') || {}).value || '').trim().slice(0, 200) : '';
+  const btn = document.getElementById('kurirRegSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Mengirim...'; }
   try {
+    // 1) Upload foto wajah (ikut diperiksa pendeteksi foto vulgar)
+    let faceUrl = '';
+    try {
+      const up = await window.uploadToR2(faceFile, null, 'kurir');
+      faceUrl = (up && up.secure_url) || '';
+    } catch (e) {
+      if ((e.message || '').includes('EXPLICIT_CONTENT') && window.showExplicitContentModal) { window.showExplicitContentModal(); return; }
+      throw new Error('foto wajah gagal diunggah');
+    }
+    if (!/^https:\/\//.test(faceUrl)) throw new Error('foto wajah gagal diunggah');
+    // 2) Data lamaran (privat: hanya pemilik & admin)
+    const ar = await window._supaFetch('/rest/v1/courier_applications?on_conflict=uid', {
+      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+      body: JSON.stringify({ uid: user.uid, wa: wa, face_url: faceUrl, experienced: experienced, experience_note: expNote || null, updated_at: new Date().toISOString() })
+    });
+    if (!ar.ok) throw new Error('data lamaran tidak tersimpan');
     const res = await window._supaFetch('/rest/v1/courier_profiles', {
       method: 'POST', prefer: 'return=minimal',
       body: JSON.stringify({ uid: user.uid, name, coverage_area: area, status: 'pending' })
@@ -27001,6 +27051,8 @@ window.submitDaftarKurir = async function() {
     openDaftarKurir();
   } catch (e) {
     showToast('Gagal mendaftar: ' + e.message, 'red');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Daftar Sekarang'; }
   }
 };
 
@@ -27335,17 +27387,38 @@ window.loadKurirAdminUI = async function() {
       });
     } catch (e) {}
     const _cdFmt = n => 'LE ' + Number(n || 0).toLocaleString('en-EG');
+    // Data lamaran privat (WA, foto wajah, pengalaman) — hanya admin yang bisa membaca
+    const _caMap = {};
+    try {
+      const ca = await window._supaFetch('/rest/v1/courier_applications?select=uid,wa,face_url,experienced,experience_note');
+      (ca.ok ? await ca.json() : []).forEach(x => { _caMap[x.uid] = x; });
+    } catch (e) {}
+    const _caEsc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const _caBlock = c => {
+      const a = _caMap[c.uid];
+      if (!a) return '<p class="text-[11px] text-gray-400 mt-1">Data lamaran belum ada (pendaftar lama).</p>';
+      const face = /^https:\/\//.test(a.face_url || '') ? _caEsc(a.face_url) : '';
+      const waDigits = String(a.wa || '').replace(/\D/g, '');
+      return '<div class="flex items-center gap-3 mt-2">'
+        + (face ? '<img src="' + face + '" onclick="window.openImgLightboxUrls&&window.openImgLightboxUrls([this.getAttribute(\'src\')],0)" class="w-14 h-14 rounded-full object-cover flex-shrink-0 cursor-pointer" style="border:2px solid #e5e7eb"/>' : '')
+        + '<div class="min-w-0 text-xs text-gray-600 leading-relaxed">'
+        + (waDigits ? '<a href="https://wa.me/' + waDigits + '" target="_blank" rel="noopener" class="font-bold" style="color:#15803D"><i class="fa-brands fa-whatsapp"></i> ' + _caEsc(a.wa) + '</a><br/>' : '')
+        + 'Pengalaman kurir: <b>' + (a.experienced ? 'Pernah' : 'Belum pernah') + '</b>'
+        + (a.experienced && a.experience_note ? ' — ' + _caEsc(a.experience_note) : '')
+        + '</div></div>';
+    };
     box.innerHTML = rows.map(c => `
       <div class="bg-white rounded-2xl p-3.5 border border-gray-100 mb-2.5">
         <div class="flex items-center justify-between mb-1 gap-2">
-          <p class="font-bold text-sm text-gray-800 min-w-0 truncate">${c.name}</p>
+          <p class="font-bold text-sm text-gray-800 min-w-0 truncate">${_caEsc(c.name)}</p>
           <div class="flex items-center gap-2 flex-shrink-0">
             ${c.status === 'active' ? `<button onclick="kurirAdminSetStatus('${c.id}','blocked')" class="text-[10px] font-bold px-3 py-1 rounded-full bg-red-500 text-white shadow-sm active:scale-95 transition-transform">Blokir</button>` : ''}
             ${c.status === 'blocked' ? `<button onclick="kurirAdminSetStatus('${c.id}','active','blocked')" class="text-[10px] font-bold px-3 py-1 rounded-full bg-primary text-white shadow-sm active:scale-95 transition-transform">Buka Blokir</button>` : ''}
             <span class="text-[10px] font-bold px-2 py-1 rounded-full ${c.status === 'active' ? 'bg-pl text-primary' : (c.status === 'rejected' || c.status === 'blocked') ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'}">${_kurirStatusLabel(c.status)}</span>
           </div>
         </div>
-        <p class="text-xs text-gray-500">Daerah: ${c.coverage_area || '-'}</p>
+        <p class="text-xs text-gray-500">Daerah: ${_caEsc(c.coverage_area || '-')}</p>
+        ${_caBlock(c)}
         <div class="flex items-center gap-5 mt-2 pt-2 border-t border-gray-50 ${c.status === 'pending' ? 'mb-2.5' : ''}">
           <div>
             <p class="text-[10px] text-gray-400 font-semibold leading-tight">Pengantaran</p>
