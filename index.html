@@ -26507,7 +26507,7 @@ async function _yfLoadTracking() {
           ${o.status === 'menunggu_kurir' ? `
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
             <button onclick="yfCancelFoodOrder('${o.id}')" class="text-[10px] font-bold px-2 py-1 rounded-full bg-red-50 text-red-500" style="white-space:nowrap">Batalkan</button>
-            <span class="text-[10px] font-bold px-2 py-1 rounded-full bg-pl text-primary" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap">Mencari Kurir <i class="fa-solid fa-spinner fa-spin" style="font-size:9px"></i></span>
+            <span class="text-[10px] font-bold px-2 py-1 rounded-full bg-pl text-primary" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap">${(o.courier_cancel_count || 0) > 0 ? 'Mencari Kurir Pengganti' : 'Mencari Kurir'} <i class="fa-solid fa-spinner fa-spin" style="font-size:9px"></i></span>
           </div>
           ` : o.status === 'diterima' ? `
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
@@ -26763,7 +26763,8 @@ async function _yfLoadKelolaPesanan() {
   box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat pesanan masuk...</p>';
   try {
     // status=neq.menunggu_kurir — seller baru lihat pesanan SETELAH kurir mengambilnya
-    const r = await window._supaFetch(`/rest/v1/food_orders?seller_id=eq.${encodeURIComponent(uid)}&status=neq.menunggu_kurir&select=*&order=created_at.desc`);
+    // + pesanan yang kurirnya membatalkan (courier_cancel_count>0) tetap tampil selagi dicarikan kurir pengganti
+    const r = await window._supaFetch(`/rest/v1/food_orders?seller_id=eq.${encodeURIComponent(uid)}&or=(status.neq.menunggu_kurir,courier_cancel_count.gt.0)&select=*&order=created_at.desc`);
     const rows = r.ok ? await r.json() : [];
     window._yfKelolaOrders = {}; rows.forEach(o => { window._yfKelolaOrders[o.id] = o; }); // utk snapshot ledger saat hapus
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood masuk.</p>'; return; }
@@ -26791,7 +26792,7 @@ async function _yfLoadKelolaPesanan() {
       // Seller cuma boleh maju sampai 'Kurir Menjemput' (dimasak -> dijemput);
       // tahap setelahnya (menuju/selesai) bukan wewenang seller, tombol disembunyikan.
       const canAdvance = next && (o.status === 'diterima' || o.status === 'dimasak');
-      const canCancel = o.status === 'diterima';
+      const canCancel = o.status === 'diterima' || o.status === 'menunggu_kurir';
       return `
       <div class="bg-white rounded-2xl p-3 border border-gray-100" style="position:relative">
         <button onclick="_yfToggleOrderMenu(event,'${o.id}')" title="Aksi" style="position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:none;cursor:pointer;color:#9ca3af;z-index:3"><i class="fa-solid fa-ellipsis-vertical"></i></button>
@@ -26808,7 +26809,7 @@ async function _yfLoadKelolaPesanan() {
             <p class="text-primary font-bold text-sm mt-1">Total: ${_yfFmtPrice((o.price || 0) * (o.qty || 1))}</p>
           </div>
           <div class="flex flex-col items-end gap-1 flex-shrink-0">
-            <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary" style="white-space:nowrap">${_YF_STATUS_LABEL[o.status] || o.status}</span>
+            <span class="text-[10px] font-bold px-2 py-1 h-fit rounded-full bg-pl text-primary" style="white-space:nowrap">${o.status === 'menunggu_kurir' ? 'Mencari Kurir Pengganti <i class="fa-solid fa-spinner fa-spin" style="font-size:9px"></i>' : (_YF_STATUS_LABEL[o.status] || o.status)}</span>
             ${o.courier_name ? `<span class="text-[10px] font-bold text-gray-900" style="white-space:nowrap">Kurir: <span${o.courier_id ? ` onclick="_yfOpenKurirProfile('${o.courier_id}','${o.id}','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}','kurir_seller')" style="cursor:pointer;touch-action:manipulation"` : ''}>${o.courier_name}</span></span>` : ''}
           </div>
         </div>
@@ -27244,7 +27245,8 @@ async function _kurirLoadWaitingRoom() {
   try {
     // Kecualikan order milik sendiri: kurir tidak boleh melihat/mengambil pesanan makanannya sendiri.
     const _uid = window._S?.user?.uid;
-    const _exclSelf = _uid ? '&buyer_id=neq.' + encodeURIComponent(_uid) : '';
+    // + kecualikan pesanan yang pernah DIBATALKAN kurir ini (declined_couriers) — dicarikan kurir lain.
+    const _exclSelf = _uid ? '&buyer_id=neq.' + encodeURIComponent(_uid) + '&declined_couriers=not.cs.' + encodeURIComponent('{' + _uid + '}') : '';
     const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir' + _exclSelf + '&select=*&order=created_at.desc');
     const rows = r.ok ? await r.json() : [];
     if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan menunggu kurir.</p>'; return; }
@@ -27352,6 +27354,7 @@ async function _kurirLoadMyDeliveries() {
       return `
       <div class="bg-white rounded-2xl p-3 border border-gray-100" style="position:relative">
         <div id="kurirOrderMenu-${o.id}" style="display:none;position:absolute;top:38px;right:10px;z-index:20;background:#fff;border:1px solid #f3f4f6;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;min-width:158px">
+          ${(o.status === 'diterima' || o.status === 'dimasak') ? `<button onclick="yfKurirCancelDelivery('${o.id}')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:600;color:#374151;background:none;border:none;border-bottom:1px solid #f3f4f6;cursor:pointer"><i class="fa-solid fa-ban mr-1.5 text-gray-400"></i>Batalkan pengantaran</button>` : ''}
           <button onclick="_kurirHideOrder('${o.id}')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:600;color:#dc2626;background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash-can mr-1.5"></i>Hapus pesanan</button>
         </div>
         <div class="flex items-center justify-between gap-1.5 mb-2 min-w-0">
@@ -27466,6 +27469,8 @@ window.yfKurirClaimOrder = async function(orderId) {
     // di _yfOrderPoolBroadcastSubscribe) supaya badge & waiting room mereka
     // ikut sinkron begitu pesanan ini hilang dari antrean bersama.
     _yfOrderPoolBroadcastNotify();
+    // Pesanan ini sebelumnya dibatalkan kurir lain → kabari pembeli & penjual: kurir pengganti sudah ada
+    if ((updated[0].courier_cancel_count || 0) > 0) _yfNotifyCourierChange(updated[0], 'replaced', user.name || 'Kurir');
     showToast('Pesanan berhasil diambil!', 'green');
     await _kurirLoadWaitingRoom();
     await _kurirLoadMyDeliveries();
@@ -27473,6 +27478,59 @@ window.yfKurirClaimOrder = async function(orderId) {
     showToast('Gagal mengambil pesanan: ' + e.message, 'red');
   }
 };
+
+// ── Kurir membatalkan pengantaran (hanya sebelum makanan dijemput: diterima/dimasak) ──
+// RPC yf_courier_cancel_order (server): kosongkan kurir, status kembali 'menunggu_kurir',
+// simpan status lama (resume_status) supaya kurir pengganti melanjutkan dari situ,
+// catat kurir ini di declined_couriers (tak bisa ambil lagi), hapus chat lama.
+// Lalu di sini: kabari pembeli & penjual + sebar ulang notif ke kurir aktif lain.
+window.yfKurirCancelDelivery = async function(orderId) {
+  const user = window._S?.user;
+  if (!user?.uid) return;
+  document.querySelectorAll('[id^="kurirOrderMenu-"]').forEach(el => { el.style.display = 'none'; });
+  if (!confirm('Batalkan pengantaran pesanan ini?\n\nPesanan akan otomatis dicarikan kurir lain, dan kamu tidak bisa mengambil pesanan ini lagi.')) return;
+  try {
+    const res = await window._supaFetch('/rest/v1/rpc/yf_courier_cancel_order', {
+      method: 'POST', body: JSON.stringify({ p_order_id: orderId, p_reason: null })
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      if (t.includes('YF_TOO_LATE')) showToast('Pesanan sudah dijemput, tidak bisa dibatalkan lagi', 'red');
+      else if (t.includes('YF_NOT_COURIER')) showToast('Pesanan ini bukan antaranmu lagi', 'red');
+      else showToast('Gagal membatalkan pengantaran', 'red');
+      await _kurirLoadMyDeliveries();
+      return;
+    }
+    const order = await res.json().catch(() => null);
+    showToast('Pengantaran dibatalkan, pesanan dicarikan kurir lain', 'green');
+    if (order && order.id) {
+      _yfNotifyCourierChange(order, 'cancelled', user.name || 'Kurir');
+      _yfNotifyActiveCouriers(order);
+    }
+    _yfOrderPoolBroadcastNotify();
+    await _kurirLoadMyDeliveries();
+    await _kurirLoadWaitingRoom();
+  } catch (e) {
+    showToast('Gagal membatalkan: ' + (e.message || e), 'red');
+  }
+};
+
+// Notif bel + push ke pembeli & penjual saat kurir membatalkan / kurir pengganti mengambil.
+function _yfNotifyCourierChange(order, kind, courierName) {
+  try {
+    const title = (order.ad_title || 'YallaFood').slice(0, 40);
+    const msgs = kind === 'replaced'
+      ? { buyer: `Kurir pengganti (${courierName}) sudah mengambil pesanan "${title}"`, seller: `Kurir pengganti (${courierName}) mengambil pesanan "${title}"` }
+      : { buyer: `Kurir membatalkan pengantaran "${title}". Sedang dicarikan kurir lain…`, seller: `Kurir membatalkan pengantaran "${title}". Sedang dicarikan kurir pengganti…` };
+    const now = new Date().toISOString();
+    const rows = [];
+    if (order.buyer_id) rows.push({ to_uid: order.buyer_id, user_id: order.buyer_id, type: 'yallafood_status', message: msgs.buyer, sender_name: 'YallaFood', is_read: false, created_at: now });
+    if (order.seller_id) rows.push({ to_uid: order.seller_id, user_id: order.seller_id, type: 'yallafood_seller_order', message: msgs.seller, sender_name: 'YallaFood', is_read: false, created_at: now });
+    if (rows.length) window._supaFetch('/rest/v1/notifications', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify(rows) }).catch(() => {});
+    if (order.buyer_id) { try { window.sendPushToUser(order.buyer_id, 'YallaFood', msgs.buyer, '/?go=yforders'); } catch (e) {} }
+    if (order.seller_id) { try { window.sendPushToUser(order.seller_id, 'YallaFood', msgs.seller, '/?go=yfseller'); } catch (e) {} }
+  } catch (e) {}
+}
 
 let _kurirChannel = null;
 function _kurirSubscribeRealtime() {
@@ -28570,10 +28628,11 @@ async function _yfOrderQueueRefreshBadge() {
     if (prow[0]?.status !== 'active') { badges.forEach(b => { b.style.display = 'none'; }); return; }
     // Kecualikan order milik sendiri: kurir yang juga PEMBELI tidak boleh dapat badge
     // "order baru" dari pesanan makanannya sendiri.
-    const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir&buyer_id=neq.' + encodeURIComponent(user.uid) + '&select=created_at');
+    const r = await window._supaFetch('/rest/v1/food_orders?status=eq.menunggu_kurir&buyer_id=neq.' + encodeURIComponent(user.uid) + '&declined_couriers=not.cs.' + encodeURIComponent('{' + user.uid + '}') + '&select=created_at,requeued_at');
     const rows = r.ok ? await r.json() : [];
     const lastSeen = _yfOrderQueueGetLastSeen();
-    const count = rows.filter(o => new Date(o.created_at).getTime() > lastSeen).length;
+    // requeued_at = pesanan masuk antrean LAGI karena kurir sebelumnya membatalkan
+    const count = rows.filter(o => new Date(o.requeued_at || o.created_at).getTime() > lastSeen).length;
     badges.forEach(b => {
       b.textContent = count > 9 ? '9+' : String(count);
       b.style.display = count > 0 ? 'flex' : 'none';
@@ -28736,7 +28795,8 @@ async function _yfNotifyActiveCouriers(order) {
     const couriers = cr.ok ? await cr.json() : [];
     if (!couriers.length) return;
     const now = new Date().toISOString();
-    const targets = couriers.filter(c => c.uid && c.uid !== order.buyer_id);
+    const _declined = (order && Array.isArray(order.declined_couriers)) ? order.declined_couriers : [];
+    const targets = couriers.filter(c => c.uid && c.uid !== order.buyer_id && !_declined.includes(c.uid));
     const payload = targets.map(c => ({
       to_uid: c.uid, user_id: c.uid, type: 'yallafood_kurir',
       message: 'Ada pesanan deliveri menunggu diambil, cek sekarang sebelum keduluan yang lain!',
