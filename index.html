@@ -26436,6 +26436,8 @@ window.yfSubmitFoodOrder = async function() {
 window.openFoodOrderTracking = async function() {
   document.getElementById('yallaFoodOrderTracking').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  window._yfTabState.buyer.limit = _YF_PAGE;
+  document.getElementById('yallaFoodTrackingList').innerHTML = '';
   window._yfTabState.buyer.tab = null; // pilih tab otomatis tiap kali dibuka (Berlangsung kalau ada, kalau tidak Semua)
   await _yfLoadTracking();
   _yfSubscribeBuyerRealtime();
@@ -26498,8 +26500,8 @@ function _yfWaitTickerStart() {
   }, 1000);
 }
 
-// ── Tab Pesanan Saya pembeli: Berlangsung | Selesai | Dibatalkan | Semua ──
-// Filter di sisi tampilan saja (kartu diberi data-yf-grp), data & realtime tidak berubah.
+// ── Tab Pesanan Saya pembeli & Kelola Pesanan penjual: Berlangsung | Selesai | Dibatalkan | Semua ──
+// Tiap tab diambil dari server per halaman (lihat _YF_PAGE); data-yf-grp tetap dipakai _yfTabApply.
 function _yfBuyerGrp(status) {
   if (status === 'selesai') return 'selesai';
   if (status === 'dibatalkan') return 'dibatalkan';
@@ -26514,9 +26516,41 @@ const _YF_BUYER_TABS = [
 // Konfigurasi per halaman: pembeli (Pesanan Saya) & penjual (Kelola Pesanan) — logika sama.
 const _YF_TAB_CTX = {
   buyer:  { bar: 'yfBuyerTabs',  box: 'yallaFoodTrackingList', empty: 'yfBuyerTabEmpty',  emptyAll: 'Belum ada pesanan YallaFood.' },
-  seller: { bar: 'yfSellerTabs', box: 'yallaFoodKelolaList',   empty: 'yfSellerTabEmpty', emptyAll: 'Belum ada pesanan YallaFood masuk.' }
+  seller: { bar: 'yfSellerTabs', box: 'yallaFoodKelolaList',   empty: 'yfSellerTabEmpty', emptyAll: 'Belum ada pesanan YallaFood masuk.' },
+  // Dasbor kurir: yang menggulir adalah wadah dasbor (bukan daftar), jadi scroll ≠ box
+  courier: { bar: 'kurirTabs', box: 'kurirMyDeliveriesList', scroll: 'kurirDashScroll', empty: 'kurirTabEmpty', emptyAll: 'Belum ada pesanan yang kamu antar.' }
 };
-window._yfTabState = window._yfTabState || { buyer: { tab: null, counts: {} }, seller: { tab: null, counts: {} } };
+window._yfTabState = window._yfTabState || {};
+['buyer', 'seller', 'courier'].forEach(k => { if (!window._yfTabState[k]) window._yfTabState[k] = { tab: null, counts: {} }; });
+// ── Infinite scroll (paginasi server) — tiap tab ambil datanya sendiri, _YF_PAGE per tahap ──
+// st.limit = jumlah yang sudah dimuat (bertambah _YF_PAGE tiap gulir mendekati bawah);
+// reload (realtime/aksi) memakai limit yang sama supaya posisi gulir tidak hilang.
+const _YF_PAGE = 15;
+const _YF_ACTIVE_STATUSES = 'menunggu_kurir,diterima,dimasak,dijemput,menuju';
+function _yfTabStatusFilter(tab) {
+  if (tab === 'berlangsung') return '&status=in.(' + _YF_ACTIVE_STATUSES + ')';
+  if (tab === 'selesai') return '&status=eq.selesai';
+  if (tab === 'dibatalkan') return '&status=eq.dibatalkan';
+  return '';
+}
+function _yfTabLoader(ctx) { return ctx === 'buyer' ? _yfLoadTracking : ctx === 'courier' ? _kurirLoadMyDeliveries : _yfLoadKelolaPesanan; }
+// Footer bawah daftar: "Memuat lagi…" kalau masih ada halaman berikutnya
+function _yfTabMoreFooter(ctx) {
+  const st = window._yfTabState[ctx];
+  return st.hasMore ? '<p data-yf-more="1" class="text-center text-gray-400 text-xs py-3"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Memuat lagi…</p>' : '';
+}
+function _yfTabAttachScroll(ctx) {
+  const box = document.getElementById(_YF_TAB_CTX[ctx].scroll || _YF_TAB_CTX[ctx].box);
+  if (!box || box.dataset.yfInf) return;
+  box.dataset.yfInf = '1';
+  box.addEventListener('scroll', () => {
+    const st = window._yfTabState[ctx];
+    if (!st.hasMore || st.loading) return;
+    if (box.scrollTop + box.clientHeight < box.scrollHeight - 250) return;
+    st.limit = (st.limit || _YF_PAGE) + _YF_PAGE;
+    _yfTabLoader(ctx)();
+  }, { passive: true });
+}
 function _yfTabsRender(ctx, counts) {
   const st = window._yfTabState[ctx], cfg = _YF_TAB_CTX[ctx];
   st.counts = counts || {};
@@ -26550,11 +26584,25 @@ function _yfTabApply(ctx) {
   }
 }
 window._yfTabSet = function(ctx, key) {
-  window._yfTabState[ctx].tab = key;
-  _yfTabsRender(ctx, window._yfTabState[ctx].counts);
+  const st = window._yfTabState[ctx];
+  st.tab = key; st.limit = _YF_PAGE; st.hasMore = false;
+  _yfTabsRender(ctx, st.counts);
   const box = document.getElementById(_YF_TAB_CTX[ctx].box);
-  if (box) box.scrollTop = 0;
+  if (box) { if (!_YF_TAB_CTX[ctx].scroll) box.scrollTop = 0; box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat pesanan...</p>'; }
+  _yfTabLoader(ctx)();
 };
+// Ambil jumlah pesanan Berlangsung (query ringan: id saja) + tentukan tab awal
+async function _yfTabFetchActiveCount(ctx, baseQuery) {
+  const st = window._yfTabState[ctx];
+  try {
+    const r = await window._supaFetch('/rest/v1/food_orders?' + baseQuery + _yfTabStatusFilter('berlangsung') + '&select=id,status');
+    const ids = r.ok ? await r.json() : [];
+    st.counts = { berlangsung: ids.length };
+    st.activeRows = ids; // dipakai dasbor kurir utk siaran lokasi live (tak tergantung tab yang dibuka)
+  } catch (e) {}
+  if (!st.tab) st.tab = (st.counts.berlangsung || 0) > 0 ? 'berlangsung' : 'semua';
+  if (!st.limit) st.limit = _YF_PAGE;
+}
 // Nama lama (sisi pembeli) tetap dipakai di _yfLoadTracking
 function _yfBuyerRenderTabs(counts) { _yfTabsRender('buyer', counts); }
 window._yfBuyerSetTab = function(key) { window._yfTabSet('buyer', key); };
@@ -26563,24 +26611,30 @@ async function _yfLoadTracking() {
   const box = document.getElementById('yallaFoodTrackingList');
   const uid = window._S?.user?.uid;
   if (!uid) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Silakan login dulu.</p>'; return; }
-  box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat pesanan...</p>';
+  // "Memuat..." hanya saat daftar masih kosong — muat-lagi & reload realtime berjalan diam-diam
+  if (!box.querySelector('[data-yf-grp]')) box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat pesanan...</p>';
+  const st = window._yfTabState.buyer;
+  const seq = st.seq = (st.seq || 0) + 1;
+  st.loading = true;
+  _yfTabAttachScroll('buyer');
   try {
-    const r = await window._supaFetch(`/rest/v1/food_orders?buyer_id=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc`);
-    let rows = r.ok ? await r.json() : [];
     // Sembunyikan pesanan yang sudah "dihapus" buyer dari Pesanan Saya-nya (server-side, permanen).
     // Hanya menyaring tampilan buyer — food_orders & income penjual/kurir TIDAK disentuh.
+    let base = `buyer_id=eq.${encodeURIComponent(uid)}`;
     try {
       const hr = await window._supaFetch(`/rest/v1/buyer_hidden_food_orders?buyer_id=eq.${encodeURIComponent(uid)}&select=order_id`);
       const hidden = hr.ok ? await hr.json() : [];
-      if (hidden.length) {
-        const hset = new Set(hidden.map(h => h.order_id));
-        rows = rows.filter(o => !hset.has(o.id));
-      }
+      if (hidden.length) base += '&id=not.in.(' + hidden.map(h => h.order_id).join(',') + ')';
     } catch (e) {}
+    await _yfTabFetchActiveCount('buyer', base);
+    const r = await window._supaFetch(`/rest/v1/food_orders?${base}${_yfTabStatusFilter(st.tab)}&select=*&order=created_at.desc&limit=${st.limit}`);
+    let rows = r.ok ? await r.json() : [];
+    if (seq !== st.seq) return; // ada muat yang lebih baru — buang hasil lama
+    st.hasMore = rows.length >= st.limit;
     // Pesanan yang sedang mencari kurir selalu di paling atas (urutan lain tetap)
     rows.sort((a, b) => (b.status === 'menunggu_kurir') - (a.status === 'menunggu_kurir'));
     window._yfBuyerOrdersById = {}; rows.forEach(o => { window._yfBuyerOrdersById[o.id] = o; }); // utk panel Lacak Kurir
-    if (!rows.length) { _yfBuyerRenderTabs({}); box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood.</p>'; return; }
+    if (!rows.length) { _yfBuyerRenderTabs(st.counts); box.innerHTML = '<p id="yfBuyerTabEmpty" class="text-center text-gray-400 text-sm py-8"></p>'; _yfTabApply('buyer'); return; }
 
     // Badge unread PER TOMBOL 'Chat Kurir' — bukan agregat global.
     const unreadMap = {};
@@ -26614,8 +26668,6 @@ async function _yfLoadTracking() {
       }
     } catch (e) { console.warn('[YallaFood Tracking] gagal ambil foto kurir:', e.message); }
 
-    const _grpCount = { berlangsung: 0, selesai: 0, dibatalkan: 0, semua: rows.length };
-    rows.forEach(o => { _grpCount[_yfBuyerGrp(o.status)]++; });
     box.innerHTML = rows.map(o => `
       <div class="bg-white rounded-2xl p-3 border border-gray-100" data-yf-grp="${_yfBuyerGrp(o.status)}" style="position:relative">
         <div id="yfBuyerOrderMenu-${o.id}" style="display:none;position:absolute;top:38px;right:10px;z-index:20;background:#fff;border:1px solid #f3f4f6;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;min-width:158px">
@@ -26671,11 +26723,13 @@ async function _yfLoadTracking() {
           <button onclick="yfCancelFoodOrder('${o.id}')" style="background:none;border:none;padding:2px 0;font-size:11.5px;font-weight:600;color:#9ca3af;cursor:pointer">Batalkan pesanan</button>
         </div>` : `<p class="text-[10px] text-gray-600 text-right mt-1.5">${_yfTimeAgo(o.created_at)}</p>`}
       </div>
-    `).join('') + '<p id="yfBuyerTabEmpty" class="text-center text-gray-400 text-sm py-8" style="display:none"></p>';
-    _yfBuyerRenderTabs(_grpCount);
+    `).join('') + '<p id="yfBuyerTabEmpty" class="text-center text-gray-400 text-sm py-8" style="display:none"></p>' + _yfTabMoreFooter('buyer');
+    _yfBuyerRenderTabs(st.counts);
     _yfWaitTickerStart();
   } catch (e) {
     box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat pesanan.</p>';
+  } finally {
+    if (seq === st.seq) st.loading = false;
   }
 }
 // Batalkan pesanan SELAGI masih 'menunggu_kurir' — tidak menyentuh logika
@@ -26874,6 +26928,8 @@ window.yfSaveLokasiToko = async function() {
 // ── SELLER: kelola pesanan masuk ─────────────────────────────
 window.openKelolaPesananYallaFood = async function() {
   document.getElementById('yallaFoodKelolaPesanan').style.display = 'flex';
+  window._yfTabState.seller.limit = _YF_PAGE;
+  document.getElementById('yallaFoodKelolaList').innerHTML = '';
   window._yfTabState.seller.tab = null; // pilih tab otomatis (Berlangsung kalau ada, kalau tidak Semua)
   await _yfLoadKelolaPesanan();
   _yfSubscribeSellerRealtime();
@@ -26886,16 +26942,23 @@ async function _yfLoadKelolaPesanan() {
   const box = document.getElementById('yallaFoodKelolaList');
   const uid = window._S?.user?.uid;
   if (!uid) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Silakan login dulu.</p>'; return; }
-  box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat pesanan masuk...</p>';
+  // "Memuat..." hanya saat daftar masih kosong — muat-lagi & reload realtime berjalan diam-diam
+  if (!box.querySelector('[data-yf-grp]')) box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat pesanan masuk...</p>';
+  const st = window._yfTabState.seller;
+  const seq = st.seq = (st.seq || 0) + 1;
+  st.loading = true;
+  _yfTabAttachScroll('seller');
   try {
     // status=neq.menunggu_kurir — seller baru lihat pesanan SETELAH kurir mengambilnya
     // + pesanan yang kurirnya membatalkan (courier_cancel_count>0) tetap tampil selagi dicarikan kurir pengganti
-    const r = await window._supaFetch(`/rest/v1/food_orders?seller_id=eq.${encodeURIComponent(uid)}&or=(status.neq.menunggu_kurir,courier_cancel_count.gt.0)&select=*&order=created_at.desc`);
+    const base = `seller_id=eq.${encodeURIComponent(uid)}&or=(status.neq.menunggu_kurir,courier_cancel_count.gt.0)`;
+    await _yfTabFetchActiveCount('seller', base);
+    const r = await window._supaFetch(`/rest/v1/food_orders?${base}${_yfTabStatusFilter(st.tab)}&select=*&order=created_at.desc&limit=${st.limit}`);
     const rows = r.ok ? await r.json() : [];
+    if (seq !== st.seq) return; // ada muat yang lebih baru — buang hasil lama
+    st.hasMore = rows.length >= st.limit;
     window._yfKelolaOrders = {}; rows.forEach(o => { window._yfKelolaOrders[o.id] = o; }); // utk snapshot ledger saat hapus
-    if (!rows.length) { _yfTabsRender('seller', {}); box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood masuk.</p>'; return; }
-    const _sGrpCount = { berlangsung: 0, selesai: 0, dibatalkan: 0, semua: rows.length };
-    rows.forEach(o => { _sGrpCount[_yfBuyerGrp(o.status)]++; });
+    if (!rows.length) { _yfTabsRender('seller', st.counts); box.innerHTML = '<p id="yfSellerTabEmpty" class="text-center text-gray-400 text-sm py-8"></p>'; _yfTabApply('seller'); return; }
 
     // Badge unread PER TOMBOL 'Chat Kurir' — bukan agregat global.
     const unreadMap = {};
@@ -26954,10 +27017,12 @@ async function _yfLoadKelolaPesanan() {
           <span style="font-size:10px;font-weight:600;color:#9ca3af">${_yfTimeAgo(o.created_at)}</span>
         </div>
       </div>`;
-    }).join('') + '<p id="yfSellerTabEmpty" class="text-center text-gray-400 text-sm py-8" style="display:none"></p>';
-    _yfTabsRender('seller', _sGrpCount);
+    }).join('') + '<p id="yfSellerTabEmpty" class="text-center text-gray-400 text-sm py-8" style="display:none"></p>' + _yfTabMoreFooter('seller');
+    _yfTabsRender('seller', st.counts);
   } catch (e) {
     box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat pesanan.</p>';
+  } finally {
+    if (seq === st.seq) st.loading = false;
   }
 }
 // Pesan notif bel real-time ke BUYER saat seller memajukan status pesanan —
@@ -27105,10 +27170,11 @@ function _yfSubscribeSellerRealtime() {
       <span id="kurirIncomeAmount" class="text-sm font-bold text-primary" style="white-space:nowrap">LE 0</span>
     </div>
   </div>
-  <div class="flex-1 overflow-y-auto px-3 py-3">
+  <div id="kurirDashScroll" class="flex-1 overflow-y-auto px-3 py-3">
     <p class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Pesanan Menunggu Kurir</p>
     <div id="kurirWaitingRoomList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px"></div>
     <p class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Pesanan Saya Antar</p>
+    <div id="kurirTabs" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:10px"></div>
     <div id="kurirMyDeliveriesList" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 </div>
@@ -27319,6 +27385,9 @@ window.openKurirDashboard = async function() {
   }
   document.getElementById('kurirDashboard').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  window._yfTabState.courier.limit = _YF_PAGE;
+  window._yfTabState.courier.tab = null; // pilih tab otomatis (Berlangsung kalau ada, kalau tidak Semua)
+  document.getElementById('kurirMyDeliveriesList').innerHTML = '';
   await _kurirLoadWaitingRoom();
   await _kurirLoadMyDeliveries();
   _kurirSubscribeRealtime();
@@ -27441,23 +27510,30 @@ async function _kurirLoadMyDeliveries() {
   const box = document.getElementById('kurirMyDeliveriesList');
   const uid = window._S?.user?.uid;
   _kurirRenderIncome(); // refresh pendapatan tiap daftar antaran dimuat (buka, selesai, realtime)
-  box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
+  // "Memuat..." hanya saat daftar masih kosong — muat-lagi & reload realtime berjalan diam-diam
+  if (!box.querySelector('[data-yf-grp]')) box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Memuat...</p>';
+  const st = window._yfTabState.courier;
+  const seq = st.seq = (st.seq || 0) + 1;
+  st.loading = true;
+  _yfTabAttachScroll('courier');
   try {
-    const r = await window._supaFetch(`/rest/v1/food_orders?courier_id=eq.${encodeURIComponent(uid)}&select=*&order=created_at.desc&limit=20`);
-    let rows = r.ok ? await r.json() : [];
     // Sembunyikan pesanan yang sudah "dihapus" kurir dari dasbornya (server-side, permanen).
     // Hanya menyaring tampilan — food_orders & pencatatan pendapatan (ledger) TIDAK disentuh.
+    let base = `courier_id=eq.${encodeURIComponent(uid)}`;
     try {
       const hr = await window._supaFetch(`/rest/v1/courier_hidden_orders?courier_id=eq.${encodeURIComponent(uid)}&select=order_id`);
       const hidden = hr.ok ? await hr.json() : [];
-      if (hidden.length) {
-        const hset = new Set(hidden.map(h => h.order_id));
-        rows = rows.filter(o => !hset.has(o.id));
-      }
+      if (hidden.length) base += '&id=not.in.(' + hidden.map(h => h.order_id).join(',') + ')';
     } catch (e) {}
-    // Lacak Kurir: siarkan posisi HANYA utk pesanan yang sedang dijemput/diantar (berhenti otomatis kalau tak ada)
-    try { if (window._yfSyncAutoShare) window._yfSyncAutoShare(rows.filter(o => o.status === 'dijemput' || o.status === 'menuju').map(o => o.id)); } catch (e) {}
-    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-xs py-4">Belum ada pesanan yang kamu antar.</p>'; return; }
+    await _yfTabFetchActiveCount('courier', base);
+    // Lacak Kurir: siarkan posisi HANYA utk pesanan yang sedang dijemput/diantar (berhenti otomatis kalau tak ada).
+    // Sumber = daftar pesanan aktif (bukan tab yang sedang dibuka), jadi buka tab Selesai tak menghentikan siaran.
+    try { if (window._yfSyncAutoShare && st.activeRows) window._yfSyncAutoShare(st.activeRows.filter(o => o.status === 'dijemput' || o.status === 'menuju').map(o => o.id)); } catch (e) {}
+    const r = await window._supaFetch(`/rest/v1/food_orders?${base}${_yfTabStatusFilter(st.tab)}&select=*&order=created_at.desc&limit=${st.limit}`);
+    let rows = r.ok ? await r.json() : [];
+    if (seq !== st.seq) return; // ada muat yang lebih baru — buang hasil lama
+    st.hasMore = rows.length >= st.limit;
+    if (!rows.length) { _yfTabsRender('courier', st.counts); box.innerHTML = '<p id="kurirTabEmpty" class="text-center text-gray-400 text-xs py-4"></p>'; _yfTabApply('courier'); return; }
 
     // Badge unread PER TOMBOL (Chat Buyer / Chat Seller) — bukan agregat.
     // Satu query room + satu query pesan untuk semua order sekaligus (bukan loop per-row).
@@ -27481,7 +27557,7 @@ async function _kurirLoadMyDeliveries() {
       const buyerUnread = unreadMap[o.id + '_buyer_kurir'] || 0;
       const sellerUnread = unreadMap[o.id + '_kurir_seller'] || 0;
       return `
-      <div class="bg-white rounded-2xl p-3 border border-gray-100" style="position:relative">
+      <div class="bg-white rounded-2xl p-3 border border-gray-100" data-yf-grp="${_yfBuyerGrp(o.status)}" style="position:relative">
         <div id="kurirOrderMenu-${o.id}" style="display:none;position:absolute;top:38px;right:10px;z-index:20;background:#fff;border:1px solid #f3f4f6;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;min-width:158px">
           ${(o.status === 'diterima' || o.status === 'dimasak') ? `<button onclick="yfKurirCancelDelivery('${o.id}')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:600;color:#374151;background:none;border:none;border-bottom:1px solid #f3f4f6;cursor:pointer"><i class="fa-solid fa-ban mr-1.5 text-gray-400"></i>Batalkan pengantaran</button>` : ''}
           <button onclick="_kurirHideOrder('${o.id}')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:600;color:#dc2626;background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash-can mr-1.5"></i>Hapus pesanan</button>
@@ -27517,9 +27593,12 @@ async function _kurirLoadMyDeliveries() {
         </div>
       </div>
     `;
-    }).join('');
+    }).join('') + '<p id="kurirTabEmpty" class="text-center text-gray-400 text-xs py-4" style="display:none"></p>' + _yfTabMoreFooter('courier');
+    _yfTabsRender('courier', st.counts);
   } catch (e) {
     box.innerHTML = '<p class="text-center text-red-400 text-xs py-4">Gagal memuat.</p>';
+  } finally {
+    if (seq === st.seq) st.loading = false;
   }
 }
 
