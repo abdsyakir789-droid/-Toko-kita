@@ -25230,6 +25230,7 @@ window.closeKelolaToko = function() {
     <button onclick="closeFoodOrderTracking()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">Pesanan YallaFood Saya</h2>
   </div>
+  <div id="yfBuyerTabs" class="bg-white border-b border-gray-100 px-3 py-2" style="flex-shrink:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch"></div>
   <div id="yallaFoodTrackingList" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:10px"></div>
 </div>
 
@@ -25248,6 +25249,7 @@ window.closeKelolaToko = function() {
     <button onclick="closeKelolaPesananYallaFood()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
     <h2 class="font-bold text-base flex-1">Kelola Pesanan YallaFood</h2>
   </div>
+  <div id="yfSellerTabs" class="bg-white border-b border-gray-100 px-3 py-2" style="flex-shrink:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch"></div>
   <div id="yallaFoodKelolaList" class="flex-1 overflow-y-auto px-3 py-3" style="display:flex;flex-direction:column;gap:10px"></div>
 </div>
 
@@ -26434,12 +26436,129 @@ window.yfSubmitFoodOrder = async function() {
 window.openFoodOrderTracking = async function() {
   document.getElementById('yallaFoodOrderTracking').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  window._yfTabState.buyer.tab = null; // pilih tab otomatis tiap kali dibuka (Berlangsung kalau ada, kalau tidak Semua)
   await _yfLoadTracking();
   _yfSubscribeBuyerRealtime();
 };
 window.closeFoodOrderTracking = function() {
   document.getElementById('yallaFoodOrderTracking').style.display = 'none';
 };
+// ── Strip "Sedang mencari kurir" (kartu Pesanan Saya pembeli, status menunggu_kurir) ──
+// Hijau = pencarian pertama; amber = kurir sebelumnya membatalkan (courier_cancel_count>0).
+// Timer "Menunggu X" dihitung dari requeued_at (masuk antrean lagi) atau created_at.
+function _yfEnsureSearchStripCss() {
+  if (document.getElementById('yfSearchStripCss')) return;
+  const st = document.createElement('style');
+  st.id = 'yfSearchStripCss';
+  st.textContent = '@keyframes yfPing{0%{transform:scale(.6);opacity:.7}100%{transform:scale(1.9);opacity:0}}'
+    + '@keyframes yfRun{0%{left:-40%}100%{left:100%}}'
+    + '.yf-rad{position:relative;width:34px;height:34px;flex-shrink:0}'
+    + '.yf-rad>span{position:absolute;inset:0;border-radius:50%;animation:yfPing 1.6s ease-out infinite}'
+    + '.yf-rad>span:nth-child(2){animation-delay:.8s}'
+    + '.yf-rad>b{position:absolute;inset:7px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px}'
+    + '.yf-sbar{position:relative;height:4px;border-radius:4px;overflow:hidden;margin-top:9px}'
+    + '.yf-sbar>b{position:absolute;top:0;width:40%;height:100%;border-radius:4px;animation:yfRun 1.4s linear infinite}';
+  document.head.appendChild(st);
+}
+function _yfFmtWait(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return s + ' dtk';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + ' mnt';
+  return Math.floor(m / 60) + ' jam ' + (m % 60) + ' mnt';
+}
+function _yfSearchStrip(o) {
+  _yfEnsureSearchStripCss();
+  const re = (o.courier_cancel_count || 0) > 0;
+  const c = re
+    ? { bg: '#FFFBEB', bd: '#FDE68A', dot: '#F59E0B', track: '#FEF3C7', t1: '#92400E', t2: '#B45309', icon: 'fa-rotate', title: 'Mencari kurir pengganti…', sub: 'Kurir sebelumnya membatalkan. Pesananmu tetap diproses.' }
+    : { bg: '#ECFDF5', bd: '#A7F3D0', dot: '#10B981', track: '#D1FAE5', t1: '#065F46', t2: '#047857', icon: 'fa-motorcycle', title: 'Sedang mencari kurir…', sub: 'Kurir aktif sudah diberi tahu.' };
+  const since = new Date(o.requeued_at || o.created_at).getTime() || Date.now();
+  return `
+        <div style="margin-top:10px;background:${c.bg};border:1px solid ${c.bd};border-radius:12px;padding:10px 11px">
+          <div style="display:flex;gap:10px;align-items:center">
+            <div class="yf-rad"><span style="background:${c.dot}"></span><span style="background:${c.dot}"></span><b style="background:${c.dot}"><i class="fa-solid ${c.icon}"></i></b></div>
+            <div style="min-width:0">
+              <p style="margin:0;font-size:13px;font-weight:700;color:${c.t1}">${c.title}</p>
+              <p style="margin:2px 0 0;font-size:11px;color:${c.t2};line-height:1.35">${c.sub} Menunggu <span class="yf-wait-el" data-since="${since}">${_yfFmtWait(Date.now() - since)}</span></p>
+            </div>
+          </div>
+          <div class="yf-sbar" style="background:${c.track}"><b style="background:${c.dot}"></b></div>
+        </div>`;
+}
+// Satu ticker global (1 dtk) — hanya jalan selama ada elemen timer di layar, berhenti sendiri.
+function _yfWaitTickerStart() {
+  if (window._yfWaitTicker) return;
+  if (!document.querySelector('.yf-wait-el')) return;
+  window._yfWaitTicker = setInterval(() => {
+    const els = document.querySelectorAll('.yf-wait-el');
+    if (!els.length) { clearInterval(window._yfWaitTicker); window._yfWaitTicker = null; return; }
+    const now = Date.now();
+    els.forEach(el => { el.textContent = _yfFmtWait(now - Number(el.dataset.since || now)); });
+  }, 1000);
+}
+
+// ── Tab Pesanan Saya pembeli: Berlangsung | Selesai | Dibatalkan | Semua ──
+// Filter di sisi tampilan saja (kartu diberi data-yf-grp), data & realtime tidak berubah.
+function _yfBuyerGrp(status) {
+  if (status === 'selesai') return 'selesai';
+  if (status === 'dibatalkan') return 'dibatalkan';
+  return 'berlangsung';
+}
+const _YF_BUYER_TABS = [
+  { key: 'berlangsung', label: 'Berlangsung', empty: 'Tidak ada pesanan yang sedang berlangsung.' },
+  { key: 'selesai', label: 'Selesai', empty: 'Belum ada pesanan yang selesai.' },
+  { key: 'dibatalkan', label: 'Dibatalkan', empty: 'Belum ada pesanan yang dibatalkan.' },
+  { key: 'semua', label: 'Semua', empty: 'Belum ada pesanan YallaFood.' }
+];
+// Konfigurasi per halaman: pembeli (Pesanan Saya) & penjual (Kelola Pesanan) — logika sama.
+const _YF_TAB_CTX = {
+  buyer:  { bar: 'yfBuyerTabs',  box: 'yallaFoodTrackingList', empty: 'yfBuyerTabEmpty',  emptyAll: 'Belum ada pesanan YallaFood.' },
+  seller: { bar: 'yfSellerTabs', box: 'yallaFoodKelolaList',   empty: 'yfSellerTabEmpty', emptyAll: 'Belum ada pesanan YallaFood masuk.' }
+};
+window._yfTabState = window._yfTabState || { buyer: { tab: null, counts: {} }, seller: { tab: null, counts: {} } };
+function _yfTabsRender(ctx, counts) {
+  const st = window._yfTabState[ctx], cfg = _YF_TAB_CTX[ctx];
+  st.counts = counts || {};
+  if (!st.tab) st.tab = (st.counts.berlangsung || 0) > 0 ? 'berlangsung' : 'semua';
+  const bar = document.getElementById(cfg.bar);
+  if (bar) {
+    bar.innerHTML = _YF_BUYER_TABS.map(t => {
+      const on = st.tab === t.key;
+      const n = t.key === 'berlangsung' ? (st.counts.berlangsung || 0) : 0;
+      const badge = n > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:999px;font-size:10px;font-weight:700;margin-left:5px;background:${on ? '#fff' : '#10B981'};color:${on ? '#059669' : '#fff'}">${n > 99 ? '99+' : n}</span>` : '';
+      return `<button onclick="_yfTabSet('${ctx}','${t.key}')" style="flex-shrink:0;display:inline-flex;align-items:center;border:none;cursor:pointer;white-space:nowrap;padding:6px 11px;border-radius:999px;font-size:12px;font-weight:700;background:${on ? '#10B981' : '#f3f4f6'};color:${on ? '#fff' : '#4b5563'}">${t.label}${badge}</button>`;
+    }).join('');
+  }
+  _yfTabApply(ctx);
+}
+function _yfTabApply(ctx) {
+  const st = window._yfTabState[ctx], cfg = _YF_TAB_CTX[ctx];
+  const box = document.getElementById(cfg.box);
+  if (!box) return;
+  const tab = st.tab || 'semua';
+  let shown = 0;
+  box.querySelectorAll('[data-yf-grp]').forEach(el => {
+    const ok = tab === 'semua' || el.getAttribute('data-yf-grp') === tab;
+    el.style.display = ok ? '' : 'none';
+    if (ok) shown++;
+  });
+  const empty = document.getElementById(cfg.empty);
+  if (empty) {
+    empty.textContent = tab === 'semua' ? cfg.emptyAll : ((_YF_BUYER_TABS.find(t => t.key === tab) || {}).empty || '');
+    empty.style.display = shown ? 'none' : 'block';
+  }
+}
+window._yfTabSet = function(ctx, key) {
+  window._yfTabState[ctx].tab = key;
+  _yfTabsRender(ctx, window._yfTabState[ctx].counts);
+  const box = document.getElementById(_YF_TAB_CTX[ctx].box);
+  if (box) box.scrollTop = 0;
+};
+// Nama lama (sisi pembeli) tetap dipakai di _yfLoadTracking
+function _yfBuyerRenderTabs(counts) { _yfTabsRender('buyer', counts); }
+window._yfBuyerSetTab = function(key) { window._yfTabSet('buyer', key); };
+
 async function _yfLoadTracking() {
   const box = document.getElementById('yallaFoodTrackingList');
   const uid = window._S?.user?.uid;
@@ -26458,8 +26577,10 @@ async function _yfLoadTracking() {
         rows = rows.filter(o => !hset.has(o.id));
       }
     } catch (e) {}
+    // Pesanan yang sedang mencari kurir selalu di paling atas (urutan lain tetap)
+    rows.sort((a, b) => (b.status === 'menunggu_kurir') - (a.status === 'menunggu_kurir'));
     window._yfBuyerOrdersById = {}; rows.forEach(o => { window._yfBuyerOrdersById[o.id] = o; }); // utk panel Lacak Kurir
-    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood.</p>'; return; }
+    if (!rows.length) { _yfBuyerRenderTabs({}); box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood.</p>'; return; }
 
     // Badge unread PER TOMBOL 'Chat Kurir' — bukan agregat global.
     const unreadMap = {};
@@ -26493,8 +26614,10 @@ async function _yfLoadTracking() {
       }
     } catch (e) { console.warn('[YallaFood Tracking] gagal ambil foto kurir:', e.message); }
 
+    const _grpCount = { berlangsung: 0, selesai: 0, dibatalkan: 0, semua: rows.length };
+    rows.forEach(o => { _grpCount[_yfBuyerGrp(o.status)]++; });
     box.innerHTML = rows.map(o => `
-      <div class="bg-white rounded-2xl p-3 border border-gray-100" style="position:relative">
+      <div class="bg-white rounded-2xl p-3 border border-gray-100" data-yf-grp="${_yfBuyerGrp(o.status)}" style="position:relative">
         <div id="yfBuyerOrderMenu-${o.id}" style="display:none;position:absolute;top:38px;right:10px;z-index:20;background:#fff;border:1px solid #f3f4f6;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;min-width:158px">
           <button onclick="_yfBuyerHideOrder('${o.id}')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:600;color:#dc2626;background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash-can mr-1.5"></i>Hapus pesanan</button>
         </div>
@@ -26504,12 +26627,7 @@ async function _yfLoadTracking() {
             <p class="text-xs font-semibold lc1" style="color:#111827;line-height:1">${o.seller_name || ''}</p>
           </div>
           <div class="flex items-center gap-1.5 flex-shrink-0">
-          ${o.status === 'menunggu_kurir' ? `
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-            <button onclick="yfCancelFoodOrder('${o.id}')" class="text-[10px] font-bold px-2 py-1 rounded-full bg-red-50 text-red-500" style="white-space:nowrap">Batalkan</button>
-            <span class="text-[10px] font-bold px-2 py-1 rounded-full bg-pl text-primary" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap">${(o.courier_cancel_count || 0) > 0 ? 'Mencari Kurir Pengganti' : 'Mencari Kurir'} <i class="fa-solid fa-spinner fa-spin" style="font-size:9px"></i></span>
-          </div>
-          ` : o.status === 'diterima' ? `
+          ${o.status === 'menunggu_kurir' ? '' : o.status === 'diterima' ? `
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
             <span class="text-[10px] font-bold px-2 py-1 rounded-full bg-pl text-primary" style="white-space:nowrap">Pemesanan Diterima</span>
             ${o.courier_name ? `<span class="text-[10px] font-bold text-gray-900" style="white-space:nowrap">Kurir: ${o.courier_name}</span>` : ''}
@@ -26527,6 +26645,7 @@ async function _yfLoadTracking() {
             <p class="text-primary font-bold text-sm mt-1">${_yfFmtPrice(o.total)}</p>
           </div>
         </div>
+        ${o.status === 'menunggu_kurir' ? _yfSearchStrip(o) : ''}
         ${o.courier_id ? `
         <div class="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-100">
           <div class="flex items-center gap-2 min-w-0 cursor-pointer" onclick="_yfOpenKurirProfile('${o.courier_id}','${o.id}','${(o.courier_name||'Kurir').replace(/['"\`]/g,'')}')">
@@ -26546,9 +26665,15 @@ async function _yfLoadTracking() {
           <button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="flex-1 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan</button>
           ${o.courier_id ? `<button onclick="openReviewWrite('${o.ad_id}','${('Kurir: '+(o.courier_name||'Kurir')).replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.courier_id}','kurir')" class="flex-1 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan Kurir</button>` : ''}
         </div>` : ''}
-        <p class="text-[10px] text-gray-600 text-right mt-1.5">${_yfTimeAgo(o.created_at)}</p>
+        ${o.status === 'menunggu_kurir' ? `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <span class="text-[10px] text-gray-600">${_yfTimeAgo(o.created_at)}</span>
+          <button onclick="yfCancelFoodOrder('${o.id}')" style="background:none;border:none;padding:2px 0;font-size:11.5px;font-weight:600;color:#9ca3af;cursor:pointer">Batalkan pesanan</button>
+        </div>` : `<p class="text-[10px] text-gray-600 text-right mt-1.5">${_yfTimeAgo(o.created_at)}</p>`}
       </div>
-    `).join('');
+    `).join('') + '<p id="yfBuyerTabEmpty" class="text-center text-gray-400 text-sm py-8" style="display:none"></p>';
+    _yfBuyerRenderTabs(_grpCount);
+    _yfWaitTickerStart();
   } catch (e) {
     box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat pesanan.</p>';
   }
@@ -26749,6 +26874,7 @@ window.yfSaveLokasiToko = async function() {
 // ── SELLER: kelola pesanan masuk ─────────────────────────────
 window.openKelolaPesananYallaFood = async function() {
   document.getElementById('yallaFoodKelolaPesanan').style.display = 'flex';
+  window._yfTabState.seller.tab = null; // pilih tab otomatis (Berlangsung kalau ada, kalau tidak Semua)
   await _yfLoadKelolaPesanan();
   _yfSubscribeSellerRealtime();
   // Auto-clear badge 'Pesanan Masuk' di ikon Gerai/Toko top bar begitu seller membuka halaman ini
@@ -26767,7 +26893,9 @@ async function _yfLoadKelolaPesanan() {
     const r = await window._supaFetch(`/rest/v1/food_orders?seller_id=eq.${encodeURIComponent(uid)}&or=(status.neq.menunggu_kurir,courier_cancel_count.gt.0)&select=*&order=created_at.desc`);
     const rows = r.ok ? await r.json() : [];
     window._yfKelolaOrders = {}; rows.forEach(o => { window._yfKelolaOrders[o.id] = o; }); // utk snapshot ledger saat hapus
-    if (!rows.length) { box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood masuk.</p>'; return; }
+    if (!rows.length) { _yfTabsRender('seller', {}); box.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Belum ada pesanan YallaFood masuk.</p>'; return; }
+    const _sGrpCount = { berlangsung: 0, selesai: 0, dibatalkan: 0, semua: rows.length };
+    rows.forEach(o => { _sGrpCount[_yfBuyerGrp(o.status)]++; });
 
     // Badge unread PER TOMBOL 'Chat Kurir' — bukan agregat global.
     const unreadMap = {};
@@ -26794,7 +26922,7 @@ async function _yfLoadKelolaPesanan() {
       const canAdvance = next && (o.status === 'diterima' || o.status === 'dimasak');
       const canCancel = o.status === 'diterima' || o.status === 'menunggu_kurir';
       return `
-      <div class="bg-white rounded-2xl p-3 border border-gray-100" style="position:relative">
+      <div class="bg-white rounded-2xl p-3 border border-gray-100" data-yf-grp="${_yfBuyerGrp(o.status)}" style="position:relative">
         <button onclick="_yfToggleOrderMenu(event,'${o.id}')" title="Aksi" style="position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:none;cursor:pointer;color:#9ca3af;z-index:3"><i class="fa-solid fa-ellipsis-vertical"></i></button>
         <div id="yfOrderMenu-${o.id}" style="display:none;position:absolute;top:36px;right:8px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.14);z-index:4;overflow:hidden;min-width:180px">
           ${canCancel ? `<button onclick="_yfCloseOrderMenu('${o.id}');yfAdvanceOrderStatus('${o.id}','dibatalkan')" style="display:block;width:100%;text-align:left;padding:11px 14px;font-size:12.5px;font-weight:600;color:#374151;background:none;border:none;cursor:pointer;border-bottom:1px solid #f3f4f6"><i class="fa-solid fa-ban mr-1.5 text-gray-400"></i>Batalkan pesanan</button>` : ''}
@@ -26826,7 +26954,8 @@ async function _yfLoadKelolaPesanan() {
           <span style="font-size:10px;font-weight:600;color:#9ca3af">${_yfTimeAgo(o.created_at)}</span>
         </div>
       </div>`;
-    }).join('');
+    }).join('') + '<p id="yfSellerTabEmpty" class="text-center text-gray-400 text-sm py-8" style="display:none"></p>';
+    _yfTabsRender('seller', _sGrpCount);
   } catch (e) {
     box.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat pesanan.</p>';
   }
