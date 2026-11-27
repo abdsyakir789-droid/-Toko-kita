@@ -3519,6 +3519,13 @@ h3.text-sm.font-bold.text-gray-800 {
       </div>
       <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Kirim Barang</p>
     </button>
+    <!-- Mat'am Terdekat (YallaFood, discovery) — versi desktop/tablet, SELALU tampil, di kanan Kirim Barang. -->
+    <button id="btnMatamTerdekatDesk" onclick="window.openMatamTerdekat ? openMatamTerdekat() : showToast('Fitur Mat\'am Terdekat segera hadir!','green')" class="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl py-5 flex-1 transition-all hover:shadow-md hover:-translate-y-0.5 text-center group">
+      <div class="w-10 h-10 rounded-xl bg-gray-50 group-hover:bg-primary/10 flex items-center justify-center flex-shrink-0 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+      </div>
+      <p class="text-[11px] text-gray-800 leading-tight" style="font-weight:700">Mat'am Terdekat</p>
+    </button>
   </div>
 
   <!-- ══ KURIR YALLAFOOD + YALLAKURIR — Desktop, menu baru murni tambahan ══ -->
@@ -28806,7 +28813,9 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
     map.on('style.load', () => { if (_mtMap === map && _mtRouteCoords) _mtPaintRoute(false); }); // rute ikut pindah saat ganti style
     // Kalau user geser/zoom peta sendiri, jangan auto-fit lagi (biar tidak menyentak).
     // originalEvent hanya ada kalau gerakan berasal dari jari/mouse, bukan dari program.
-    map.on('dragstart', (e) => { if (e && e.originalEvent) { _mtUserMoved = true; if (_mtFollow) { _mtSetFollow(false, true); try { showToast('Berhenti mengikuti posisi'); } catch (er) {} } } });
+    // Mode "ikuti posisi" TIDAK dimatikan oleh geser/zoom (di HP cubit-zoom ikut terbaca 'drag') —
+    // hanya dimatikan lewat tombolnya sendiri (_mtToggleFollow). Update GPS berikutnya mengembalikan kamera.
+    map.on('dragstart', (e) => { if (e && e.originalEvent) { _mtUserMoved = true; } });
     map.on('zoomstart', (e) => { if (e && e.originalEvent && !_mtProg) _mtUserMoved = true; });
     // WebGL context bisa hilang saat app di-background lama → izinkan browser memulihkan.
     try {
@@ -28925,10 +28934,20 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
       } catch (e) {}
     });
   }
+  // Saat mengikuti: zoom (cubit / scroll) berpusat di TENGAH layar = titik user, jadi titik tidak
+  // keluar layar saat di-zoom. Saat tidak mengikuti: zoom kembali normal (berpusat di jari/kursor).
+  function _mtZoomAroundCenter(on) {
+    if (!_mtMap) return;
+    try {
+      _mtMap.touchZoomRotate.disable(); _mtMap.touchZoomRotate.enable(on ? { around: 'center' } : undefined);
+      _mtMap.scrollZoom.disable(); _mtMap.scrollZoom.enable(on ? { around: 'center' } : undefined);
+    } catch (e) {}
+  }
   function _mtSetFollow(on, silent) {
     _mtFollow = !!on;
     const b = document.getElementById('mtFollowBtn');
     if (b) { b.classList.toggle('on', _mtFollow); b.setAttribute('aria-pressed', _mtFollow ? 'true' : 'false'); }
+    _mtZoomAroundCenter(_mtFollow);
     if (!_mtFollow) return;
     _mtFitted = true;        // jangan ada auto-fit yang menarik kamera ke tempat lain
     _mtStartWatch();         // pastikan GPS live aktif
