@@ -2995,7 +2995,7 @@ h3.text-sm.font-bold.text-gray-800 {
       <button onclick="filterCat('semua')" data-nav="semua" class="ntab active text-xs px-3 py-2.5 text-primary">Semua</button>
       <button onclick="filterCat('gratis-ongkir')" data-nav="gratis-ongkir" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-truck-fast mr-1 text-[10px]"></i>Gratis Ongkir</button>
       <button onclick="filterCat('promo')" data-nav="promo" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-bolt mr-1 text-[10px]"></i>Promo</button>
-      <button onclick="filterCat('official')" data-nav="official" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-medal mr-1 text-[10px]"></i>Official</button>
+      <button onclick="openPartnerPage()" data-nav="official" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-handshake mr-1 text-[10px]"></i>Partner</button>
       <button onclick="filterCat('elektronik')" data-nav="elektronik" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-mobile-screen mr-1 text-[10px]"></i>Elektronik</button>
       <button onclick="filterCat('fashion')" data-nav="fashion" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-shirt mr-1 text-[10px]"></i>Fashion</button>
       <button onclick="filterCat('kecantikan')" data-nav="kecantikan" class="ntab text-xs px-3 py-2.5 text-gray-500 hover:text-primary font-medium"><i class="fa-solid fa-wand-sparkles mr-1 text-[10px]"></i>Kecantikan</button>
@@ -5232,10 +5232,10 @@ h3.text-sm.font-bold.text-gray-800 {
     <span>YallaFood</span>
   </button>
 
-  <!-- 3. Official -->
-  <button id="mnav-official" onclick="filterCat('official');setMobTab('official')" class="mob-nav-btn">
-    <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg></span>
-    <span>Official</span>
+  <!-- 3. Partner (dulu "Official") — halaman daftar mat'am partner YallaMart -->
+  <button id="mnav-official" onclick="openPartnerPage();setMobTab('official')" class="mob-nav-btn">
+    <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762"/></svg></span>
+    <span>Partner</span>
   </button>
 
   <!-- 4. Notifikasi -->
@@ -5503,6 +5503,33 @@ async function uploadToR2(file, onProgress, folder, opts) {
   });
 }
 window.uploadToR2 = uploadToR2;
+
+// ── THUMBNAIL KARTU ──────────────────────────────────────────
+// Foto utama iklan disimpan 900px (±200 KB) untuk halaman detail. Untuk KARTU (beranda,
+// YallaFood, etalase, Partner) dibuat versi kecil ±320px (±25 KB) di HP penjual, diunggah
+// ke folder thumbs/ dan disimpan di ads.thumb_url. Gagal → null (kartu pakai foto utama).
+// File thumbnail lama dihapus otomatis oleh trigger DB (trg_ads_thumb_cleanup).
+async function uploadThumbToR2(file) {
+  try {
+    const blob = await compressImage(file, 320, 0.72);
+    const fd = new FormData();
+    fd.append('file', blob, 'thumb.jpg');
+    fd.append('folder', 'thumbs');
+    const r = await fetch(R2_WORKER_URL, { method: 'POST', headers: { 'X-Auth-Token': R2_AUTH_TOKEN }, body: fd });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    return (j && j.url) || null;
+  } catch (e) { console.warn('[uploadThumbToR2]', e.message); return null; }
+}
+window.uploadThumbToR2 = uploadThumbToR2;
+// Foto untuk kartu: thumbnail kalau ada, kalau tidak foto utama
+window._ymThumbOf = function(p) { return (p && (p.thumb_url || p.thumbUrl)) || ''; };
+// onerror kartu: thumbnail gagal dimuat → coba foto utama (data-full) → baru placeholder
+window._ymImgFallback = function(el) {
+  const full = el.getAttribute('data-full');
+  if (full && el.src !== full) { el.removeAttribute('data-full'); el.src = full; return; }
+  el.onerror = null; el.src = window._YM_PH;
+};
 
 // ── Hapus foto dari Cloudflare R2 ────────────────────────────
 // Terima 1 url (string) atau array url. Aman dipanggil walau url kosong/bukan dari R2.
@@ -6201,18 +6228,20 @@ window._FB = {
     wrap.style.display='block'; btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i> Mengupload...';
     try {
       txt.textContent='Mengompres foto...'; bar.style.width='10%'; pct.textContent='10%';
+      const _thumbP = uploadThumbToR2(file); // thumbnail kartu, paralel dengan foto utama
       const uploadResult = await uploadToR2(file, p => {
         const v=10+Math.round(p*.8); bar.style.width=v+'%'; pct.textContent=v+'%';
         txt.textContent=`Mengunggah foto ${p}%...`;
       });
       const imgUrl = uploadResult.secure_url;
       const imgPublicId = uploadResult.public_id || '';
+      const thumbUrl = await _thumbP;
       bar.style.width='95%'; pct.textContent='95%'; txt.textContent='Menyimpan ke database...';
       const _adRes = await window._supaFetch('/rest/v1/ads?select=id', {
         method: 'POST',
         prefer: 'return=representation',
         body: JSON.stringify({
-          title, price:Number(price), cat, description:desc, siap_taushil:!!siapTaushil, is_yallafood:!!isYallaFood, img_url:imgUrl, img_public_id:imgPublicId,
+          title, price:Number(price), cat, description:desc, siap_taushil:!!siapTaushil, is_yallafood:!!isYallaFood, img_url:imgUrl, img_public_id:imgPublicId, thumb_url:thumbUrl||null,
           location: location||'',
           variants: (variants && variants.length > 0) ? variants : [],
           size: size||'',
@@ -6875,6 +6904,7 @@ async function _loadAllAds() {
     id: d.id,
     desc: d.description,
     imgUrl: d.img_url || d.imgUrl || '',
+    thumbUrl: d.thumb_url || d.thumbUrl || '',
     imgPublicId: d.img_public_id || '',
     sellerName: d.seller_name || d.sellerName || '',
     sellerUid:  d.seller_uid  || d.sellerUid  || '',
@@ -7096,6 +7126,7 @@ async function _writeAllCaches(ads) {
       id: a.id,
       title: a.title || a.name || '',
       imgUrl: a.imgUrl || a.img || '',
+      thumbUrl: a.thumbUrl || a.thumb_url || '',
       price: a.price || 0,
       disc: a.disc || 0,
       badge: a.badge || '',
@@ -9871,12 +9902,16 @@ window.renderProducts = () => {
   if(!g) return;
   document.getElementById('prodCount').textContent=list.length+' produk';
   g.innerHTML='';
+  // Matikan infinite scroll daftar SEBELUMNYA dulu (naikkan generasi + putus observer).
+  // Dulu ini baru terjadi setelah cek kosong → saat filter kosong (mis. tab Official),
+  // penanda lama langsung terlihat & memuat 12 kartu berikutnya dari daftar lama.
+  const _pcGen = (window._ymPcGen = (window._ymPcGen || 0) + 1);
+  if (window._ymPcObserver) { window._ymPcObserver.disconnect(); window._ymPcObserver = null; }
   if(!list.length){e.style.display='block';return;}
   e.style.display='none';
   // ── INFINITE SCROLL: kartu dibuat per 12 saat user menggulir mendekati bawah.
   // Data tetap lengkap di HP → pencarian/filter/sortir tidak berubah perilakunya.
   const _PC_BATCH = 12;
-  const _pcGen = (window._ymPcGen = (window._ymPcGen || 0) + 1);
   let _pcShown = 0;
   const _renderOne = (p,i)=>{
     const name=p.title||p.name||'';
@@ -9902,8 +9937,8 @@ window.renderProducts = () => {
 
     d.innerHTML=`
       <div class="relative" style="aspect-ratio:1/1;overflow:hidden;background:#f9fafb">
-        <img src="${img}" alt="${name}" class="w-full h-full object-cover hover:scale-110 transition-transform duration-400" loading="lazy"
-          onerror="this.onerror=null;this.src=window._YM_PH"/>
+        <img src="${_ymThumbOf(p) || img}" ${_ymThumbOf(p) ? `data-full="${img}"` : ''} alt="${name}" class="w-full h-full object-cover hover:scale-110 transition-transform duration-400" loading="lazy"
+          onerror="window._ymImgFallback(this)"/>
         ${p.badge?`<span class="absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm ${badgeCls}" style="z-index:2">${p.badge}</span>`:''}
         ${p.siapTaushil?`<img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1781317917/file_00000000665871f4ae0c02ec23ea4b84-removebg-preview_fqwvyq.png" style="position:absolute;bottom:0;left:0;width:65px;height:auto;z-index:3;pointer-events:none" alt="Ready Taushil"/>`:''}
         ${window._ymPoBadge?window._ymPoBadge(p):''}
@@ -10752,8 +10787,8 @@ function _miniAdCard(p, highlightSeller) {
   return `
     <div class="recom-card" onclick="ymPushReturn('detail', window._ymReopenDetailFn());closeDetailDirect();setTimeout(()=>openDetail('${p.id||''}'),120)">
       <div class="relative bg-gray-100 overflow-hidden" style="aspect-ratio:1/1">
-        <img src="${img}" alt="${name}" class="w-full h-full object-cover hover:scale-110 transition-transform duration-400" loading="lazy"
-          onerror="this.onerror=null;this.src=window._YM_PH"/>
+        <img src="${_ymThumbOf(p) || img}" ${_ymThumbOf(p) ? `data-full="${img}"` : ''} alt="${name}" class="w-full h-full object-cover hover:scale-110 transition-transform duration-400" loading="lazy"
+          onerror="window._ymImgFallback(this)"/>
         ${p.badge?`<span class="absolute top-1.5 left-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400 text-white shadow-sm">${p.badge}</span>`:''}
         ${p.siapTaushil?`<img src="https://res.cloudinary.com/dsy4hjc7a/image/upload/v1781317917/file_00000000665871f4ae0c02ec23ea4b84-removebg-preview_fqwvyq.png" style="position:absolute;bottom:0;left:0;width:65px;height:auto;z-index:3;pointer-events:none" alt="Ready Taushil"/>`:''}
         ${window._ymPoBadge?window._ymPoBadge(p):''}
@@ -12888,8 +12923,8 @@ window._renderEtalaseGrid = function(ads) {
       <div class="pc bg-white rounded-2xl overflow-hidden border border-gray-100 ${storeClosed?'':'cursor-pointer'}"
            style="animation:fadeUp .3s ease ${i*.04}s both" ${storeClosed ? '' : `onclick="openDetail('${p.id}')"`}>
         <div class="relative overflow-hidden bg-gray-50" style="aspect-ratio:1/1">
-          <img src="${img}" alt="${name}" class="w-full h-full object-cover hover:scale-105 transition-transform" loading="lazy"
-            style="${storeClosed ? 'filter:blur(3px) grayscale(70%);' : ''}"/>
+          <img src="${_ymThumbOf(p) || img}" ${_ymThumbOf(p) ? `data-full="${img}"` : ''} alt="${name}" class="w-full h-full object-cover hover:scale-105 transition-transform" loading="lazy"
+            onerror="window._ymImgFallback(this)" style="${storeClosed ? 'filter:blur(3px) grayscale(70%);' : ''}"/>
           ${storeClosed ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:5;background:rgba(0,0,0,0.25)"><span style="font-size:13px;font-weight:900;color:#fff;letter-spacing:.12em;background:rgba(0,0,0,0.55);padding:4px 10px;border-radius:6px">CLOSE</span></div>` : ''}
           ${p.disc>0?`<span class="absolute top-2 right-2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">${p.disc}%</span>`:''}
           ${cat==='terlaris'&&p.sold?`<span class="absolute bottom-2 left-2 bg-black/60 text-white text-[9px] font-semibold px-2 py-0.5 rounded-full"><i class="fa-solid fa-fire text-amber-400 text-[8px]"></i> ${fmtSold(p.sold)} sold</span>`:''}
@@ -12931,7 +12966,7 @@ window._renderEtalaseRecommend = function(currentSellerUid) {
       <div class="pc bg-white rounded-2xl overflow-hidden border border-gray-100 cursor-pointer"
            style="animation:fadeUp .35s ease ${i*.05}s both" onclick="openDetail('${p.id}')">
         <div class="relative overflow-hidden bg-gray-50" style="aspect-ratio:1/1">
-          <img src="${img}" alt="${name}" class="w-full h-full object-cover hover:scale-105 transition-transform" loading="lazy"/>
+          <img src="${_ymThumbOf(p) || img}" ${_ymThumbOf(p) ? `data-full="${img}"` : ''} alt="${name}" class="w-full h-full object-cover hover:scale-105 transition-transform" loading="lazy" onerror="window._ymImgFallback(this)"/>
           ${p.disc>0?`<span class="absolute top-2 right-2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">${p.disc}%</span>`:''}
         </div>
         <div class="p-3">
@@ -16813,7 +16848,7 @@ if ('serviceWorker' in navigator) {
                 <i class="fa-solid fa-circle-check text-gray-400 text-lg"></i>
                 <div>
                   <p class="text-xs font-bold text-gray-700">Centang Silver</p>
-                  <p class="text-[10px] text-gray-400">Official Partner</p>
+                  <p class="text-[10px] text-gray-400">Partner YallaMart</p>
                 </div>
               </label>
             </div>
@@ -17146,7 +17181,7 @@ window.ymIsAdminUid = async function (uid) {
 function renderVerifyBadge(status) {
   if (status === 'verified_blue')  return `<span class="vbadge-blue" title="Verified" style="margin-left:2px;vertical-align:middle">${_verifiedBlueSVG(16)}</span>`;
   if (status === 'verified_gold')  return `<span class="vbadge-gold"   title="Admin">${_embossBadgeSVG('gold')}</span>`;
-  if (status === 'partner_silver') return `<span class="vbadge-silver" title="Official Partner">${_embossBadgeSVG('silver')}</span>`;
+  if (status === 'partner_silver') return `<span class="vbadge-silver" title="Partner YallaMart">${_embossBadgeSVG('silver')}</span>`;
   return '';
 }
 
@@ -17975,7 +18010,7 @@ window.applyVerification = async function() {
 
     if(userRow.uid) delete window._verifyCache[userRow.uid]; window._verifyAllPromise = null; if (typeof _ymLoadVerifyAll === "function") _ymLoadVerifyAll();
 
-    const typeLabel = verifyType === 'verified_blue' ? '✅ Centang Biru' : '🥈 Centang Silver (Official Partner)';
+    const typeLabel = verifyType === 'verified_blue' ? '✅ Centang Biru' : '🥈 Centang Silver (Partner)';
     const expiryStr = new Date(expiryMs).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
     statusEl.textContent = `${typeLabel} berhasil!
 User: ${userRow.name||'-'} (${userRow.email||email})
@@ -18400,15 +18435,18 @@ window.submitEditAd = async function() {
   try {
     let imgUrl = _editAdOldImgUrl;
     let imgPublicId = _editAdOldPublicId;
+    let _thumbPatch = {}; // hanya dikirim kalau foto utama diganti
 
     // Upload foto baru jika ada
     if(_editNewPhotoFile) {
       showToast('⏳ Mengupload foto baru...', 'green');
+      const _thumbP = uploadThumbToR2(_editNewPhotoFile); // thumbnail kartu, paralel
       const result = await uploadToR2(_editNewPhotoFile, progress => {
         if(progress < 100) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Upload '+progress+'%...';
       }, 'ads');
       imgUrl = typeof result === 'object' ? (result.secure_url || result.url || '') : result;
       imgPublicId = (typeof result === 'object' ? result.public_id : '') || '';
+      _thumbPatch = { thumb_url: (await _thumbP) || null };
     }
 
     // Ambil size, varName, varian
@@ -18439,6 +18477,7 @@ window.submitEditAd = async function() {
         is_yallafood: isYallaFood,
         img_url: imgUrl,
         img_public_id: imgPublicId,
+        ..._thumbPatch,
         size: size,
         var_name: varName,
         stock: (stockVal !== '' && !_poEdit) ? Number(stockVal) : null,
@@ -23325,6 +23364,8 @@ window.renewAd = async function(adId) {
     const ad = (window._S.fbAds || []).find(a => a.id === adId);
     if (ad) { ad.last_renewed_at = result.renewed_at; ad.updated_at = result.renewed_at; }
     renderIklanSayaList();
+    // Kosongkan cache iklan + YallaFood supaya urutan baru (iklan ini di atas) langsung terlihat
+    try { if (window._clearAdsCache) window._clearAdsCache(); } catch (e) {}
 
     // Kirim notifikasi ke semua follower toko (pola sama seperti notif iklan baru)
     try {
@@ -25138,9 +25179,9 @@ window.closeKelolaToko = function() {
       <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></span>
       <span>YallaFood</span>
     </button>
-    <button onclick="closeYallaFoodHome();filterCat('official');setMobTab('official')" class="mob-nav-btn">
-      <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg></span>
-      <span>Official</span>
+    <button onclick="closeYallaFoodHome();openPartnerPage();setMobTab('official')" class="mob-nav-btn">
+      <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762"/></svg></span>
+      <span>Partner</span>
     </button>
     <button onclick="closeYallaFoodHome();openNotifFullScreen();setMobTab('notif')" class="mob-nav-btn" style="position:relative">
       <div style="position:relative;display:inline-block">
@@ -25154,6 +25195,232 @@ window.closeKelolaToko = function() {
     </button>
   </nav>
 </div>
+
+<!-- ============================================================
+     🤝 PARTNER — daftar mat'am partner YallaMart (pengganti tab "Official").
+     Partner = akun berstatus verifikasi 'partner_silver' yang MASIH berlaku
+     dan punya menu YallaFood. Overlay penuh + bottom nav sendiri (pola YallaFood).
+     ============================================================ -->
+<div id="partnerPage" style="display:none;position:fixed;inset:0;z-index:52;background:#f8fafc;flex-direction:column">
+  <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
+    <button onclick="closePartnerPage();showPage('home');setMobTab('home')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
+    <h2 class="font-bold text-base flex-1">Partner YallaMart</h2>
+  </div>
+  <div id="partnerScroll" class="flex-1 overflow-y-auto px-3 py-3" style="min-height:0;-webkit-overflow-scrolling:touch">
+    <div style="background:#ECFDF5;border:1px solid #A7F3D0;border-radius:14px;padding:10px 12px;margin-bottom:10px;display:flex;gap:10px;align-items:center">
+      <span style="flex-shrink:0;display:flex"><svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762"/></svg></span>
+      <div>
+        <p style="margin:0;font-size:13px;font-weight:700;color:#065F46">Mat'am partner YallaMart</p>
+        <p style="margin:2px 0 0;font-size:11px;color:#047857">Terverifikasi dan bekerja sama langsung dengan YallaMart</p>
+      </div>
+    </div>
+    <div id="partnerChips" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:10px"></div>
+    <div id="partnerList" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div>
+  <nav class="mob-bottom-nav" style="display:flex;flex-shrink:0">
+    <button onclick="closePartnerPage();showPage('home');setMobTab('home')" class="mob-nav-btn">
+      <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+      <span>Beranda</span>
+    </button>
+    <button onclick="closePartnerPage();openYallaFoodHome();setMobTab('yallafood')" class="mob-nav-btn">
+      <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></span>
+      <span>YallaFood</span>
+    </button>
+    <button onclick="document.getElementById('partnerScroll').scrollTo({top:0,behavior:'smooth'})" class="mob-nav-btn active-tab">
+      <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762"/></svg></span>
+      <span>Partner</span>
+    </button>
+    <button onclick="closePartnerPage();openNotifFullScreen();setMobTab('notif')" class="mob-nav-btn" style="position:relative">
+      <div style="position:relative;display:inline-block">
+        <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+      </div>
+      <span>Notifikasi</span>
+    </button>
+    <button onclick="closePartnerPage();showProfileOrAuth();setMobTab('akun')" class="mob-nav-btn">
+      <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg></span>
+      <span>Akun</span>
+    </button>
+  </nav>
+</div>
+<script>
+// ── 🤝 PARTNER: data & render ───────────────────────────────────
+window._ptState = { sort: 'buka', items: null, loc: null, loading: false };
+window.openPartnerPage = function() {
+  const pg = document.getElementById('partnerPage');
+  if (!pg) return;
+  pg.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  _ptRenderChips();
+  _ptLoad();
+  _ptTrySilentLocation();
+};
+window.closePartnerPage = function() {
+  const pg = document.getElementById('partnerPage');
+  if (pg) pg.style.display = 'none';
+  document.body.style.overflow = '';
+};
+const _PT_SORTS = [
+  { key: 'buka', label: 'Buka sekarang' },
+  { key: 'dekat', label: 'Terdekat' },
+  { key: 'rating', label: 'Rating tertinggi' }
+];
+function _ptRenderChips() {
+  const box = document.getElementById('partnerChips');
+  if (!box) return;
+  box.innerHTML = _PT_SORTS.map(s => {
+    const on = window._ptState.sort === s.key;
+    return `<button onclick="_ptSetSort('${s.key}')" style="flex-shrink:0;border:${on ? 'none' : '1px solid #e5e7eb'};cursor:pointer;white-space:nowrap;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;background:${on ? '#10B981' : '#fff'};color:${on ? '#fff' : '#4b5563'}">${s.label}</button>`;
+  }).join('');
+}
+window._ptSetSort = function(key) {
+  window._ptState.sort = key;
+  _ptRenderChips();
+  if (key === 'dekat' && !window._ptState.loc) {
+    if (!navigator.geolocation) { showToast('Lokasi tidak didukung di perangkat ini', 'red'); _ptRender(); return; }
+    showToast('Mencari lokasimu...', 'green');
+    navigator.geolocation.getCurrentPosition(
+      p => { window._ptState.loc = { lat: p.coords.latitude, lng: p.coords.longitude }; _ptRender(); },
+      () => { showToast('Izin lokasi ditolak — urutan jarak tidak bisa dipakai', 'red'); _ptRender(); },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    );
+  }
+  _ptRender();
+};
+// Ambil lokasi diam-diam HANYA kalau izin sudah pernah diberikan (tidak memunculkan dialog izin)
+function _ptTrySilentLocation() {
+  try {
+    if (window._ptState.loc || !navigator.permissions || !navigator.geolocation) return;
+    navigator.permissions.query({ name: 'geolocation' }).then(st => {
+      if (st.state !== 'granted') return;
+      navigator.geolocation.getCurrentPosition(
+        p => { window._ptState.loc = { lat: p.coords.latitude, lng: p.coords.longitude }; _ptRender(); },
+        () => {}, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+      );
+    }).catch(() => {});
+  } catch (e) {}
+}
+function _ptKm(a, b) {
+  const R = 6371, toR = x => x * Math.PI / 180;
+  const dLat = toR(b.lat - a.lat), dLng = toR(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toR(a.lat)) * Math.cos(toR(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+// Teks jam hari ini (jam Kairo): "Buka · tutup 23.00" / "Tutup · buka 10.00" / "Tutup"
+function _ptHoursText(jo, open) {
+  try {
+    if (!jo || !jo.length) return open ? 'Buka' : 'Tutup';
+    const HARI = ['Ahad', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const c = window._nowInCairo();
+    const today = jo.find(j => j.hari === HARI[c.dayIdx]);
+    const fmt = t => String(t || '').slice(0, 5).replace(':', '.');
+    if (open) return today && today.tutup && today.buka !== today.tutup ? 'Buka · tutup ' + fmt(today.tutup) : 'Buka';
+    if (today && today.aktif && today.buka) {
+      const [bh, bm] = today.buka.split(':').map(Number);
+      if (c.hh * 60 + c.mm < bh * 60 + bm) return 'Tutup · buka ' + fmt(today.buka);
+    }
+    return 'Tutup';
+  } catch (e) { return open ? 'Buka' : 'Tutup'; }
+}
+async function _ptLoad() {
+  const list = document.getElementById('partnerList');
+  if (!list || window._ptState.loading) return;
+  window._ptState.loading = true;
+  if (!window._ptState.items) list.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Memuat mat\'am partner...</p>';
+  try {
+    window._verifyAllPromise = null; // ambil status partner terbaru
+    const vm = await _ymLoadVerifyAll();
+    const uids = Object.keys(vm || window._verifyAll || {}).filter(u => (vm || window._verifyAll)[u] === 'partner_silver');
+    if (!uids.length) { window._ptState.items = []; _ptRender(); return; }
+    const inList = uids.map(encodeURIComponent).join(',');
+    const get = async (p) => { try { const r = await window._supaFetch(p); return r.ok ? await r.json() : []; } catch (e) { return []; } };
+    const [users, shops, ads, reviews] = await Promise.all([
+      get(`/rest/v1/users?uid=in.(${inList})&select=uid,name,photo_url`),
+      get(`/rest/v1/shops?user_id=in.(${inList})&select=user_id,nama_toko,jam_operasional,lat,lng,is_active`),
+      get(`/rest/v1/ads?is_yallafood=eq.true&seller_uid=in.(${inList})&select=id,title,price,img_url,thumb_url,seller_uid,sold&order=sold.desc.nullslast`),
+      get(`/rest/v1/reviews?seller_uid=in.(${inList})&or=(review_type.is.null,review_type.neq.kurir)&select=seller_uid,rating`)
+    ]);
+    window._ptState.items = uids.map(uid => {
+      const u = users.find(x => x.uid === uid) || {};
+      const s = shops.find(x => x.user_id === uid) || {};
+      const menus = ads.filter(a => a.seller_uid === uid);
+      const rv = reviews.filter(r => r.seller_uid === uid);
+      const open = window.isStoreOpen ? window.isStoreOpen(s.jam_operasional) : true;
+      return {
+        uid, name: s.nama_toko || u.name || "Mat'am", photo: u.photo_url || '',
+        jo: s.jam_operasional || null, lat: s.lat, lng: s.lng, active: s.is_active !== false,
+        open, menus, rating: rv.length ? rv.reduce((t, r) => t + (r.rating || 0), 0) / rv.length : 0, nReviews: rv.length
+      };
+    }).filter(p => p.menus.length > 0 && p.active); // hanya mat'am yang punya menu YallaFood & toko aktif
+    _ptRender();
+  } catch (e) {
+    list.innerHTML = '<p class="text-center text-red-400 text-sm py-8">Gagal memuat partner.</p>';
+  } finally { window._ptState.loading = false; }
+}
+function _ptRender() {
+  const list = document.getElementById('partnerList');
+  const items = window._ptState.items;
+  if (!list || !items) return;
+  if (!items.length) {
+    list.innerHTML = `<div class="text-center py-10 px-6">
+      <p style="font-size:14px;font-weight:700;color:#111827;margin:0 0 4px">Belum ada mat'am partner</p>
+      <p style="font-size:12px;color:#6b7280;margin:0">Mat'am yang bekerja sama dengan YallaMart akan tampil di sini.</p></div>`;
+    return;
+  }
+  const loc = window._ptState.loc;
+  const rows = items.map(p => ({ ...p, km: (loc && p.lat != null && p.lng != null) ? _ptKm(loc, { lat: Number(p.lat), lng: Number(p.lng) }) : null }));
+  const sort = window._ptState.sort;
+  rows.sort((a, b) => {
+    if (sort === 'dekat' && (a.km != null || b.km != null)) return (a.km ?? 1e9) - (b.km ?? 1e9);
+    if (sort === 'rating') return (b.rating - a.rating) || (b.nReviews - a.nReviews);
+    return (b.open - a.open) || (b.rating - a.rating); // 'buka': yang buka dulu
+  });
+  const esc = window._rvEsc || (s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
+  const badge = (typeof renderVerifyBadge === 'function') ? renderVerifyBadge('partner_silver') : '';
+  const price = (n) => (typeof _yfFmtPrice === 'function') ? _yfFmtPrice(n) : ('LE ' + Number(n || 0).toLocaleString('en-EG'));
+  list.innerHTML = rows.map(p => {
+    const initials = (p.name || 'M').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+    const avatar = p.photo && /^https?:\/\//.test(p.photo)
+      ? `<img src="${esc(p.photo)}" class="w-full h-full object-cover" loading="lazy" onerror="this.parentElement.textContent='${esc(initials)}'"/>`
+      : esc(initials);
+    const top = p.menus.slice(0, 3);
+    const more = p.menus.length - top.length;
+    const hours = _ptHoursText(p.jo, p.open);
+    return `
+      <div class="bg-white" onclick="_ptOpenStore('${p.uid}')" style="border-radius:16px;padding:12px;border:1px solid #eef0f2;cursor:pointer;${p.open ? '' : 'opacity:.65'}">
+        <div style="display:flex;gap:10px;align-items:center">
+          <div style="width:46px;height:46px;border-radius:50%;flex-shrink:0;overflow:hidden;background:#10B981;color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center">${avatar}</div>
+          <div style="flex:1;min-width:0">
+            <p style="margin:0;font-size:14px;font-weight:700;color:#111827;display:flex;align-items:center;gap:4px;min-width:0"><span class="truncate">${esc(p.name)}</span>${badge}</p>
+            <p style="margin:3px 0 0;font-size:11px;color:#374151;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span>${p.nReviews ? `<i class="fa-solid fa-star" style="color:#F59E0B;font-size:10px"></i> ${fmtRating(p.rating)} (${p.nReviews})` : '<i class="fa-solid fa-seedling" style="color:#059669;font-size:10px"></i> Baru'}</span>
+              <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:${p.open ? '#D1FAE5' : '#f3f4f6'};color:${p.open ? '#047857' : '#4b5563'}">${hours}</span>
+              ${p.km != null ? `<span><i class="fa-solid fa-location-dot" style="font-size:10px"></i> ${p.km < 10 ? p.km.toFixed(1).replace('.', ',') : Math.round(p.km)} km</span>` : ''}
+            </p>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">
+          ${top.map(m => {
+            const full = m.img_url || '';
+            const src = m.thumb_url || full;
+            return `<div style="position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1/1;background:#f3f4f6">
+              <img src="${esc(src)}" ${m.thumb_url ? `data-full="${esc(full)}"` : ''} loading="lazy" decoding="async" class="w-full h-full object-cover" onerror="window._ymImgFallback(this)"/>
+              <div style="position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.65));color:#fff;padding:12px 5px 4px">
+                <p style="margin:0;font-size:10px;font-weight:600;line-height:1.2" class="truncate">${esc(m.title)}</p>
+                <p style="margin:0;font-size:10px;font-weight:700">${price(m.price)}</p>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+        ${more > 0 ? `<p style="margin:8px 0 0;font-size:11px;font-weight:600;color:#059669">+${more} menu lainnya <i class="fa-solid fa-chevron-right" style="font-size:9px"></i></p>` : ''}
+      </div>`;
+  }).join('');
+}
+// Ketuk kartu → etalase mat'am (menu YallaFood-nya bisa dipesan dari sana)
+window._ptOpenStore = function(uid) {
+  closePartnerPage();
+  if (typeof viewSellerStore === 'function') viewSellerStore(uid);
+};
+</script>
 
 <!-- YALLAFOOD DETAIL + PESAN SEKARANG -->
 <div id="yallaFoodDetailSheet" style="display:none;position:fixed;inset:0;z-index:53;background:#fff;flex-direction:column">
@@ -25799,6 +26066,11 @@ async function _yfLoadList() {
 function _yfRenderList(rows) {
   const box = document.getElementById('yallaFoodList');
   if (!box) return;
+  // Urutan: menu yang baru di-RENEW naik ke paling atas (sama seperti beranda).
+  // Kunci = waktu renew terakhir, atau waktu dibuat kalau belum pernah di-renew.
+  // Diurutkan di HP supaya data dari cache (IndexedDB/KV) pun ikut benar.
+  const _yfRecency = a => Math.max(new Date(a.last_renewed_at || 0).getTime() || 0, new Date(a.created_at || 0).getTime() || 0);
+  rows = (rows || []).slice().sort((a, b) => _yfRecency(b) - _yfRecency(a));
   window._yfState.list = rows;
   if (!rows.length) {
     box.style.display = 'block';
@@ -25836,7 +26108,7 @@ function _yfRenderList(rows) {
       const cardHtml = `
       <div class="bg-[#f8fafc] rounded-2xl overflow-hidden cursor-pointer flex flex-col" onclick="openFoodDetail('${ad.id}')">
         <div class="relative w-full" style="aspect-ratio:1/1;background:#f3f4f6">
-          <img src="${ad.img_url || ''}" class="w-full h-full object-cover" style="position:absolute;inset:0" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=window._YM_PH"/>
+          <img src="${ad.thumb_url || ad.img_url || ''}" ${ad.thumb_url ? `data-full="${ad.img_url || ''}"` : ''} class="w-full h-full object-cover" style="position:absolute;inset:0" loading="lazy" decoding="async" onerror="window._ymImgFallback(this)"/>
         </div>
         <div class="p-2.5 flex flex-col gap-1 flex-1">
           <p class="text-[12.5px] font-medium text-slate-900 lc2" style="font-family:'Inter',sans-serif;line-height:1.5;letter-spacing:-.01em">${ad.title || ''}</p>
@@ -25978,12 +26250,8 @@ window._yfOpenSellerStore = function(uid) {
 // verification_status, dipakai juga di kartu produk utama YallaMart via
 // goldBadgeHtml) supaya status centang di YallaFood benar-benar sinkron
 // dengan yang tampil di profil akun utama/kartu YallaMart.
-// Rating toko dihitung langsung dari tabel `reviews` (bukan RPC
-// get_seller_avg_rating() — RPC itu ternyata TIDAK ADA di database, dicek
-// langsung dan selalu 404, jadi widget rating di halaman produk fisik pun
-// sebenarnya diam-diam gagal. Di sini dihitung manual: rata-rata
-// reviews.rating milik seller ini, pola yang sama seperti penghitungan
-// rating per-produk).
+// Rating toko diambil dari RPC get_seller_avg_rating() — sumber yang sama
+// dengan etalase toko, jadi angkanya selalu sinkron (ulasan kurir dikecualikan).
 async function _yfInjectSellerInfo(ad) {
   if (!ad?.seller_uid) return;
   try {
@@ -26003,9 +26271,13 @@ async function _yfInjectSellerInfo(ad) {
     }
   } catch (e) {}
   try {
-    const r = await window._supaFetch(`/rest/v1/reviews?seller_uid=eq.${encodeURIComponent(ad.seller_uid)}&review_type=eq.food&select=rating`);
-    const rows = r.ok ? await r.json() : [];
-    const avg = rows.length ? rows.reduce((s, rv) => s + (rv.rating || 0), 0) / rows.length : 0;
+    // Rating TOKO = sama persis dengan etalase (RPC get_seller_avg_rating: semua ulasan toko,
+    // barang fisik + YallaFood, tanpa ulasan kurir). Dulu hanya ulasan 'food' → toko yang
+    // ulasannya dari barang fisik tampil 0 di YallaFood.
+    const r = await window._supaFetch('/rest/v1/rpc/get_seller_avg_rating', {
+      method: 'POST', body: JSON.stringify({ p_seller_uid: ad.seller_uid })
+    });
+    const avg = r.ok ? Number(await r.json()) || 0 : 0;
     const ratingEl = document.getElementById('yfSellerRatingVal');
     if (ratingEl) ratingEl.textContent = fmtRating(avg);
   } catch (e) {}
@@ -26516,7 +26788,8 @@ const _YF_BUYER_TABS = [
 // Konfigurasi per halaman: pembeli (Pesanan Saya) & penjual (Kelola Pesanan) — logika sama.
 const _YF_TAB_CTX = {
   buyer:  { bar: 'yfBuyerTabs',  box: 'yallaFoodTrackingList', empty: 'yfBuyerTabEmpty',  emptyAll: 'Belum ada pesanan YallaFood.' },
-  seller: { bar: 'yfSellerTabs', box: 'yallaFoodKelolaList',   empty: 'yfSellerTabEmpty', emptyAll: 'Belum ada pesanan YallaFood masuk.' },
+  // Penjual: tab awal SELALU Berlangsung (permintaan pemilik), walau sedang kosong
+  seller: { bar: 'yfSellerTabs', box: 'yallaFoodKelolaList',   empty: 'yfSellerTabEmpty', emptyAll: 'Belum ada pesanan YallaFood masuk.', defaultTab: 'berlangsung' },
   // Dasbor kurir: yang menggulir adalah wadah dasbor (bukan daftar), jadi scroll ≠ box
   courier: { bar: 'kurirTabs', box: 'kurirMyDeliveriesList', scroll: 'kurirDashScroll', empty: 'kurirTabEmpty', emptyAll: 'Belum ada pesanan yang kamu antar.' }
 };
@@ -26554,7 +26827,7 @@ function _yfTabAttachScroll(ctx) {
 function _yfTabsRender(ctx, counts) {
   const st = window._yfTabState[ctx], cfg = _YF_TAB_CTX[ctx];
   st.counts = counts || {};
-  if (!st.tab) st.tab = (st.counts.berlangsung || 0) > 0 ? 'berlangsung' : 'semua';
+  if (!st.tab) st.tab = cfg.defaultTab || ((st.counts.berlangsung || 0) > 0 ? 'berlangsung' : 'semua');
   const bar = document.getElementById(cfg.bar);
   if (bar) {
     bar.innerHTML = _YF_BUYER_TABS.map(t => {
@@ -26600,7 +26873,7 @@ async function _yfTabFetchActiveCount(ctx, baseQuery) {
     st.counts = { berlangsung: ids.length };
     st.activeRows = ids; // dipakai dasbor kurir utk siaran lokasi live (tak tergantung tab yang dibuka)
   } catch (e) {}
-  if (!st.tab) st.tab = (st.counts.berlangsung || 0) > 0 ? 'berlangsung' : 'semua';
+  if (!st.tab) st.tab = _YF_TAB_CTX[ctx].defaultTab || ((st.counts.berlangsung || 0) > 0 ? 'berlangsung' : 'semua');
   if (!st.limit) st.limit = _YF_PAGE;
 }
 // Nama lama (sisi pembeli) tetap dipakai di _yfLoadTracking
@@ -26712,7 +26985,7 @@ async function _yfLoadTracking() {
         ` : ''}
         ${o.status === 'selesai' ? `
         <div class="flex gap-2 mt-2">
-          <button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="flex-1 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan</button>
+          <button onclick="openReviewWrite('${o.ad_id}','${(o.ad_title||'').replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.seller_id||''}','food')" class="flex-1 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2" style="white-space:nowrap">Beri Ulasan Mat'am</button>
           ${o.courier_id ? `<button onclick="openReviewWrite('${o.ad_id}','${('Kurir: '+(o.courier_name||'Kurir')).replace(/['"\`]/g,'')}','${o.ad_img||''}','${o.courier_id}','kurir')" class="flex-1 text-xs font-bold text-primary border border-primary/30 rounded-xl py-2">Beri Ulasan Kurir</button>` : ''}
         </div>` : ''}
         ${o.status === 'menunggu_kurir' ? `
@@ -26817,7 +27090,11 @@ window._yfOpenKurirProfile = async function(kurirId, orderId, courierName, chatT
   avEl.innerHTML = 'K';
   document.getElementById('yfKurirProfileName').textContent = 'Memuat...';
   document.getElementById('yfKurirProfileDeliveries').textContent = '0';
-  document.getElementById('yfKurirProfileRating').textContent = '0.0';
+  window._yfKurirReviews = [];
+  window._yfKurirReviewsFor = kurirId;
+  const _rvBox = document.getElementById('yfKurirReviewsBox');
+  if (_rvBox) { _rvBox.style.display = 'none'; _rvBox.innerHTML = ''; }
+  _yfKurirSetRatingStat(null);
 
   try {
     const uRes = await window._supaFetch(`/rest/v1/users?uid=eq.${encodeURIComponent(kurirId)}&select=name,photo_url&limit=1`);
@@ -26838,14 +27115,64 @@ window._yfOpenKurirProfile = async function(kurirId, orderId, courierName, chatT
     document.getElementById('yfKurirProfileDeliveries').textContent = String(cNum);
   } catch (e) {}
 
-  // Rating kurir: dihitung dari reviews (seller_uid dipakai sbg id kurir
+  // Rating + daftar ulasan kurir: dari reviews (seller_uid dipakai sbg id kurir
   // khusus utk review_type='kurir', dibedakan dari ulasan seller/produk).
+  // Nama & foto penulis tampil apa adanya (sama seperti ulasan produk).
   try {
-    const rRes = await window._supaFetch(`/rest/v1/reviews?seller_uid=eq.${encodeURIComponent(kurirId)}&review_type=eq.kurir&select=rating`);
+    const rRes = await window._supaFetch(`/rest/v1/reviews?seller_uid=eq.${encodeURIComponent(kurirId)}&review_type=eq.kurir&select=rating,comment,buyer_name,buyer_photo,created_at&order=created_at.desc&limit=50`);
     const rRows = rRes.ok ? await rRes.json() : [];
-    const avg = rRows.length ? rRows.reduce((s, rv) => s + (rv.rating || 0), 0) / rRows.length : 0;
-    document.getElementById('yfKurirProfileRating').textContent = fmtRating(avg);
+    if (window._yfKurirReviewsFor !== kurirId) return; // profil lain sudah dibuka
+    window._yfKurirReviews = rRows;
+    _yfKurirSetRatingStat(rRows);
   } catch (e) {}
+};
+// Kotak Rating di lembar profil kurir: "★ 4.8 / 12 ulasan", atau "Kurir baru" kalau belum ada ulasan
+function _yfKurirSetRatingStat(rows) {
+  const numEl = document.getElementById('yfKurirProfileRatingNum');
+  const lblEl = document.getElementById('yfKurirProfileRatingLabel');
+  if (!numEl || !lblEl) return;
+  if (rows === null) { numEl.innerHTML = '<i class="fa-solid fa-star text-amber-400" style="font-size:14px"></i> <span id="yfKurirProfileRating">…</span>'; lblEl.textContent = 'Rating'; return; }
+  if (!rows.length) {
+    numEl.innerHTML = '<span style="font-size:13px;font-weight:700;color:#059669"><i class="fa-solid fa-seedling" style="font-size:12px"></i> Baru</span>';
+    lblEl.textContent = 'Kurir baru';
+    return;
+  }
+  const avg = rows.reduce((s, rv) => s + (rv.rating || 0), 0) / rows.length;
+  numEl.innerHTML = `<i class="fa-solid fa-star text-amber-400" style="font-size:14px"></i> <span id="yfKurirProfileRating">${fmtRating(avg)}</span>`;
+  lblEl.innerHTML = `${rows.length} ulasan <i class="fa-solid fa-chevron-down" style="font-size:8px"></i>`;
+}
+// Ketuk kotak Rating → buka/tutup daftar ulasan kurir di bawah statistik
+window._yfKurirToggleReviews = function() {
+  const box = document.getElementById('yfKurirReviewsBox');
+  if (!box) return;
+  if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+  const rows = window._yfKurirReviews || [];
+  const esc = window._rvEsc || (s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
+  if (!rows.length) {
+    box.innerHTML = '<p class="text-center text-xs py-3" style="color:#6b7280">Kurir ini belum punya ulasan. Jadilah yang pertama memberi ulasan setelah pesananmu selesai.</p>';
+  } else {
+    box.innerHTML = `<p style="font-size:13px;font-weight:700;color:#111827;margin:0 0 10px">Ulasan Kurir (${rows.length})</p>
+      <div style="display:flex;flex-direction:column;gap:14px">` + rows.map(rv => {
+        const stars = [1, 2, 3, 4, 5].map(i => `<i class="fa-solid fa-star" style="font-size:10px;color:${i <= (rv.rating || 0) ? '#fbbf24' : '#e5e7eb'}"></i>`).join('');
+        const photo = rv.buyer_photo && /^https?:\/\//.test(rv.buyer_photo)
+          ? `<img src="${esc(rv.buyer_photo)}" class="w-full h-full object-cover" onerror="window.ymSetAvatarFallback(this.parentElement)"/>`
+          : window.YM_USER_ICON_SVG;
+        return `
+        <div style="display:flex;gap:10px">
+          <div class="w-8 h-8 rounded-full ym-avatar-fb overflow-hidden flex-shrink-0">${photo}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+              <p style="margin:0;font-size:12.5px;font-weight:700;color:#111827" class="truncate">${esc(rv.buyer_name || 'Pembeli')}</p>
+              <span style="font-size:10px;color:#111827;flex-shrink:0">${_yfTimeAgo(rv.created_at)}</span>
+            </div>
+            <div style="display:flex;gap:2px;margin-top:2px">${stars}</div>
+            ${rv.comment ? `<p style="margin:4px 0 0;font-size:12px;color:#374151;line-height:1.45;white-space:pre-line">${esc(rv.comment)}</p>` : ''}
+          </div>
+        </div>`;
+      }).join('') + '</div>';
+  }
+  box.style.display = 'block';
+  setTimeout(() => { try { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }, 50);
 };
 window._yfOpenKurirProfileChat = function() {
   const ctx = window._yfKurirProfileCtx;
@@ -28486,17 +28813,18 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
      .stat-strip/.stat-item milik halaman Etalase Toko supaya 3 elemen
      (Pengantaran/Rating/Chat) sejajar rapi tanpa bikin sistem grid baru. -->
 <div id="yfKurirProfileSheet" style="display:none;position:fixed;inset:0;z-index:57;background:rgba(0,0,0,.4);align-items:flex-end;justify-content:center" onclick="if(event.target===this) _yfCloseKurirProfile()">
-  <div id="yfKurirProfileSheetInner" class="bg-white w-full" style="max-width:480px;max-height:50vh;overflow-y:auto;border-radius:24px 24px 0 0;position:relative;padding:24px 20px;transform:translateY(100%);transition:transform .3s ease-out">
+  <div id="yfKurirProfileSheetInner" class="bg-white w-full" style="max-width:480px;max-height:80vh;overflow-y:auto;border-radius:24px 24px 0 0;position:relative;padding:24px 20px;transform:translateY(100%);transition:transform .3s ease-out">
     <button onclick="_yfCloseKurirProfile()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100" style="position:absolute;top:12px;right:12px"><i class="fa-solid fa-xmark text-gray-500"></i></button>
     <div style="display:flex;flex-direction:column;align-items:center;padding-top:8px">
       <div id="yfKurirProfileAvatar" class="rounded-full ym-avatar-fb overflow-hidden flex-shrink-0" style="width:80px;height:80px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <h3 id="yfKurirProfileName" class="font-bold text-lg mt-3 text-center" style="color:#111827"></h3>
       <div class="stat-strip mt-4" style="max-width:320px;width:100%">
         <div class="stat-item"><p class="stat-num colored" id="yfKurirProfileDeliveries">0</p><p class="stat-label">Pengantaran</p></div>
-        <div class="stat-item"><p class="stat-num"><i class="fa-solid fa-star text-amber-400" style="font-size:14px"></i> <span id="yfKurirProfileRating">0.0</span></p><p class="stat-label">Rating</p></div>
+        <div class="stat-item" style="cursor:pointer" onclick="_yfKurirToggleReviews()"><p class="stat-num" id="yfKurirProfileRatingNum"><i class="fa-solid fa-star text-amber-400" style="font-size:14px"></i> <span id="yfKurirProfileRating">0.0</span></p><p class="stat-label" id="yfKurirProfileRatingLabel">Rating</p></div>
         <div class="stat-item" style="cursor:pointer" onclick="_yfOpenKurirProfileChat()"><p class="stat-num"><i class="fa-regular fa-comment-dots"></i></p><p class="stat-label">Chat</p></div>
       </div>
     </div>
+    <div id="yfKurirReviewsBox" style="display:none;margin-top:16px;border-top:1px solid #f3f4f6;padding-top:12px"></div>
   </div>
 </div>
 
