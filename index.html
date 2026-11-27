@@ -25170,7 +25170,7 @@ window.closeKelolaToko = function() {
   <!-- Bottom nav YallaMart di dalam layar YallaFood — tombol menutup YallaFood
        lalu navigasi. Ditaruh sebagai footer flex (bukan fixed), jadi tidak kena
        masalah z-index overlay & list tetap scroll di atasnya. -->
-  <nav class="mob-bottom-nav" style="display:flex;flex-shrink:0">
+  <nav class="mob-bottom-nav ym-overlay-nav" style="display:flex;flex-shrink:0">
     <button onclick="closeYallaFoodHome();showPage('home');setMobTab('home')" class="mob-nav-btn">
       <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
       <span>Beranda</span>
@@ -25201,6 +25201,11 @@ window.closeKelolaToko = function() {
      Partner = akun berstatus verifikasi 'partner_silver' yang MASIH berlaku
      dan punya menu YallaFood. Overlay penuh + bottom nav sendiri (pola YallaFood).
      ============================================================ -->
+<style>
+/* Bottom nav di dalam overlay YallaFood & Partner hanya untuk HP (≤768px), sama seperti
+   bottom nav utama. Di tablet/desktop disembunyikan — keluar lewat tombol ← di atas. */
+@media (min-width: 769px) { .ym-overlay-nav { display: none !important; } }
+</style>
 <div id="partnerPage" style="display:none;position:fixed;inset:0;z-index:52;background:#f8fafc;flex-direction:column">
   <div class="flex items-center gap-2 bg-white border-b border-gray-100 px-4 py-3" style="flex-shrink:0">
     <button onclick="closePartnerPage();showPage('home');setMobTab('home')" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100"><i class="fa-solid fa-chevron-left text-gray-700"></i></button>
@@ -25217,7 +25222,7 @@ window.closeKelolaToko = function() {
     <div id="partnerChips" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:10px"></div>
     <div id="partnerList" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
-  <nav class="mob-bottom-nav" style="display:flex;flex-shrink:0">
+  <nav class="mob-bottom-nav ym-overlay-nav" style="display:flex;flex-shrink:0">
     <button onclick="closePartnerPage();showPage('home');setMobTab('home')" class="mob-nav-btn">
       <span class="lucide-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
       <span>Beranda</span>
