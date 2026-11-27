@@ -16368,6 +16368,14 @@ window.setMobTab = function(tab) {
   const akunHdr = document.getElementById('headerAkun');
   if(!mainHdr || !akunHdr) return;
 
+  // Tablet/desktop (>768px): header versi HP TIDAK boleh muncul — dulu fungsi ini selalu
+  // memunculkannya, jadi setelah keluar dari YallaFood/Partner tampilan HP & desktop bertumpuk.
+  if (window.innerWidth > 768) {
+    mainHdr.style.setProperty('display', 'none', 'important');
+    akunHdr.style.display = 'none';
+    return;
+  }
+
   // Cek apakah user yang login adalah admin
   const currentEmail = (window._S?.user?.email || '').toLowerCase();
   const isAdminUser = currentEmail === (window.ADMIN_EMAIL || 'abdsyakir160@gmail.com').toLowerCase();
