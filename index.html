@@ -28845,7 +28845,8 @@ window.kurirAdminSetStatus = async function(courierRowId, newStatus, prevStatus)
       const latMin = (_mtUser.lat - dLat).toFixed(6), latMax = (_mtUser.lat + dLat).toFixed(6);
       const lngMin = (_mtUser.lng - dLng).toFixed(6), lngMax = (_mtUser.lng + dLng).toFixed(6);
       // 1) toko di sekitar user yang SUDAH mengaktifkan titik lokasi (dibatasi kotak → ringan)
-      const shopRes = await window._supaFetch(`/rest/v1/shops?lat=gte.${latMin}&lat=lte.${latMax}&lng=gte.${lngMin}&lng=lte.${lngMax}&select=user_id,nama_toko,lat,lng,alamat`);
+      // is_active=not.is.false → toko yang DINONAKTIFKAN admin tidak tampil (null/lama tetap dianggap aktif)
+      const shopRes = await window._supaFetch(`/rest/v1/shops?lat=gte.${latMin}&lat=lte.${latMax}&lng=gte.${lngMin}&lng=lte.${lngMax}&is_active=not.is.false&select=user_id,nama_toko,lat,lng,alamat`);
       if (!shopRes.ok) throw new Error('shops HTTP ' + shopRes.status); // non-ok = GAGAL (bukan "kosong")
       const shopsRaw = await shopRes.json();
       if (!shopsRaw.length) { _mtShops = []; _mtFetchedOnce = true; _mtFetchRetry = 0; _mtFetching = false; _mtDraw(); return; }
